@@ -140,30 +140,45 @@ class Ingestion:
     errors: list[IngestionError]
 
 
-def read_jsonl(lines: Iterable[str]) -> Ingestion:
-    events = []
-    errors = []
-    accepted_ids = set()
+class JSONLReader:
+    def __init__(self) -> None:
+        self.events: list[Event] = []
+        self.errors: list[IngestionError] = []
+        self._accepted_ids: set[str] = set()
+        self._line_number = 0
 
-    for line_number, line in enumerate(lines, 1):
+    def feed(self, line: str) -> Event | None:
+        self._line_number += 1
         if not line.strip():
-            continue
+            return None
         try:
             event = Event.from_dict(json.loads(line))
         except json.JSONDecodeError as error:
-            errors.append(IngestionError(line_number, f"invalid JSON: {error.msg}"))
-            continue
+            self.errors.append(IngestionError(
+                self._line_number, f"invalid JSON: {error.msg}"
+            ))
+            return None
         except EventError as error:
-            errors.append(IngestionError(line_number, str(error)))
-            continue
+            self.errors.append(IngestionError(self._line_number, str(error)))
+            return None
 
-        if event.event_id in accepted_ids:
-            errors.append(IngestionError(line_number, f"duplicate event ID: {event.event_id}"))
-            continue
-        accepted_ids.add(event.event_id)
-        events.append(event)
+        if event.event_id in self._accepted_ids:
+            self.errors.append(IngestionError(
+                self._line_number, f"duplicate event ID: {event.event_id}"
+            ))
+            return None
+        self._accepted_ids.add(event.event_id)
+        self.events.append(event)
+        return event
 
-    return Ingestion(events, errors)
+    def read(self, lines: Iterable[str]) -> Ingestion:
+        for line in lines:
+            self.feed(line)
+        return Ingestion(self.events, self.errors)
+
+
+def read_jsonl(lines: Iterable[str]) -> Ingestion:
+    return JSONLReader().read(lines)
 
 
 def sanitize_event(
