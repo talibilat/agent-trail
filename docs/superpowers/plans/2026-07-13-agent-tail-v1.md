@@ -436,7 +436,8 @@ class UiStateTests(unittest.TestCase):
 
 - [ ] **Step 6: Implement the curses shell**
 
-Add `UiState` for selection and filters, then a small `run(index)` wrapper using standard-library `curses.wrapper`.
+Add `UiState` for selection and filters, then a small `run(index, events=None)` wrapper using standard-library `curses.wrapper`.
+When `events` is supplied, consume available sanitized events incrementally on a reader thread and wake the curses loop through a queue so standard-input traces redraw before EOF.
 Use text labels in every state, honor `NO_COLOR`, freeze the final view after EOF, and redraw from `render_snapshot`.
 
 - [ ] **Step 7: Run the tests and verify GREEN**
@@ -480,6 +481,19 @@ Run: `git add src/agent_tail/ui.py tests/test_ui.py && git commit -m "feat: add 
             self.assertEqual(file_report.read_text(), stdin_report.read_text())
             self.assertIn("trace-1", file_report.read_text())
             self.assertNotIn("secret-value", file_report.read_text())
+
+    def test_stdin_events_are_visible_before_eof(self):
+        process = subprocess.Popen(
+            [sys.executable, "-m", "agent_tail", "-", "--snapshot-stream"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1,
+        )
+        process.stdin.write(json.dumps(event_data()) + "\n")
+        process.stdin.flush()
+
+        self.assertIn("reviewer-1", process.stdout.readline())
+
+        process.stdin.close()
+        self.assertEqual(process.wait(timeout=2), 0)
 ```
 
 - [ ] **Step 2: Run the tests and verify RED**
@@ -490,9 +504,11 @@ Expected: FAIL because the CLI does not ingest or export.
 
 - [ ] **Step 3: Connect the CLI**
 
-Open UTF-8 files or use `sys.stdin` for `-`.
+Open UTF-8 files directly.
+For `-`, pass a line iterator to the UI so it sanitizes, indexes, and redraws after each accepted event without waiting for EOF.
 Pass each event through sanitization before adding it to `TraceIndex`.
 Write Markdown when `--export` is present; otherwise use the interactive UI on a TTY and print a static snapshot on a non-TTY.
+Use the internal `--snapshot-stream` acceptance mode to emit one flushed snapshot marker per accepted standard-input event without curses; keep it undocumented because it exists only to test incremental behavior through the real CLI boundary.
 Return exit code `0` when at least one event was accepted, `1` when none were accepted, and `2` for command-line or file errors.
 
 - [ ] **Step 4: Run the tests and verify GREEN**
