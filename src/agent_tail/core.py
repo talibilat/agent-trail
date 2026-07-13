@@ -1,7 +1,7 @@
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, field
 from datetime import datetime
 import re
-from types import MappingProxyType
 from typing import Mapping
 
 
@@ -20,9 +20,19 @@ class Event:
     sequence: int
     timestamp: datetime
     kind: str
-    actor: Mapping[str, object]
-    operation: Mapping[str, object]
-    raw: Mapping[str, object]
+    _raw: dict[str, object] = field(repr=False)
+
+    @property
+    def actor(self) -> dict[str, object]:
+        return deepcopy(self._raw["actor"])
+
+    @property
+    def operation(self) -> dict[str, object]:
+        return deepcopy(self._raw["operation"])
+
+    @property
+    def raw(self) -> dict[str, object]:
+        return deepcopy(self._raw)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> "Event":
@@ -63,6 +73,8 @@ class Event:
             if len(timestamp_text) < 11 or timestamp_text[10] != "T":
                 raise ValueError
             timestamp = datetime.fromisoformat(timestamp_text.replace("Z", "+00:00"))
+            if timestamp.utcoffset() is None:
+                raise ValueError
         except ValueError as error:
             raise EventError(f"invalid timestamp: {timestamp_text}") from error
 
@@ -73,13 +85,12 @@ class Event:
         operation = data["operation"]
         if not isinstance(operation.get("status"), str):
             raise EventError("operation.status must be a string")
-        if "name" in operation and not isinstance(operation["name"], str):
-            raise EventError("operation.name must be a string")
 
         parent_span_id = data.get("parent_span_id")
         if parent_span_id is not None and not isinstance(parent_span_id, str):
             raise EventError("parent_span_id must be a string")
 
+        snapshot = deepcopy(dict(data))
         return cls(
             schema_version=schema_version,
             event_id=data["event_id"],
@@ -90,7 +101,5 @@ class Event:
             sequence=sequence,
             timestamp=timestamp,
             kind=data["kind"],
-            actor=MappingProxyType(dict(actor)),
-            operation=MappingProxyType(dict(operation)),
-            raw=MappingProxyType(dict(data)),
+            _raw=snapshot,
         )

@@ -61,8 +61,22 @@ class EventTests(unittest.TestCase):
 
         with self.assertRaises(FrozenInstanceError):
             event.kind = "changed"
-        with self.assertRaises(TypeError):
-            event.raw["kind"] = "changed"
+
+    def test_nested_input_mutation_does_not_change_event(self):
+        data = event_data(future_field={"items": ["original"]})
+        event = Event.from_dict(data)
+
+        data["future_field"]["items"][0] = "changed"
+
+        self.assertEqual(event.raw["future_field"], {"items": ["original"]})
+
+    def test_nested_raw_mutation_does_not_change_event(self):
+        event = Event.from_dict(event_data(future_field={"items": ["original"]}))
+
+        raw = event.raw
+        raw["future_field"]["items"][0] = "changed"
+
+        self.assertEqual(event.raw["future_field"], {"items": ["original"]})
 
     def test_rejects_missing_required_fields(self):
         for field in (
@@ -116,6 +130,10 @@ class EventTests(unittest.TestCase):
                 with self.assertRaisesRegex(EventError, "timestamp"):
                     Event.from_dict(event_data(timestamp=timestamp))
 
+    def test_rejects_timezone_naive_timestamp(self):
+        with self.assertRaisesRegex(EventError, "timestamp"):
+            Event.from_dict(event_data(timestamp="2026-07-13T11:02:44"))
+
     def test_rejects_invalid_schema_versions(self):
         for version in ("2.0", "0.9", "1", "1.x", "1.2.3"):
             with self.subTest(version=version):
@@ -134,9 +152,12 @@ class EventTests(unittest.TestCase):
                 with self.assertRaisesRegex(EventError, "operation.status"):
                     Event.from_dict(event_data(operation=operation))
 
-    def test_rejects_incorrect_operation_name_type(self):
-        with self.assertRaisesRegex(EventError, "operation.name"):
-            Event.from_dict(event_data(operation={"status": "running", "name": 1}))
+    def test_does_not_validate_optional_operation_name(self):
+        event = Event.from_dict(
+            event_data(operation={"status": "running", "name": [1]})
+        )
+
+        self.assertEqual(event.operation["name"], [1])
 
 
 if __name__ == "__main__":
