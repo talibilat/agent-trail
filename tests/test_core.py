@@ -358,6 +358,18 @@ class TraceIndexTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field):
                     TraceIndex(**{field: value})
 
+    def test_rejects_invalid_threshold_types(self):
+        for field, values in (
+            ("loop_threshold", (True, 2.0, "4")),
+            ("stall_seconds", (False, "1", None)),
+            ("orphan_grace_seconds", (True, "1", None)),
+            ("max_bytes", (True, 1.5, "1024")),
+        ):
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    with self.assertRaisesRegex(TypeError, field):
+                        TraceIndex(**{field: value})
+
     def test_groups_and_orders_events_without_inventing_cross_emitter_order(self):
         index = TraceIndex()
         index.add(Event.from_dict(event_data(
@@ -518,6 +530,21 @@ class TraceIndexTests(unittest.TestCase):
 
         self.assertTrue(actor.uncertain)
 
+    def test_actor_state_is_uncertain_for_equal_sequence_maxima(self):
+        index = TraceIndex()
+        for event_id, status in (("completed", "completed"), ("failed", "failed")):
+            index.add(Event.from_dict(event_data(
+                event_id=event_id, span_id=event_id, sequence=1,
+                timestamp="2026-07-13T11:02:00Z", kind=f"tool.call.{status}",
+                operation={"status": status, "name": "read_file"},
+            )))
+
+        actor = index.trace("trace-1").actors["reviewer-1"]
+
+        self.assertTrue(actor.uncertain)
+        self.assertEqual(actor.status, "failed")
+        self.assertEqual(actor.last_activity_event_id, "failed")
+
 
 class WarningTests(unittest.TestCase):
     def test_empty_payload_does_not_stall_eviction(self):
@@ -618,6 +645,26 @@ class WarningTests(unittest.TestCase):
             retry_index.add(Event.from_dict(event_data(
                 event_id=f"retry-{sequence}", span_id=f"retry-{sequence}",
                 emitter_id=emitter_id, sequence=1, kind="tool.call.failed",
+                operation={"status": "failed", "name": "read_file"},
+                attributes={"arguments": {"path": "same.py"}},
+            )))
+
+        self.assertNotIn("LOOP", {w.code for w in loop_index.warnings()})
+        self.assertNotIn("RETRY", {w.code for w in retry_index.warnings()})
+
+    def test_loop_and_retry_reset_at_equal_sequences(self):
+        loop_index = TraceIndex(loop_threshold=4)
+        for event_id, sequence in enumerate((1, 2, 2, 3), 1):
+            loop_index.add(Event.from_dict(event_data(
+                event_id=f"loop-{event_id}", span_id=f"loop-{event_id}",
+                sequence=sequence,
+                attributes={"arguments": {"path": "same.py"}},
+            )))
+        retry_index = TraceIndex()
+        for event_id, sequence in enumerate((1, 1, 2), 1):
+            retry_index.add(Event.from_dict(event_data(
+                event_id=f"retry-{event_id}", span_id=f"retry-{event_id}",
+                sequence=sequence, kind="tool.call.failed",
                 operation={"status": "failed", "name": "read_file"},
                 attributes={"arguments": {"path": "same.py"}},
             )))

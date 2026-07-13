@@ -281,6 +281,14 @@ class TraceIndex:
         orphan_grace_seconds: float = 5.0,
         max_bytes: int = 16 * 1024 * 1024,
     ) -> None:
+        for field_name, value, expected_type in (
+            ("loop_threshold", loop_threshold, int),
+            ("stall_seconds", stall_seconds, (int, float)),
+            ("orphan_grace_seconds", orphan_grace_seconds, (int, float)),
+            ("max_bytes", max_bytes, int),
+        ):
+            if isinstance(value, bool) or not isinstance(value, expected_type):
+                raise TypeError(f"{field_name} has an incorrect type")
         for field_name, valid in (
             ("loop_threshold", loop_threshold >= 2),
             ("stall_seconds", stall_seconds >= 0),
@@ -334,7 +342,10 @@ class TraceIndex:
             )
 
         last_activity = {
-            actor_id: max(activity, key=lambda event: event.timestamp)
+            actor_id: max(
+                enumerate(activity),
+                key=lambda item: (item[1].timestamp, item[0]),
+            )[1]
             for actor_id, activity in actor_events.items()
         }
         for event in ordered:
@@ -358,6 +369,7 @@ class TraceIndex:
                     for other in activity
                 )
             ]
+            display = latest[-1] if latest else activity[-1]
             open_spans = tuple(
                 span_id
                 for span_id, span in spans.items()
@@ -370,13 +382,13 @@ class TraceIndex:
                     if event.span_id in open_spans
                 )
             else:
-                status = activity[-1].operation["status"]
+                status = display.operation["status"]
             actors[actor_id] = ActorState(
                 status,
                 last_activity[actor_id].timestamp,
                 last_activity[actor_id].event_id,
                 open_spans,
-                len({event.emitter_id for event in latest}) > 1,
+                len(latest) > 1,
             )
 
         return TraceView(tuple(ordered), frozenset(uncertain), actors, spans)
@@ -513,54 +525,70 @@ class TraceIndex:
         return False
 
     def _loop_warnings(self, events: tuple[Event, ...]) -> list[Warning]:
-        groups: dict[tuple[str, str], list[Event]] = {}
-        for event in events:
-            groups.setdefault(
-                (event.emitter_id, self._signature(event)), []
-            ).append(event)
         warnings = []
-        for (_, signature), repeated in groups.items():
-            for start in range(len(repeated) - self.loop_threshold + 1):
-                window = repeated[start:start + self.loop_threshold]
-                states = {self._state(event) for event in window}
-                if len(states) == 1:
-                    last = window[-1]
-                    warnings.append(self._warning(
-                        "LOOP", last.event_id, last.actor["id"],
-                        f"repeated equivalent operation {len(window)} times without state change",
-                        event_ids=[event.event_id for event in window],
-                        signature=signature, state=next(iter(states)),
-                    ))
-                    break
+        for (_, signature), histories in self._histories(events).items():
+            for repeated in histories:
+                for start in range(len(repeated) - self.loop_threshold + 1):
+                    window = repeated[start:start + self.loop_threshold]
+                    states = {self._state(event) for event in window}
+                    if len(states) == 1:
+                        last = window[-1]
+                        warnings.append(self._warning(
+                            "LOOP", last.event_id, last.actor["id"],
+                            f"repeated equivalent operation {len(window)} times without state change",
+                            event_ids=[event.event_id for event in window],
+                            signature=signature, state=next(iter(states)),
+                        ))
+                        break
+                else:
+                    continue
+                break
         return warnings
 
     def _retry_warnings(self, events: tuple[Event, ...]) -> list[Warning]:
-        groups: dict[tuple[str, str], list[Event]] = {}
-        for event in events:
-            if event.kind.endswith(".failed") or event.operation["status"].lower() == "failed":
-                groups.setdefault(
-                    (event.emitter_id, self._signature(event)), []
-                ).append(event)
         warnings = []
-        for (_, signature), repeated in groups.items():
-            for start in range(len(repeated) - 2):
-                window = repeated[start:start + 3]
-                delays = [
-                    (after.timestamp - before.timestamp).total_seconds()
-                    for before, after in zip(window, window[1:])
-                ]
-                states = {self._state(event) for event in window}
-                if delays[1] <= delays[0] and len(states) == 1:
-                    last = window[-1]
-                    warnings.append(self._warning(
-                        "RETRY", last.event_id, last.actor["id"],
-                        "repeated an unchanged failing call 3 times without increasing delay",
-                        event_ids=[event.event_id for event in window],
-                        delays=delays, signature=signature,
-                        state=next(iter(states)),
-                    ))
-                    break
+        failed = tuple(
+            event
+            for event in events
+            if event.kind.endswith(".failed")
+            or event.operation["status"].lower() == "failed"
+        )
+        for (_, signature), histories in self._histories(failed).items():
+            for repeated in histories:
+                for start in range(len(repeated) - 2):
+                    window = repeated[start:start + 3]
+                    delays = [
+                        (after.timestamp - before.timestamp).total_seconds()
+                        for before, after in zip(window, window[1:])
+                    ]
+                    states = {self._state(event) for event in window}
+                    if delays[1] <= delays[0] and len(states) == 1:
+                        last = window[-1]
+                        warnings.append(self._warning(
+                            "RETRY", last.event_id, last.actor["id"],
+                            "repeated an unchanged failing call 3 times without increasing delay",
+                            event_ids=[event.event_id for event in window],
+                            delays=delays, signature=signature,
+                            state=next(iter(states)),
+                        ))
+                        break
+                else:
+                    continue
+                break
         return warnings
+
+    def _histories(
+        self, events: tuple[Event, ...]
+    ) -> dict[tuple[str, str], list[list[Event]]]:
+        groups: dict[tuple[str, str], list[list[Event]]] = {}
+        for event in events:
+            histories = groups.setdefault(
+                (event.emitter_id, self._signature(event)), [[]]
+            )
+            if histories[-1] and event.sequence <= histories[-1][-1].sequence:
+                histories.append([])
+            histories[-1].append(event)
+        return groups
 
     def _signature(self, event: Event) -> str:
         raw = event.raw
