@@ -35,6 +35,30 @@ def run_cli(*arguments, input=None):
 
 
 class CliTests(unittest.TestCase):
+    def test_realistic_multi_agent_fixture_exports_expected_warnings_safely(self):
+        fixture = Path(__file__).parent / "fixtures" / "runtime.jsonl"
+        secret = "ghp_fixturesecretfixturesecretfixturesecret1"
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory, "report.md")
+
+            result = run_cli(fixture, "--export", report_path)
+            report = report_path.read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 0)
+        for evidence in (
+            "agent-01",
+            "agent-30",
+            "LOOP",
+            "RETRY",
+            "STALL",
+            "ORPHAN",
+            "[REDACTED]",
+            "truncated",
+        ):
+            with self.subTest(evidence=evidence):
+                self.assertIn(evidence, report)
+        self.assertNotIn(secret, report)
+
     def test_help_names_file_and_stdin_inputs_without_internal_options(self):
         result = run_cli("--help")
 

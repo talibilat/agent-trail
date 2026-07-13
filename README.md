@@ -1,0 +1,115 @@
+# Agent Tail
+
+Agent Tail is a local CLI and terminal UI for inspecting canonical multi-agent runtime events without a backend.
+Version 1 directly supports the canonical JSONL emitted by this runtime from a file or standard input.
+
+## Install
+
+Agent Tail requires Python 3.11 or newer.
+
+```bash
+python -m pip install .
+agent-tail --help
+```
+
+For development without installation, prefix commands with `PYTHONPATH=src python -m agent_tail`.
+
+## Read Events
+
+Read a JSONL file:
+
+```bash
+agent-tail run.jsonl
+```
+
+Read newline-delimited events from standard input:
+
+```bash
+producer | agent-tail -
+```
+
+Each non-empty line is parsed independently, so malformed and duplicate lines are reported without discarding other valid events.
+The process succeeds when at least one valid event was accepted.
+
+## Event Envelope
+
+Every event must be a JSON object containing these fields:
+
+- `schema_version`: a supported `1.x` string.
+- `event_id`: a unique string within the input.
+- `trace_id`: the trace identifier.
+- `span_id`: the span identifier.
+- `emitter_id`: the process or stream that owns `sequence`.
+- `sequence`: a non-negative integer.
+- `timestamp`: an ISO 8601 timestamp with a timezone.
+- `kind`: the event kind string.
+- `actor`: an object with a string `id`.
+- `operation`: an object with a string `status` and optional `name`.
+
+`parent_span_id` is optional and links an event to a parent span in the same trace.
+Unknown kinds, fields, and supported minor schema versions are retained so the canonical envelope can evolve.
+
+Harnesses other than the v1 runtime need an adapter that emits this envelope.
+Adapter-specific data belongs under namespaced `attributes`, not in new top-level fields or core parsing rules.
+
+## Ordering And Warnings
+
+Ordering prefers increasing `sequence` within one `emitter_id`, then causal parent links, wall-clock timestamps, and ingestion order.
+Events without enough causal information are marked `uncertain` rather than presented as an exact distributed total order.
+Clock skew and late arrivals therefore remain visible without overriding an emitter's sequence.
+
+`LOOP`, `RETRY`, `STALL`, and `ORPHAN` findings are heuristics, not diagnoses.
+Loop and retry detection compares canonical operation arguments and selected material-state attributes.
+Stall detection checks open spans against `--stall-seconds`, which defaults to 30 seconds.
+Orphan detection allows a short parent-arrival grace period.
+
+## Payloads And Redaction
+
+By default, common bearer tokens, credential-shaped values, sensitive keys, and several common token formats are redacted before accepted events enter the index.
+This ruleset is deliberately limited and cannot guarantee that every secret or private value is detected.
+Review every terminal view and exported report before sharing it.
+
+Payloads larger than the preview limit are truncated on a UTF-8 boundary while recording their original byte count and SHA-256 digest.
+Use `--full-payloads` to retain full accepted payloads in the in-memory inspector when the input is trusted.
+Use `--unsafe-unredacted` only for trusted local data when accepted non-structural values must remain visible.
+
+Structural identifiers remain protected in unsafe mode because they drive indexing and can appear throughout output.
+Rejected-data diagnostics also remain redacted because malformed data never reaches the accepted-event safety boundary.
+Neither option makes arbitrary untrusted input safe to disclose.
+
+The index defaults to a 16 MiB memory budget controlled by `--max-bytes`.
+When necessary it evicts payloads before event metadata and records an `EVICT` warning.
+
+## Markdown Export
+
+Export a deterministic Markdown report with actor states, ordered timelines, heuristic evidence, payload-retention status, and ingestion errors:
+
+```bash
+agent-tail run.jsonl --export report.md
+```
+
+Markdown is the only v1 export format.
+
+## Keyboard Controls
+
+The interactive terminal UI provides these controls:
+
+- `j`: select the next event.
+- `k`: select the previous event.
+- `e`: toggle failed events only.
+- `l`: toggle warning events only.
+- `a`: set or clear an exact actor filter.
+- `t`: set or clear an exact event-kind filter.
+- `T`: set or clear an exact trace filter.
+- `/`: set or clear a case-insensitive event search.
+- `q`: quit.
+
+## Exit Codes
+
+- `0`: at least one valid event was accepted, even if other lines were rejected.
+- `1`: input was read successfully but no valid events were accepted.
+- `2`: command-line validation, input decoding, file access, configuration, or export failed.
+
+## Deferred Scope
+
+Version 1 defers sockets, public harness adapters, HTML and Mermaid exports, a graph pane, persistence, replay, hosting, fan-out warnings, per-tool policies, and custom keybindings.
