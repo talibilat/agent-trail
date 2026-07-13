@@ -1,3 +1,4 @@
+import hashlib
 from queue import Empty, Queue
 import threading
 import unittest
@@ -162,6 +163,29 @@ class SnapshotTests(unittest.TestCase):
         self.assertIn("trace=trace-2", output)
         self.assertIn("writer-1", output)
         self.assertNotIn("reviewer-1", output)
+
+    def test_search_uses_redacted_extension_and_payload_keys(self):
+        extension_secret = "ghp_" + "a" * 36
+        payload_secret = "ghp_" + "b" * 36
+        index = TraceIndex()
+        index.add(sanitize_event(Event.from_dict(event_data(
+            future_field={extension_secret: "extension"},
+            payload={payload_secret: "payload"},
+        )), full_payloads=True))
+
+        for secret in (extension_secret, payload_secret):
+            state = UiState(event_count=1, search=secret)
+            raw_search = render_snapshot(index, width=160, state=state)
+            placeholder = (
+                "[REDACTED:"
+                + hashlib.sha256(secret.encode()).hexdigest()[:12]
+                + "]"
+            )
+            state.search = placeholder
+            redacted_search = render_snapshot(index, width=160, state=state)
+
+            self.assertNotIn("event evt-1", raw_search)
+            self.assertIn("event evt-1", redacted_search)
 
     def test_run_is_the_public_curses_boundary(self):
         self.assertTrue(callable(run))

@@ -44,13 +44,21 @@ def redact_text(value: str) -> str:
     return _SECRET_VALUE.sub("[REDACTED]", value)
 
 
-def _redact_identity(value: str) -> str:
+def _redact_deterministic(value: str) -> str:
     return _SECRET_VALUE.sub(
         lambda match: "[REDACTED:"
         + hashlib.sha256(match.group().encode("utf-8")).hexdigest()[:12]
         + "]",
         value,
     )
+
+
+def _redact_identity(value: str) -> str:
+    if not _SECRET_VALUE.search(value) and value.startswith(
+        ("[REDACTED:", "[LITERAL]")
+    ):
+        value = "[LITERAL]" + value
+    return _redact_deterministic(value)
 
 
 @dataclass(frozen=True)
@@ -209,13 +217,20 @@ def sanitize_event(
 ) -> Event:
     def redact(value: object, path: tuple[str, ...] = ()) -> object:
         if isinstance(value, dict):
-            return {
-                key: "[REDACTED]"
-                if not unsafe_unredacted
-                and _SENSITIVE_KEY.search(_KEY_SEPARATOR.sub("", str(key)))
-                else redact(item, (*path, str(key)))
-                for key, item in value.items()
-            }
+            redacted = {}
+            for key, item in value.items():
+                safe_key = (
+                    key
+                    if unsafe_unredacted or not isinstance(key, str)
+                    else _redact_deterministic(key)
+                )
+                redacted[safe_key] = (
+                    "[REDACTED]"
+                    if not unsafe_unredacted
+                    and _SENSITIVE_KEY.search(_KEY_SEPARATOR.sub("", str(key)))
+                    else redact(item, (*path, str(key)))
+                )
+            return redacted
         if isinstance(value, list):
             return [redact(item, path) for item in value]
         if isinstance(value, str):

@@ -213,6 +213,82 @@ class RedactionTests(unittest.TestCase):
         self.assertEqual(first.actor["id"], second.actor["id"])
         self.assertEqual(first.operation["name"], "[REDACTED]")
 
+    def test_structural_redactions_cannot_collide_with_literal_prefixes(self):
+        secret = "ghp_" + "a" * 36
+        placeholder = (
+            "[REDACTED:" + hashlib.sha256(secret.encode()).hexdigest()[:12] + "]"
+        )
+
+        redacted = sanitize_event(Event.from_dict(event_data(event_id=secret)))
+        literal = sanitize_event(Event.from_dict(event_data(event_id=placeholder)))
+        prefixed = sanitize_event(Event.from_dict(
+            event_data(event_id="[LITERAL]" + placeholder)
+        ))
+        parent = sanitize_event(Event.from_dict(event_data(
+            event_id="parent",
+            span_id=placeholder,
+            actor={"id": "[LITERAL]actor"},
+        )))
+        child = sanitize_event(Event.from_dict(event_data(
+            event_id="child",
+            span_id="child",
+            parent_span_id=placeholder,
+            actor={"id": "[LITERAL]actor"},
+        )))
+
+        self.assertEqual(redacted.event_id, placeholder)
+        self.assertEqual(literal.event_id, "[LITERAL]" + placeholder)
+        self.assertEqual(prefixed.event_id, "[LITERAL][LITERAL]" + placeholder)
+        self.assertEqual(parent.span_id, child.parent_span_id)
+        self.assertEqual(parent.span_id, "[LITERAL]" + placeholder)
+        self.assertEqual(parent.actor["id"], child.actor["id"])
+        self.assertEqual(parent.actor["id"], "[LITERAL][LITERAL]actor")
+        self.assertEqual(
+            sanitize_event(Event.from_dict(event_data())).event_id,
+            "evt-1",
+        )
+
+    def test_recursively_redacts_secret_dictionary_keys_without_collapsing_them(self):
+        extension_secret = "ghp_" + "a" * 36
+        payload_secret = "ghp_" + "b" * 36
+        extension_key = (
+            "[REDACTED:"
+            + hashlib.sha256(extension_secret.encode()).hexdigest()[:12]
+            + "]"
+        )
+        payload_key = (
+            "[REDACTED:"
+            + hashlib.sha256(payload_secret.encode()).hexdigest()[:12]
+            + "]"
+        )
+        event = Event.from_dict(event_data(
+            future_field={
+                extension_secret: "extension",
+                payload_secret: "second",
+                "ordinary": "kept",
+            },
+            payload={payload_secret: "payload"},
+        ))
+
+        safe = sanitize_event(event, full_payloads=True).raw
+        unsafe = sanitize_event(
+            event, full_payloads=True, unsafe_unredacted=True
+        ).raw
+
+        self.assertEqual(
+            safe["future_field"],
+            {
+                extension_key: "extension",
+                payload_key: "second",
+                "ordinary": "kept",
+            },
+        )
+        self.assertEqual(safe["payload"][payload_key], "payload")
+        self.assertNotEqual(extension_key, payload_key)
+        self.assertIn(extension_secret, unsafe["future_field"])
+        self.assertIn(payload_secret, unsafe["payload"])
+        self.assertIn("event_id", safe)
+
     def test_redacts_provider_tokens_with_realistic_lengths(self):
         secrets = [
             *(
