@@ -347,6 +347,65 @@ class IngestionTests(unittest.TestCase):
 
 
 class TraceIndexTests(unittest.TestCase):
+    def test_exposes_immutable_event_count_and_insertion_view(self):
+        index = TraceIndex()
+        event = Event.from_dict(event_data())
+        index.add(event)
+
+        self.assertEqual(index.event_count, 1)
+        self.assertEqual(index.events, (event,))
+        with self.assertRaises(AttributeError):
+            index.events.append(event)
+
+    def test_global_order_preserves_cross_trace_emitter_sequence(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="sequence-1", trace_id="trace-1", span_id="span-1",
+            sequence=1, timestamp="2026-07-13T11:05:00Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="sequence-2", trace_id="trace-2", span_id="span-2",
+            sequence=2, timestamp="2026-07-13T11:01:00Z",
+        )))
+
+        self.assertEqual(
+            tuple(event.event_id for event in index.ordered_events()),
+            ("sequence-1", "sequence-2"),
+        )
+
+    def test_global_order_preserves_parent_before_child_despite_timestamps(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="parent", span_id="parent", emitter_id="parent-worker",
+            timestamp="2026-07-13T11:05:00Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="child", span_id="child", parent_span_id="parent",
+            emitter_id="child-worker", timestamp="2026-07-13T11:01:00Z",
+        )))
+
+        self.assertEqual(
+            tuple(event.event_id for event in index.ordered_events()),
+            ("parent", "child"),
+        )
+
+    def test_global_order_does_not_link_identical_span_ids_across_traces(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="other-trace-parent", trace_id="trace-1", span_id="shared",
+            emitter_id="parent-worker", timestamp="2026-07-13T11:05:00Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="local-orphan", trace_id="trace-2", span_id="child",
+            parent_span_id="shared", emitter_id="child-worker",
+            timestamp="2026-07-13T11:01:00Z",
+        )))
+
+        self.assertEqual(
+            tuple(event.event_id for event in index.ordered_events()),
+            ("local-orphan", "other-trace-parent"),
+        )
+
     def test_rejects_invalid_thresholds(self):
         for field, value in (
             ("loop_threshold", 1),

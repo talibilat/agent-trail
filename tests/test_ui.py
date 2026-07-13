@@ -1,9 +1,15 @@
-from queue import Empty
+from queue import Empty, Queue
 import threading
 import unittest
 
 from agent_tail.core import Event, TraceIndex, sanitize_event
-from agent_tail.ui import UiState, render_snapshot, run, start_event_reader
+from agent_tail.ui import (
+    UiState,
+    drain_event_updates,
+    render_snapshot,
+    run,
+    start_event_reader,
+)
 
 
 def event_data(**changes):
@@ -40,6 +46,57 @@ class SnapshotTests(unittest.TestCase):
         self.assertIn("tool.call.started", output)
         self.assertNotIn("\x1b[", output)
 
+    def test_snapshot_has_stable_actor_lanes_and_one_timeline_row_per_event(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="actor-a-late", span_id="actor-a-late", sequence=2,
+            timestamp="2026-07-13T11:02:46Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="actor-b", span_id="actor-b", emitter_id="worker-2",
+            actor={"id": "writer-1"}, timestamp="2026-07-13T11:02:45Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="actor-a-early", span_id="actor-a-early", sequence=1,
+            timestamp="2026-07-13T11:02:44Z",
+        )))
+
+        output = render_snapshot(index, width=120, now="2026-07-13T11:02:47Z")
+        lanes = output.split("AGENT LANES\n", 1)[1].split("\nTIMELINE", 1)[0]
+        timeline = output.split("TIMELINE\n", 1)[1].split("\nINSPECTOR", 1)[0]
+
+        self.assertEqual(lanes.count("reviewer-1"), 1)
+        self.assertEqual(lanes.count("writer-1"), 1)
+        self.assertLess(lanes.index("reviewer-1"), lanes.index("writer-1"))
+        self.assertEqual(timeline.count("event "), 3)
+
+    def test_timeline_uses_global_sequence_order_across_interleaved_traces(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="first", trace_id="trace-1", span_id="first", sequence=1,
+            timestamp="2026-07-13T11:05:00Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="second", trace_id="trace-2", span_id="second", sequence=2,
+            timestamp="2026-07-13T11:01:00Z",
+        )))
+
+        timeline = render_snapshot(
+            index, width=120, now="2026-07-13T11:06:00Z"
+        ).split("TIMELINE\n", 1)[1].split("\nINSPECTOR", 1)[0]
+
+        self.assertLess(timeline.index("event first"), timeline.index("event second"))
+
+    def test_omitted_render_time_is_derived_from_indexed_events(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data()))
+
+        first = render_snapshot(index, width=80)
+        second = render_snapshot(index, width=80)
+
+        self.assertEqual(first, second)
+        self.assertIn("elapsed 0.0s", first)
+
     def test_selected_inspector_shows_canonical_fields_and_sanitized_payload(self):
         index = TraceIndex()
         event = Event.from_dict(event_data(
@@ -65,6 +122,18 @@ class SnapshotTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertIn(value, output)
         self.assertNotIn("secret-value", output)
+
+    def test_payload_rendering_does_not_mutate_indexed_event(self):
+        index = TraceIndex()
+        index.add(sanitize_event(Event.from_dict(event_data(
+            payload={"answer": 42},
+        ))))
+        before = index.events[0].raw
+
+        render_snapshot(index, width=120)
+
+        self.assertEqual(index.events[0].raw, before)
+        self.assertIn("_agent_tail", index.events[0].raw["payload"])
 
     def test_snapshot_applies_plain_state_filters(self):
         index = TraceIndex()
@@ -146,6 +215,26 @@ class UiStateTests(unittest.TestCase):
 
 
 class EventReaderTests(unittest.TestCase):
+    def test_drain_processes_all_current_events_eof_and_error(self):
+        index = TraceIndex()
+        state = UiState(event_count=0)
+        updates = Queue()
+        first = Event.from_dict(event_data())
+        second = Event.from_dict(event_data(
+            event_id="evt-2", span_id="span-2", sequence=2,
+        ))
+        error = RuntimeError("reader failed")
+        for update in (first, second, error, None):
+            updates.put(update)
+
+        eof, reader_error = drain_event_updates(index, state, updates)
+
+        self.assertTrue(eof)
+        self.assertIs(reader_error, error)
+        self.assertEqual(index.events, (first, second))
+        self.assertEqual(state.event_count, 2)
+        self.assertTrue(updates.empty())
+
     def test_reader_queues_an_event_before_iterable_eof(self):
         release = threading.Event()
         event = Event.from_dict(event_data())

@@ -315,6 +315,17 @@ class TraceIndex:
         self._sizes[event.event_id] = self._event_size(event)
         self._evict()
 
+    @property
+    def event_count(self) -> int:
+        return len(self._events)
+
+    @property
+    def events(self) -> tuple[Event, ...]:
+        return tuple(self._events)
+
+    def ordered_events(self) -> tuple[Event, ...]:
+        return tuple(self._order(self._events)[0])
+
     def trace(self, trace_id: str) -> TraceView:
         events = [event for event in self._events if event.trace_id == trace_id]
         ordered, uncertain, outgoing = self._order(events)
@@ -457,12 +468,13 @@ class TraceIndex:
                     for after in sequence_groups[higher]:
                         edge(before.event_id, after.event_id)
 
-        spans: dict[str, list[Event]] = {}
+        spans: dict[tuple[str, str], list[Event]] = {}
         for event in events:
-            spans.setdefault(event.span_id, []).append(event)
+            spans.setdefault((event.trace_id, event.span_id), []).append(event)
         for event in events:
-            if event.parent_span_id in spans:
-                parents = spans[event.parent_span_id]
+            parent_key = (event.trace_id, event.parent_span_id)
+            if parent_key in spans:
+                parents = spans[parent_key]
                 starts = [parent for parent in parents if parent.kind.endswith(".started")]
                 if starts:
                     for parent in starts:
