@@ -8,15 +8,20 @@ from typing import Iterable, Mapping
 
 
 _SENSITIVE_KEY = re.compile(
-    r"(?:^|[_-])(?:authorization|cookie|password|passwd|secret|token|"
-    r"api[_-]?key|credentials?)(?:$|[_-])",
+    r"(?:auth|authorization|cookie|password|passwd|secret|token|"
+    r"apikey|credentials?)$",
     re.IGNORECASE,
 )
+_KEY_SEPARATOR = re.compile(r"[^a-z0-9]+", re.IGNORECASE)
 _SECRET_VALUE = re.compile(
-    r"\bBearer\s+[^\s,;\"']+"
+    r"(?i:\bBearer\s+[^\s,;\"']+)"
     r"|\bsk-(?:ant-)?[A-Za-z0-9_-]{16,}"
-    r"|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b",
-    re.IGNORECASE,
+    r"|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"
+    r"|\bgh[opusr]_[A-Za-z0-9]{36,}\b"
+    r"|\bxox[bpar]-[A-Za-z0-9-]{20,}\b"
+    r"|\bAIza[A-Za-z0-9_-]{35,}\b"
+    r"|(?s:-----BEGIN (?P<pem_label>(?:[A-Z0-9]+ )*PRIVATE KEY)-----.*?"
+    r"-----END (?P=pem_label)-----)",
 )
 _PAYLOAD_PREVIEW_BYTES = 4096
 
@@ -168,7 +173,9 @@ def sanitize_event(
     def redact(value: object) -> object:
         if isinstance(value, dict):
             return {
-                key: "[REDACTED]" if _SENSITIVE_KEY.search(str(key)) else redact(item)
+                key: "[REDACTED]"
+                if _SENSITIVE_KEY.search(_KEY_SEPARATOR.sub("", str(key)))
+                else redact(item)
                 for key, item in value.items()
             }
         if isinstance(value, list):

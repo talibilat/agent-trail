@@ -163,6 +163,75 @@ class EventTests(unittest.TestCase):
 
 
 class RedactionTests(unittest.TestCase):
+    def test_redacts_provider_tokens_with_realistic_lengths(self):
+        secrets = [
+            *(
+                prefix + "a" * 36
+                for prefix in ("ghp_", "gho_", "ghu_", "ghs_", "ghr_")
+            ),
+            *(prefix + "1" * 24 for prefix in ("xoxb-", "xoxp-", "xoxa-", "xoxr-")),
+            "AIza" + "a" * 35,
+        ]
+        short_lookalikes = ["ghp_short", "xoxb-short", "AIza-short"]
+        event = Event.from_dict(
+            event_data(payload={"secrets": secrets, "safe": short_lookalikes})
+        )
+
+        payload = sanitize_event(event, full_payloads=True).raw["payload"]
+
+        self.assertEqual(payload["secrets"], ["[REDACTED]"] * len(secrets))
+        self.assertEqual(payload["safe"], short_lookalikes)
+
+    def test_redacts_complete_pem_private_key_blocks(self):
+        private_key = (
+            "-----BEGIN RSA PRIVATE KEY-----\n"
+            + "MIIE" + "A" * 64 + "\n"
+            + "-----END RSA PRIVATE KEY-----"
+        )
+        incomplete = "-----BEGIN PRIVATE KEY-----\nnot-complete"
+        event = Event.from_dict(
+            event_data(payload={"private_key": private_key, "note": incomplete})
+        )
+
+        payload = sanitize_event(event, full_payloads=True).raw["payload"]
+
+        self.assertEqual(payload["private_key"], "[REDACTED]")
+        self.assertEqual(payload["note"], incomplete)
+
+    def test_redacts_normalized_sensitive_dictionary_keys(self):
+        sensitive = {
+            key: f"value-{index}"
+            for index, key in enumerate(
+                (
+                    "AUTH",
+                    "AuthToken",
+                    "AUTH_TOKEN",
+                    "Auth-Token",
+                    "Authorization",
+                    "Cookie",
+                    "Set-Cookie",
+                )
+            )
+        }
+        event = Event.from_dict(
+            event_data(
+                attributes={
+                    "nested": sensitive,
+                    "author": "kept",
+                    "tokenizer": "kept",
+                }
+            )
+        )
+
+        attributes = sanitize_event(event).raw["attributes"]
+
+        self.assertEqual(
+            attributes["nested"],
+            {key: "[REDACTED]" for key in sensitive},
+        )
+        self.assertEqual(attributes["author"], "kept")
+        self.assertEqual(attributes["tokenizer"], "kept")
+
     def test_redacts_nested_secrets_and_bounds_payloads(self):
         secret = "sk-ant-" + "x" * 40
         event = Event.from_dict(
