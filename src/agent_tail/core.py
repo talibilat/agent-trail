@@ -26,10 +26,31 @@ _SECRET_VALUE = re.compile(
     r"-----END (?P=pem_label)-----)",
 )
 _PAYLOAD_PREVIEW_BYTES = 4096
+_STRUCTURAL_IDENTITY_PATHS = {
+    ("event_id",),
+    ("trace_id",),
+    ("span_id",),
+    ("parent_span_id",),
+    ("emitter_id",),
+    ("actor", "id"),
+}
 
 
 class EventError(ValueError):
     """Raised when an event does not match the canonical envelope."""
+
+
+def redact_text(value: str) -> str:
+    return _SECRET_VALUE.sub("[REDACTED]", value)
+
+
+def _redact_identity(value: str) -> str:
+    return _SECRET_VALUE.sub(
+        lambda match: "[REDACTED:"
+        + hashlib.sha256(match.group().encode("utf-8")).hexdigest()[:12]
+        + "]",
+        value,
+    )
 
 
 @dataclass(frozen=True)
@@ -154,18 +175,14 @@ class JSONLReader:
         try:
             event = Event.from_dict(json.loads(line))
         except json.JSONDecodeError as error:
-            self.errors.append(IngestionError(
-                self._line_number, f"invalid JSON: {error.msg}"
-            ))
+            self._error(f"invalid JSON: {error.msg}")
             return None
         except EventError as error:
-            self.errors.append(IngestionError(self._line_number, str(error)))
+            self._error(str(error))
             return None
 
         if event.event_id in self._accepted_ids:
-            self.errors.append(IngestionError(
-                self._line_number, f"duplicate event ID: {event.event_id}"
-            ))
+            self._error(f"duplicate event ID: {event.event_id}")
             return None
         self._accepted_ids.add(event.event_id)
         self.events.append(event)
@@ -175,6 +192,9 @@ class JSONLReader:
         for line in lines:
             self.feed(line)
         return Ingestion(self.events, self.errors)
+
+    def _error(self, message: str) -> None:
+        self.errors.append(IngestionError(self._line_number, redact_text(message)))
 
 
 def read_jsonl(lines: Iterable[str]) -> Ingestion:
@@ -187,30 +207,32 @@ def sanitize_event(
     full_payloads: bool = False,
     unsafe_unredacted: bool = False,
 ) -> Event:
-    def redact(value: object) -> object:
+    def redact(value: object, path: tuple[str, ...] = ()) -> object:
         if isinstance(value, dict):
             return {
                 key: "[REDACTED]"
-                if _SENSITIVE_KEY.search(_KEY_SEPARATOR.sub("", str(key)))
-                else redact(item)
+                if not unsafe_unredacted
+                and _SENSITIVE_KEY.search(_KEY_SEPARATOR.sub("", str(key)))
+                else redact(item, (*path, str(key)))
                 for key, item in value.items()
             }
         if isinstance(value, list):
-            return [redact(item) for item in value]
+            return [redact(item, path) for item in value]
         if isinstance(value, str):
-            return _SECRET_VALUE.sub("[REDACTED]", value)
+            if path in _STRUCTURAL_IDENTITY_PATHS:
+                return _redact_identity(value)
+            return value if unsafe_unredacted else redact_text(value)
         return value
 
-    raw = event.raw
-    if "attributes" in raw and not unsafe_unredacted:
-        raw["attributes"] = redact(raw["attributes"])
+    original_raw = event.raw
+    raw = redact(original_raw)
 
     if "payload" in raw:
-        payload = raw["payload"]
+        payload = original_raw["payload"]
         original = json.dumps(
             payload, ensure_ascii=False, separators=(",", ":")
         ).encode("utf-8")
-        safe_payload = payload if unsafe_unredacted else redact(payload)
+        safe_payload = raw["payload"]
         if isinstance(safe_payload, dict):
             safe_payload.pop("_agent_tail", None)
         serialized = json.dumps(

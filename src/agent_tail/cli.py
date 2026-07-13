@@ -9,6 +9,13 @@ from .core import IngestionError, JSONLReader, TraceIndex, sanitize_event
 from .ui import render_snapshot, run
 
 
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(prog="agent-tail")
     result.add_argument("input", help="JSONL file or - for standard input")
@@ -17,6 +24,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--unsafe-unredacted", action="store_true")
     result.add_argument("--loop-threshold", type=int, default=4)
     result.add_argument("--stall-seconds", type=float, default=30.0)
+    result.add_argument("--max-bytes", type=_positive_int, default=16 * 1024 * 1024)
     result.add_argument(
         "--snapshot-stream", action="store_true", help=argparse.SUPPRESS
     )
@@ -41,10 +49,6 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     reader = JSONLReader()
-    index = TraceIndex(
-        loop_threshold=arguments.loop_threshold,
-        stall_seconds=arguments.stall_seconds,
-    )
 
     def events():
         for line in source:
@@ -57,6 +61,11 @@ def main(argv: list[str] | None = None) -> int:
                 )
 
     try:
+        index = TraceIndex(
+            loop_threshold=arguments.loop_threshold,
+            stall_seconds=arguments.stall_seconds,
+            max_bytes=arguments.max_bytes,
+        )
         if arguments.snapshot_stream:
             for event in events():
                 index.add(event)
@@ -81,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
             for event in events():
                 index.add(event)
             print(render_snapshot(index, width=120))
-    except OSError as error:
+    except (OSError, UnicodeError, ValueError) as error:
         print(f"agent-tail: {error}", file=sys.stderr)
         return 2
     finally:

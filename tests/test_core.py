@@ -5,7 +5,14 @@ import json
 import threading
 import unittest
 
-from agent_tail.core import Event, EventError, TraceIndex, read_jsonl, sanitize_event
+from agent_tail.core import (
+    Event,
+    EventError,
+    TraceIndex,
+    read_jsonl,
+    redact_text,
+    sanitize_event,
+)
 
 
 def event_data(**changes):
@@ -164,6 +171,48 @@ class EventTests(unittest.TestCase):
 
 
 class RedactionTests(unittest.TestCase):
+    def test_redact_text_redacts_secret_values(self):
+        self.assertEqual(
+            redact_text("failed near Bearer rejected-secret"),
+            "failed near [REDACTED]",
+        )
+
+    def test_sanitizes_entire_envelope_and_preserves_structural_identity(self):
+        shared_span = "ghp_" + "a" * 36
+        actor_id = "Bearer actor-secret"
+        first = sanitize_event(Event.from_dict(event_data(
+            event_id="ghp_" + "b" * 36,
+            trace_id="ghp_" + "c" * 36,
+            span_id=shared_span,
+            emitter_id="ghp_" + "d" * 36,
+            kind="Bearer kind-secret",
+            actor={"id": actor_id, "role": "Bearer role-secret"},
+            operation={"status": "running", "name": "Bearer operation-secret"},
+            future_field={"note": "Bearer future-secret"},
+        )))
+        second = sanitize_event(Event.from_dict(event_data(
+            event_id="ghp_" + "e" * 36,
+            span_id="span-child",
+            parent_span_id=shared_span,
+            actor={"id": actor_id},
+        )))
+
+        encoded = json.dumps((first.raw, second.raw))
+        for secret in (
+            shared_span,
+            actor_id,
+            "kind-secret",
+            "role-secret",
+            "operation-secret",
+            "future-secret",
+        ):
+            self.assertNotIn(secret, encoded)
+        self.assertRegex(first.event_id, r"^\[REDACTED:[0-9a-f]{12}\]$")
+        self.assertNotEqual(first.event_id, second.event_id)
+        self.assertEqual(first.span_id, second.parent_span_id)
+        self.assertEqual(first.actor["id"], second.actor["id"])
+        self.assertEqual(first.operation["name"], "[REDACTED]")
+
     def test_redacts_provider_tokens_with_realistic_lengths(self):
         secrets = [
             *(
@@ -318,6 +367,14 @@ class RedactionTests(unittest.TestCase):
 
 
 class IngestionTests(unittest.TestCase):
+    def test_redacts_rejected_event_error_messages(self):
+        secret = "Bearer rejected-timestamp-secret"
+        result = read_jsonl([json.dumps(event_data(timestamp=secret))])
+
+        self.assertEqual(result.events, [])
+        self.assertIn("invalid timestamp: [REDACTED]", result.errors[0].message)
+        self.assertNotIn(secret, result.errors[0].message)
+
     def test_keeps_valid_events_and_reports_bad_lines(self):
         first = json.dumps(event_data())
         duplicate = json.dumps(event_data(kind="future.kind"))

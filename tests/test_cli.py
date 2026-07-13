@@ -39,6 +39,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0)
         self.assertIn("JSONL file or - for standard input", result.stdout)
+        self.assertIn("--max-bytes", result.stdout)
         self.assertNotIn("snapshot-stream", result.stdout)
 
     def test_file_and_stdin_export_the_same_redacted_report(self):
@@ -63,6 +64,7 @@ class CliTests(unittest.TestCase):
             self.assertNotIn("payload-secret", report)
 
     def test_stdin_events_are_sanitized_and_visible_before_eof(self):
+        secret = "ghp_" + "a" * 36
         process = subprocess.Popen(
             [sys.executable, "-m", "agent_tail", "-", "--snapshot-stream"],
             stdin=subprocess.PIPE,
@@ -74,13 +76,15 @@ class CliTests(unittest.TestCase):
         self.addCleanup(lambda: process.kill() if process.poll() is None else None)
 
         process.stdin.write(json.dumps(event_data(
-            payload={"token": "Bearer secret-value"},
+            event_id=secret,
+            actor={"id": "Bearer actor-secret"},
         )) + "\n")
         process.stdin.flush()
 
         snapshot = process.stdout.readline()
-        self.assertIn("reviewer-1", snapshot)
-        self.assertNotIn("secret-value", snapshot)
+        self.assertNotIn(secret, snapshot)
+        self.assertNotIn("actor-secret", snapshot)
+        self.assertRegex(snapshot, r"\[REDACTED:[0-9a-f]{12}\]")
         self.assertIsNone(process.poll())
 
         process.stdin.close()
@@ -96,6 +100,38 @@ class CliTests(unittest.TestCase):
         self.assertEqual(missing_file.returncode, 2)
         self.assertIn("does-not-exist.jsonl", missing_file.stderr)
 
+    def test_semantic_and_non_utf8_file_errors_return_two_without_tracebacks(self):
+        semantic = run_cli("-", "--loop-threshold", "1", input="")
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "invalid.jsonl")
+            source.write_bytes(b"\xff\n")
+            non_utf8 = run_cli(source)
+
+        for result in (semantic, non_utf8):
+            with self.subTest(stderr=result.stderr):
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("agent-tail:", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
+    def test_max_bytes_forces_payload_eviction_into_markdown_evidence(self):
+        line = json.dumps(event_data(payload={"text": "x" * 5000})) + "\n"
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory, "report.md")
+            result = run_cli(
+                "-", "--export", report_path, "--max-bytes", "1000", input=line
+            )
+            report = report_path.read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("EVICT", report)
+        self.assertIn("| evicted |", report)
+
+    def test_max_bytes_must_be_positive(self):
+        result = run_cli("-", "--max-bytes", "0", input="")
+
+        self.assertEqual(result.returncode, 2)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_acceptance_controls_exit_status_even_with_invalid_lines(self):
         invalid_only = run_cli("-", input="not json\n")
         mixed = run_cli(
@@ -107,6 +143,22 @@ class CliTests(unittest.TestCase):
         self.assertEqual(mixed.returncode, 0)
         self.assertIn("line 1: invalid JSON", mixed.stderr)
         self.assertIn("line 3: missing required field", mixed.stderr)
+
+    def test_rejected_errors_stay_redacted_in_unsafe_mode_and_export(self):
+        secret = "Bearer rejected-timestamp-secret"
+        line = json.dumps(event_data(timestamp=secret)) + "\n"
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory, "report.md")
+            result = run_cli(
+                "-", "--unsafe-unredacted", "--export", report_path, input=line
+            )
+            report = report_path.read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn(secret, result.stderr)
+        self.assertNotIn(secret, report)
+        self.assertIn("invalid timestamp: [REDACTED]", result.stderr)
+        self.assertIn("invalid timestamp: [REDACTED]", report)
 
     def test_markdown_contains_complete_deterministic_evidence(self):
         lines = []
