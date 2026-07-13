@@ -1,9 +1,10 @@
 from dataclasses import FrozenInstanceError
 from datetime import datetime
+import hashlib
 import json
 import unittest
 
-from agent_tail.core import Event, EventError, read_jsonl
+from agent_tail.core import Event, EventError, read_jsonl, sanitize_event
 
 
 def event_data(**changes):
@@ -159,6 +160,70 @@ class EventTests(unittest.TestCase):
         )
 
         self.assertEqual(event.operation["name"], [1])
+
+
+class RedactionTests(unittest.TestCase):
+    def test_redacts_nested_secrets_and_bounds_payloads(self):
+        secret = "sk-ant-" + "x" * 40
+        event = Event.from_dict(
+            event_data(
+                attributes={
+                    "nested": {"authorization": "Bearer token-value"},
+                    "note": f"credential: {secret}",
+                },
+                payload={
+                    "items": [{"cookie": "session=secret"}],
+                    "text": secret + "z" * 5000,
+                },
+            )
+        )
+
+        safe = sanitize_event(event)
+        encoded = json.dumps(safe.raw)
+
+        self.assertNotIn("token-value", encoded)
+        self.assertNotIn("session=secret", encoded)
+        self.assertNotIn(secret, encoded)
+        self.assertNotIn("z" * 100, encoded)
+        self.assertTrue(safe.raw["payload"]["_agent_tail"]["truncated"])
+        self.assertEqual(safe.raw["payload"]["_agent_tail"]["ruleset"], "1")
+        self.assertEqual(len(safe.raw["payload"]["_agent_tail"]["sha256"]), 64)
+
+    def test_full_and_unsafe_payload_flags_are_explicit(self):
+        event = Event.from_dict(
+            event_data(payload={"text": "Bearer abc" + "z" * 5000})
+        )
+
+        full = sanitize_event(event, full_payloads=True)
+        unsafe = sanitize_event(
+            event, full_payloads=True, unsafe_unredacted=True
+        )
+
+        self.assertFalse(full.raw["payload"]["_agent_tail"]["truncated"])
+        self.assertNotIn("Bearer abc", json.dumps(full.raw))
+        self.assertIn("Bearer abc", json.dumps(unsafe.raw))
+
+    def test_payload_metadata_describes_original_content(self):
+        payload = {"text": "secret", "token": "visible-before-redaction"}
+        original = json.dumps(
+            payload, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+
+        safe = sanitize_event(Event.from_dict(event_data(payload=payload)))
+        metadata = safe.raw["payload"]["_agent_tail"]
+
+        self.assertEqual(metadata["original_bytes"], len(original))
+        self.assertEqual(metadata["sha256"], hashlib.sha256(original).hexdigest())
+        self.assertFalse(metadata["truncated"])
+
+    def test_payload_preview_is_utf8_safe_and_at_most_4096_bytes(self):
+        event = Event.from_dict(event_data(payload={"text": "\N{EURO SIGN}" * 2000}))
+
+        safe = sanitize_event(event)
+        preview = safe.raw["payload"]["preview"]
+
+        self.assertLessEqual(len(preview.encode("utf-8")), 4096)
+        preview.encode("utf-8").decode("utf-8")
 
 
 class IngestionTests(unittest.TestCase):

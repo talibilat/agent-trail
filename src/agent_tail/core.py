@@ -1,9 +1,24 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
+import hashlib
 import json
 import re
 from typing import Iterable, Mapping
+
+
+_SENSITIVE_KEY = re.compile(
+    r"(?:^|[_-])(?:authorization|cookie|password|passwd|secret|token|"
+    r"api[_-]?key|credentials?)(?:$|[_-])",
+    re.IGNORECASE,
+)
+_SECRET_VALUE = re.compile(
+    r"\bBearer\s+[^\s,;\"']+"
+    r"|\bsk-(?:ant-)?[A-Za-z0-9_-]{16,}"
+    r"|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b",
+    re.IGNORECASE,
+)
+_PAYLOAD_PREVIEW_BYTES = 4096
 
 
 class EventError(ValueError):
@@ -142,3 +157,59 @@ def read_jsonl(lines: Iterable[str]) -> Ingestion:
         events.append(event)
 
     return Ingestion(events, errors)
+
+
+def sanitize_event(
+    event: Event,
+    *,
+    full_payloads: bool = False,
+    unsafe_unredacted: bool = False,
+) -> Event:
+    def redact(value: object) -> object:
+        if isinstance(value, dict):
+            return {
+                key: "[REDACTED]" if _SENSITIVE_KEY.search(str(key)) else redact(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [redact(item) for item in value]
+        if isinstance(value, str):
+            return _SECRET_VALUE.sub("[REDACTED]", value)
+        return value
+
+    raw = event.raw
+    if "attributes" in raw and not unsafe_unredacted:
+        raw["attributes"] = redact(raw["attributes"])
+
+    if "payload" in raw:
+        payload = raw["payload"]
+        original = json.dumps(
+            payload, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+        safe_payload = payload if unsafe_unredacted else redact(payload)
+        if isinstance(safe_payload, dict):
+            safe_payload.pop("_agent_tail", None)
+        serialized = json.dumps(
+            safe_payload, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+        truncated = not full_payloads and len(original) > _PAYLOAD_PREVIEW_BYTES
+        metadata = {
+            "original_bytes": len(original),
+            "sha256": hashlib.sha256(original).hexdigest(),
+            "truncated": truncated,
+            "ruleset": "1",
+        }
+        if truncated:
+            raw["payload"] = {
+                "preview": serialized[:_PAYLOAD_PREVIEW_BYTES].decode(
+                    "utf-8", errors="ignore"
+                ),
+                "_agent_tail": metadata,
+            }
+        elif isinstance(safe_payload, dict):
+            safe_payload["_agent_tail"] = metadata
+            raw["payload"] = safe_payload
+        else:
+            raw["payload"] = {"value": safe_payload, "_agent_tail": metadata}
+
+    return Event.from_dict(raw)
