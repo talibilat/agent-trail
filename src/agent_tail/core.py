@@ -1,8 +1,9 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
+import json
 import re
-from typing import Mapping
+from typing import Iterable, Mapping
 
 
 class EventError(ValueError):
@@ -103,3 +104,41 @@ class Event:
             kind=data["kind"],
             _raw=snapshot,
         )
+
+
+@dataclass
+class IngestionError:
+    line: int
+    message: str
+
+
+@dataclass
+class Ingestion:
+    events: list[Event]
+    errors: list[IngestionError]
+
+
+def read_jsonl(lines: Iterable[str]) -> Ingestion:
+    events = []
+    errors = []
+    accepted_ids = set()
+
+    for line_number, line in enumerate(lines, 1):
+        if not line.strip():
+            continue
+        try:
+            event = Event.from_dict(json.loads(line))
+        except json.JSONDecodeError as error:
+            errors.append(IngestionError(line_number, f"invalid JSON: {error.msg}"))
+            continue
+        except EventError as error:
+            errors.append(IngestionError(line_number, str(error)))
+            continue
+
+        if event.event_id in accepted_ids:
+            errors.append(IngestionError(line_number, f"duplicate event ID: {event.event_id}"))
+            continue
+        accepted_ids.add(event.event_id)
+        events.append(event)
+
+    return Ingestion(events, errors)

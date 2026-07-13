@@ -1,8 +1,9 @@
 from dataclasses import FrozenInstanceError
 from datetime import datetime
+import json
 import unittest
 
-from agent_tail.core import Event, EventError
+from agent_tail.core import Event, EventError, read_jsonl
 
 
 def event_data(**changes):
@@ -158,6 +159,35 @@ class EventTests(unittest.TestCase):
         )
 
         self.assertEqual(event.operation["name"], [1])
+
+
+class IngestionTests(unittest.TestCase):
+    def test_keeps_valid_events_and_reports_bad_lines(self):
+        first = json.dumps(event_data())
+        duplicate = json.dumps(event_data(kind="future.kind"))
+        other_trace = json.dumps(event_data(event_id="evt-2", trace_id="trace-2"))
+
+        result = read_jsonl([first, "not json", duplicate, other_trace])
+
+        self.assertEqual([event.event_id for event in result.events], ["evt-1", "evt-2"])
+        self.assertEqual([error.line for error in result.errors], [2, 3])
+        self.assertIn("JSON", result.errors[0].message)
+        self.assertIn("duplicate", result.errors[1].message)
+
+    def test_reports_invalid_envelope_source_line(self):
+        invalid = json.dumps(event_data(actor={}))
+
+        result = read_jsonl(["", "  ", invalid])
+
+        self.assertEqual(result.events, [])
+        self.assertEqual(result.errors[0].line, 3)
+        self.assertIn("actor.id", result.errors[0].message)
+
+    def test_ignores_blank_lines(self):
+        result = read_jsonl(["", "  \t", json.dumps(event_data())])
+
+        self.assertEqual([event.event_id for event in result.events], ["evt-1"])
+        self.assertEqual(result.errors, [])
 
 
 if __name__ == "__main__":
