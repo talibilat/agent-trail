@@ -272,6 +272,52 @@ class SnapshotTests(unittest.TestCase):
         self.assertIn("event root ", output)
         self.assertIn("event child ", output)
 
+    def test_trace_filtered_warning_mode_does_not_leak_same_actor_warning(self):
+        index = TraceIndex(stall_seconds=10)
+        index.add(Event.from_dict(event_data(
+            event_id="trace-1-open", trace_id="trace-1", span_id="trace-1-open",
+            emitter_id="worker-1", actor={"id": "shared"},
+            timestamp="2026-07-13T11:00:00Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="trace-2-done", trace_id="trace-2", span_id="trace-2-done",
+            emitter_id="worker-2", actor={"id": "shared"},
+            timestamp="2026-07-13T11:03:00Z", kind="tool.call.completed",
+            operation={"status": "completed", "name": "read_file"},
+        )))
+
+        output = render_snapshot(
+            index,
+            width=160,
+            now="2026-07-13T11:03:40Z",
+            state=UiState(
+                event_count=2,
+                trace_filter="trace-2",
+                warnings_only=True,
+            ),
+        )
+
+        self.assertNotIn("warning STALL", output)
+        self.assertNotIn("event trace-1-open", output)
+        self.assertNotIn("event trace-2-done", output)
+
+    def test_same_actor_in_multiple_visible_traces_has_distinct_lanes(self):
+        index = TraceIndex()
+        for trace_id, emitter_id in (("trace-1", "worker-1"), ("trace-2", "worker-2")):
+            index.add(Event.from_dict(event_data(
+                event_id=f"{trace_id}-event", trace_id=trace_id,
+                span_id=f"{trace_id}-span", emitter_id=emitter_id,
+                actor={"id": "shared"},
+            )))
+
+        lanes = render_snapshot(index, width=160).split(
+            "AGENT LANES\n", 1
+        )[1].split("\nTIMELINE", 1)[0]
+
+        self.assertEqual(lanes.count("shared"), 2)
+        self.assertIn("trace-1", lanes)
+        self.assertIn("trace-2", lanes)
+
     def test_lane_displays_actor_state_uncertainty(self):
         index = TraceIndex()
         for event_id, emitter, status in (
@@ -344,6 +390,57 @@ class UiStateTests(unittest.TestCase):
 
 
 class EventReaderTests(unittest.TestCase):
+    def test_curses_loop_sanitizes_and_bounds_reader_error_status(self):
+        error = RuntimeError("bad\n\t\x1b\N{RIGHT-TO-LEFT OVERRIDE}\x00end")
+        updates = Queue()
+        updates.put(error)
+        updates.put(None)
+
+        class Screen:
+            def __init__(self):
+                self.lines = []
+
+            def timeout(self, _value):
+                pass
+
+            def getmaxyx(self):
+                return (20, 80)
+
+            def erase(self):
+                pass
+
+            def addstr(self, row, _column, text):
+                self.lines.append((row, text))
+
+            def refresh(self):
+                pass
+
+            def get_wch(self):
+                return "q"
+
+        screen = Screen()
+        with mock.patch(
+            "agent_tail.ui.start_event_reader", return_value=updates
+        ):
+            _curses_loop(screen, TraceIndex(), ())
+
+        status = screen.lines[0][1]
+        self.assertIn("READER ERROR", status)
+        self.assertIn("end", status)
+        self.assertFalse(any(
+            unicodedata.category(character).startswith("C")
+            for _, line in screen.lines
+            for character in line
+        ))
+        for _, line in screen.lines:
+            cells = sum(
+                0 if unicodedata.category(character).startswith("M")
+                else 2 if unicodedata.east_asian_width(character) in {"W", "F"}
+                else 1
+                for character in line
+            )
+            self.assertLessEqual(cells, 79)
+
     def test_curses_loop_returns_reader_failure_after_quit(self):
         error = RuntimeError("reader failed")
         updates = Queue()

@@ -672,6 +672,7 @@ class TraceIndexTests(unittest.TestCase):
             if warning.code == "STALL" and warning.actor_id == "reviewer-1"
         )
         self.assertEqual(stall.event_id, "child")
+        self.assertEqual(stall.trace_id, "trace-1")
 
     def test_waiting_is_open_and_terminal_status_closes_span(self):
         index = TraceIndex()
@@ -871,6 +872,7 @@ class WarningTests(unittest.TestCase):
         codes = {warning.code for warning in warnings}
 
         self.assertTrue({"LOOP", "RETRY", "STALL", "ORPHAN"}.issubset(codes))
+        self.assertEqual({warning.trace_id for warning in warnings}, {"trace-1"})
         retry = next(warning for warning in warnings if warning.code == "RETRY")
         self.assertEqual(
             json.loads(retry.evidence)["event_ids"],
@@ -1036,6 +1038,7 @@ class WarningTests(unittest.TestCase):
         self.assertEqual(view.event_ids, ("evt-1",))
         self.assertEqual(set(view.events[0].raw["payload"]), {"_agent_tail"})
         eviction = next(warning for warning in index.warnings() if warning.code == "EVICT")
+        self.assertEqual(eviction.trace_id, "trace-1")
         self.assertEqual(json.loads(eviction.evidence)["latest"]["evicted"], "payload")
 
         tiny = TraceIndex(max_bytes=1)

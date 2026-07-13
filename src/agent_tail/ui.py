@@ -125,8 +125,10 @@ def render_snapshot(
         current = datetime.fromtimestamp(0, timezone.utc)
     events = list(index.ordered_events())
     warnings = index.warnings(now=current)
-    warning_ids = {warning.event_id for warning in warnings}
-    warning_actor_ids = {warning.actor_id for warning in warnings}
+    warning_ids = {(warning.trace_id, warning.event_id) for warning in warnings}
+    warning_actor_ids = {
+        (warning.trace_id, warning.actor_id) for warning in warnings
+    }
     if state:
         events = [
             event for event in events
@@ -146,8 +148,8 @@ def render_snapshot(
             )
             and (
                 not state.warnings_only
-                or event.event_id in warning_ids
-                or event.actor["id"] in warning_actor_ids
+                or (event.trace_id, event.event_id) in warning_ids
+                or (event.trace_id, event.actor["id"]) in warning_actor_ids
             )
         ]
         selected = state.selected
@@ -168,28 +170,33 @@ def render_snapshot(
             f"warnings={'on' if state.warnings_only else 'off'}",
         ))
     lines = [" ".join(filters), "AGENT LANES"]
-    latest_by_actor = {event.actor["id"]: event for event in events}
+    latest_by_actor = {
+        (event.trace_id, event.actor["id"]): event for event in events
+    }
     visible_actors = latest_by_actor.keys()
     actor_states = {}
     for trace_id in dict.fromkeys(event.trace_id for event in events):
         for actor_id, actor_state in index.trace(trace_id).actors.items():
-            if actor_id in visible_actors and (
-                actor_id not in actor_states
-                or actor_state.last_activity >= actor_states[actor_id].last_activity
-            ):
-                actor_states[actor_id] = actor_state
-    for actor_id in dict.fromkeys(
-        event.actor["id"]
+            lane = (trace_id, actor_id)
+            if lane in visible_actors:
+                actor_states[lane] = actor_state
+    visible_traces = {trace_id for trace_id, _ in visible_actors}
+    for trace_id, actor_id in dict.fromkeys(
+        (event.trace_id, event.actor["id"])
         for event in indexed_events
-        if event.actor["id"] in visible_actors
+        if (event.trace_id, event.actor["id"]) in visible_actors
     ):
-        event = latest_by_actor[actor_id]
-        state_actor = actor_states[actor_id]
+        lane_key = (trace_id, actor_id)
+        event = latest_by_actor[lane_key]
+        state_actor = actor_states[lane_key]
         elapsed = max(0.0, (current - state_actor.last_activity).total_seconds())
         actor = event.actor
         operation = event.operation
+        lane_name = (
+            f"{trace_id} {actor_id}" if len(visible_traces) > 1 else actor_id
+        )
         lane = (
-            f"{actor_id} {state_actor.status} {state_actor.operation} "
+            f"{lane_name} {state_actor.status} {state_actor.operation} "
             f"elapsed {elapsed:.1f}s "
             f"{'uncertain' if state_actor.uncertain else 'causal'}"
         )
@@ -199,7 +206,7 @@ def render_snapshot(
             codes = [
                 warning.code
                 for warning in warnings
-                if warning.actor_id == actor_id
+                if (warning.trace_id, warning.actor_id) == lane_key
             ]
             if codes:
                 lane += " warning " + ",".join(codes)
@@ -270,9 +277,10 @@ def _curses_loop(
         status = "INPUT EOF - final view frozen" if eof else "INPUT LIVE"
         if reader_error:
             status += f" - READER ERROR: {reader_error}"
-        text = status + "\n" + render_snapshot(
+        content_width = max(width - 1, 1)
+        text = _truncate_cells(status, content_width) + "\n" + render_snapshot(
             index,
-            width=max(width - 1, 1),
+            width=content_width,
             now=frozen_now if eof else datetime.now().astimezone(),
             state=state,
         )

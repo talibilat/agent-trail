@@ -302,6 +302,7 @@ def sanitize_event(
 class Warning:
     code: str
     event_id: str
+    trace_id: str
     actor_id: str
     summary: str
     evidence: str
@@ -496,7 +497,7 @@ class TraceIndex:
                 if actor.open_span_ids and elapsed >= self.stall_seconds:
                     event_id = actor.last_activity_event_id
                     warnings.append(self._warning(
-                        "STALL", event_id, actor_id,
+                        "STALL", event_id, trace_id, actor_id,
                         f"{actor_id} has produced no event for {elapsed:.1f} seconds",
                         event_ids=[event_id], seconds=elapsed,
                     ))
@@ -510,7 +511,7 @@ class TraceIndex:
                     >= self.orphan_grace_seconds
                 ):
                     warnings.append(self._warning(
-                        "ORPHAN", event.event_id, event.actor["id"],
+                        "ORPHAN", event.event_id, event.trace_id, event.actor["id"],
                         f"parent span {event.parent_span_id} is absent",
                         event_ids=[event.event_id], parent_span_id=event.parent_span_id,
                     ))
@@ -651,7 +652,7 @@ class TraceIndex:
                     if len(states) == 1:
                         last = window[-1]
                         warnings.append(self._warning(
-                            "LOOP", last.event_id, last.actor["id"],
+                            "LOOP", last.event_id, last.trace_id, last.actor["id"],
                             f"repeated equivalent operation {len(window)} times without state change",
                             event_ids=[event.event_id for event in window],
                             signature=signature, state=next(iter(states)),
@@ -702,7 +703,7 @@ class TraceIndex:
                 ]
                 if delays[1] <= delays[0]:
                     warnings.append(self._warning(
-                        "RETRY", event.event_id, event.actor["id"],
+                        "RETRY", event.event_id, event.trace_id, event.actor["id"],
                         "repeated an unchanged failing call 3 times without increasing delay",
                         event_ids=[item.event_id for item in window],
                         delays=delays, signature=signature, state=state,
@@ -794,7 +795,7 @@ class TraceIndex:
     def _record_eviction(self, event: Event, evicted: str, bytes_freed: int) -> None:
         self._eviction_count += 1
         self._eviction_warning = self._warning(
-            "EVICT", event.event_id, event.actor["id"],
+            "EVICT", event.event_id, event.trace_id, event.actor["id"],
             f"evicted indexed data {self._eviction_count} times",
             count=self._eviction_count,
             latest={
@@ -809,11 +810,12 @@ class TraceIndex:
         cls,
         code: str,
         event_id: str,
+        trace_id: str,
         actor_id: str,
         summary: str,
         **evidence: object,
     ) -> Warning:
-        return Warning(code, event_id, actor_id, summary, cls._json(evidence))
+        return Warning(code, event_id, trace_id, actor_id, summary, cls._json(evidence))
 
     @staticmethod
     def _json(value: object) -> str:
