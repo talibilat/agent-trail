@@ -1,11 +1,14 @@
 import argparse
 from datetime import datetime, timezone
+import html
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Iterable, TextIO
+import unicodedata
 
-from .core import IngestionError, JSONLReader, TraceIndex, sanitize_event
+from .core import IngestionError, JSONLReader, TraceIndex, redact_text, sanitize_event
 from .ui import render_snapshot, run
 
 
@@ -48,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"agent-tail: {arguments.input}: {error.strerror}", file=sys.stderr)
             return 2
 
-    reader = JSONLReader()
+    reader = JSONLReader(retain_events=False)
 
     def events():
         for line in source:
@@ -61,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
 
     try:
+        reader_error = None
         index = TraceIndex(
             loop_threshold=arguments.loop_threshold,
             stall_seconds=arguments.stall_seconds,
@@ -77,11 +81,11 @@ def main(argv: list[str] | None = None) -> int:
             for event in events():
                 index.add(event)
             Path(arguments.export).write_text(
-                _markdown(index, reader.errors), encoding="utf-8"
+                _markdown(index, reader.all_errors), encoding="utf-8"
             )
         elif sys.stdout.isatty():
             if arguments.input == "-":
-                run(index, events())
+                reader_error = run(index, events())
             else:
                 for event in events():
                     index.add(event)
@@ -97,13 +101,18 @@ def main(argv: list[str] | None = None) -> int:
         if close_source:
             source.close()
 
-    _print_errors(reader.errors)
-    return 0 if reader.events else 1
+    if reader_error is not None:
+        message = redact_text(str(reader_error).splitlines()[0])
+        print(f"agent-tail: reader failed: {message}", file=sys.stderr)
+        return 2
+    _print_errors(reader.all_errors)
+    return 0 if reader.accepted_count else 1
 
 
 def _print_errors(errors: Iterable[IngestionError]) -> None:
     for error in errors:
-        print(f"line {error.line}: {error.message}", file=sys.stderr)
+        prefix = f"line {error.line}: " if error.line is not None else ""
+        print(prefix + error.message, file=sys.stderr)
 
 
 def _markdown(index: TraceIndex, errors: Iterable[IngestionError]) -> str:
@@ -186,7 +195,8 @@ def _markdown(index: TraceIndex, errors: Iterable[IngestionError]) -> str:
     error_list = list(errors)
     if error_list:
         lines.extend(
-            f"- Line {error.line}: {_markdown_text(error.message)}"
+            (f"- Line {error.line}: " if error.line is not None else "- ")
+            + _markdown_text(error.message)
             for error in error_list
         )
     else:
@@ -211,4 +221,26 @@ def _payload_retention(payload: object) -> str:
 def _markdown_text(value: object) -> str:
     if not isinstance(value, str):
         value = json.dumps(value, ensure_ascii=False, sort_keys=True)
-    return value.replace("|", "\\|").replace("\n", " ")
+    value = "".join(
+        " " if unicodedata.category(character).startswith("C") else character
+        for character in value
+    )
+    value = html.escape(value, quote=False)
+    value = value.translate(str.maketrans({
+        "\\": "&#92;",
+        "|": "&#124;",
+        "`": "&#96;",
+        "*": "&#42;",
+        "_": "&#95;",
+        "#": "&#35;",
+        "!": "&#33;",
+        ">": "&#62;",
+        "~": "&#126;",
+    }))
+    value = re.sub(r"](?=\s*\()", "&#93;", value)
+    value = re.sub(
+        r"^(\s*)([-+])(?=\s)",
+        lambda match: match.group(1) + f"&#{ord(match.group(2))};",
+        value,
+    )
+    return re.sub(r"^(\s*\d+)\.(?=\s)", r"\1&#46;", value)

@@ -1,10 +1,14 @@
 import hashlib
+import io
 import json
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
+
+from agent_tail import cli
 
 
 def event_data(**changes):
@@ -35,6 +39,57 @@ def run_cli(*arguments, input=None):
 
 
 class CliTests(unittest.TestCase):
+    def test_markdown_text_neutralizes_hostile_markup_and_controls(self):
+        hostile = (
+            "<img src=x> ![alt](javascript:boom) [link](https://evil) "
+            "`tick` # heading\n- item | pipe \\ slash\x01"
+        )
+
+        safe = cli._markdown_text(hostile)
+
+        for active in ("<img", "![", "](javascript:", "](https:", "`", "|", "\\", "\n", "\x01"):
+            with self.subTest(active=active):
+                self.assertNotIn(active, safe)
+        self.assertIn("&lt;img src=x&gt;", safe)
+        self.assertFalse(cli._markdown_text("# heading").startswith("#"))
+        self.assertFalse(cli._markdown_text("- item").startswith("-"))
+        self.assertFalse(cli._markdown_text("1. item").startswith("1."))
+
+    def test_export_escapes_hostile_trace_actor_and_ingestion_error(self):
+        hostile = "<img src=x> ![alt](javascript:boom) [link](https://evil) `tick`"
+        lines = (
+            json.dumps(event_data(trace_id=hostile, actor={"id": hostile})),
+            json.dumps(event_data(event_id="bad", timestamp=hostile)),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory, "report.md")
+            result = run_cli(
+                "-", "--export", report_path, input="\n".join(lines) + "\n"
+            )
+            report = report_path.read_text(encoding="utf-8")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertNotIn("<img", report)
+        self.assertNotIn("![", report)
+        self.assertNotIn("](javascript:", report)
+        self.assertNotIn("](https:", report)
+        self.assertIn("&lt;img src=x&gt;", report)
+
+    def test_live_reader_failure_returns_two_after_view_closes(self):
+        error = RuntimeError("Bearer reader-secret\ninternal detail")
+        stdin = io.StringIO(json.dumps(event_data()) + "\n")
+        stderr = io.StringIO()
+        with (
+            mock.patch.object(cli.sys, "stdin", stdin),
+            mock.patch.object(cli.sys, "stderr", stderr),
+            mock.patch.object(cli.sys.stdout, "isatty", return_value=True),
+            mock.patch.object(cli, "run", return_value=error),
+        ):
+            result = cli.main(["-"])
+
+        self.assertEqual(result, 2)
+        self.assertEqual(stderr.getvalue(), "agent-tail: reader failed: [REDACTED]\n")
+
     def test_realistic_multi_agent_fixture_exports_expected_warnings_safely(self):
         fixture = Path(__file__).parent / "fixtures" / "runtime.jsonl"
         secret = "ghp_fixturesecretfixturesecretfixturesecret1"

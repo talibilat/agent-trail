@@ -5,8 +5,26 @@ import json
 from queue import Empty, Queue
 import threading
 from typing import Iterable
+import unicodedata
 
 from .core import Event, TraceIndex
+
+
+def _truncate_cells(value: str, max_cells: int) -> str:
+    cells = 0
+    end = 0
+    for end, character in enumerate(value, 1):
+        if (
+            unicodedata.category(character).startswith(("C", "M"))
+            or unicodedata.combining(character)
+        ):
+            width = 0
+        else:
+            width = 2 if unicodedata.east_asian_width(character) in {"W", "F"} else 1
+        if cells + width > max_cells:
+            return value[:end - 1]
+        cells += width
+    return value[:end]
 
 
 @dataclass
@@ -45,7 +63,7 @@ class UiState:
 def start_event_reader(
     events: Iterable[Event],
 ) -> Queue[Event | Exception | None]:
-    updates: Queue[Event | Exception | None] = Queue()
+    updates: Queue[Event | Exception | None] = Queue(maxsize=1)
 
     def read() -> None:
         try:
@@ -141,31 +159,36 @@ def render_snapshot(
     lines = [" ".join(filters), "AGENT LANES"]
     latest_by_actor = {event.actor["id"]: event for event in events}
     visible_actors = latest_by_actor.keys()
+    actor_states = {}
+    for trace_id in dict.fromkeys(event.trace_id for event in events):
+        for actor_id, actor_state in index.trace(trace_id).actors.items():
+            if actor_id in visible_actors and (
+                actor_id not in actor_states
+                or actor_state.last_activity >= actor_states[actor_id].last_activity
+            ):
+                actor_states[actor_id] = actor_state
     for actor_id in dict.fromkeys(
         event.actor["id"]
         for event in indexed_events
         if event.actor["id"] in visible_actors
     ):
         event = latest_by_actor[actor_id]
-        elapsed = max(0.0, (current - event.timestamp).total_seconds())
+        state_actor = actor_states[actor_id]
+        elapsed = max(0.0, (current - state_actor.last_activity).total_seconds())
         actor = event.actor
         operation = event.operation
         lane = (
-            f"{actor_id} {operation['status']} {operation.get('name', '-')} "
-            f"elapsed {elapsed:.1f}s"
+            f"{actor_id} {state_actor.status} {state_actor.operation} "
+            f"elapsed {elapsed:.1f}s "
+            f"{'uncertain' if state_actor.uncertain else 'causal'}"
         )
         if width >= 80:
             if actor.get("role"):
                 lane += f" role {actor['role']}"
-            actor_event_ids = {
-                candidate.event_id
-                for candidate in events
-                if candidate.actor["id"] == actor_id
-            }
             codes = [
                 warning.code
                 for warning in warnings
-                if warning.event_id in actor_event_ids
+                if warning.actor_id == actor_id
             ]
             if codes:
                 lane += " warning " + ",".join(codes)
@@ -204,14 +227,18 @@ def render_snapshot(
                     payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
                 )
             )
-    return "\n".join(line[:width] for line in lines)
+    return "\n".join(_truncate_cells(line, width) for line in lines)
 
 
-def run(index: TraceIndex, events: Iterable[Event] | None = None) -> None:
-    curses.wrapper(_curses_loop, index, events)
+def run(
+    index: TraceIndex, events: Iterable[Event] | None = None
+) -> Exception | None:
+    return curses.wrapper(_curses_loop, index, events)
 
 
-def _curses_loop(screen, index: TraceIndex, events: Iterable[Event] | None) -> None:
+def _curses_loop(
+    screen, index: TraceIndex, events: Iterable[Event] | None
+) -> Exception | None:
     updates = start_event_reader(events) if events is not None else None
     state = UiState(event_count=index.event_count)
     eof = updates is None
@@ -241,7 +268,7 @@ def _curses_loop(screen, index: TraceIndex, events: Iterable[Event] | None) -> N
         screen.erase()
         for row, line in enumerate(text.splitlines()[:height]):
             try:
-                screen.addnstr(row, 0, line, max(width - 1, 1))
+                screen.addstr(row, 0, line)
             except curses.error:
                 pass
         screen.refresh()
@@ -271,3 +298,5 @@ def _curses_loop(screen, index: TraceIndex, events: Iterable[Event] | None) -> N
             state.handle_key(key, value)
         else:
             state.handle_key(key)
+
+    return reader_error

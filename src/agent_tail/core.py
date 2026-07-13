@@ -2,6 +2,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
 import hashlib
+import heapq
 import json
 import re
 from typing import Iterable, Mapping
@@ -159,7 +160,7 @@ class Event:
 
 @dataclass
 class IngestionError:
-    line: int
+    line: int | None
     message: str
 
 
@@ -170,11 +171,27 @@ class Ingestion:
 
 
 class JSONLReader:
-    def __init__(self) -> None:
+    def __init__(self, *, retain_events: bool = True, max_errors: int = 100) -> None:
         self.events: list[Event] = []
         self.errors: list[IngestionError] = []
+        self.accepted_count = 0
+        self.omitted_error_count = 0
+        self._retain_events = retain_events
+        self._max_errors = max_errors
         self._accepted_ids: set[str] = set()
         self._line_number = 0
+
+    @property
+    def all_errors(self) -> list[IngestionError]:
+        if not self.omitted_error_count:
+            return list(self.errors)
+        return [
+            *self.errors,
+            IngestionError(
+                None,
+                f"{self.omitted_error_count} additional ingestion errors omitted",
+            ),
+        ]
 
     def feed(self, line: str) -> Event | None:
         self._line_number += 1
@@ -193,16 +210,21 @@ class JSONLReader:
             self._error(f"duplicate event ID: {event.event_id}")
             return None
         self._accepted_ids.add(event.event_id)
-        self.events.append(event)
+        self.accepted_count += 1
+        if self._retain_events:
+            self.events.append(event)
         return event
 
     def read(self, lines: Iterable[str]) -> Ingestion:
         for line in lines:
             self.feed(line)
-        return Ingestion(self.events, self.errors)
+        return Ingestion(self.events, self.all_errors)
 
     def _error(self, message: str) -> None:
-        self.errors.append(IngestionError(self._line_number, redact_text(message)))
+        if len(self.errors) < self._max_errors:
+            self.errors.append(IngestionError(self._line_number, redact_text(message)))
+        else:
+            self.omitted_error_count += 1
 
 
 def read_jsonl(lines: Iterable[str]) -> Ingestion:
@@ -297,6 +319,7 @@ class SpanState:
 @dataclass(frozen=True)
 class ActorState:
     status: str
+    operation: object
     last_activity: datetime
     last_activity_event_id: str
     open_span_ids: tuple[str, ...]
@@ -380,7 +403,7 @@ class TraceIndex:
 
     def trace(self, trace_id: str) -> TraceView:
         events = [event for event in self._events if event.trace_id == trace_id]
-        ordered, uncertain, outgoing = self._order(events)
+        ordered, uncertain, _ = self._order(events)
         spans: dict[str, SpanState] = {}
         actor_events: dict[str, list[Event]] = {}
 
@@ -423,16 +446,7 @@ class TraceIndex:
 
         actors = {}
         for actor_id, activity in actor_events.items():
-            latest = [
-                event
-                for event in activity
-                if not any(
-                    other != event
-                    and self._reaches(outgoing, event.event_id, other.event_id)
-                    for other in activity
-                )
-            ]
-            display = latest[-1] if latest else activity[-1]
+            display = activity[-1]
             open_spans = tuple(
                 span_id
                 for span_id, span in spans.items()
@@ -448,10 +462,11 @@ class TraceIndex:
                 status = display.operation["status"]
             actors[actor_id] = ActorState(
                 status,
+                display.operation.get("name", "-"),
                 last_activity[actor_id].timestamp,
                 last_activity[actor_id].event_id,
                 open_spans,
-                len(latest) > 1,
+                display.event_id in uncertain,
             )
 
         return TraceView(tuple(ordered), frozenset(uncertain), actors, spans)
@@ -541,31 +556,27 @@ class TraceIndex:
                     edge(parent.event_id, event.event_id, causal=False)
                     fallback_uncertain.update((parent.event_id, event.event_id))
 
-        ids = list(by_id)
-        uncertain = {
-            event_id
-            for event_id in ids
-            if any(
-                other != event_id
-                and not self._reaches(causal_outgoing, event_id, other)
-                and not self._reaches(causal_outgoing, other, event_id)
-                for other in ids
-            )
-        }
-        uncertain.update(fallback_uncertain)
-        ready = [event_id for event_id in ids if not incoming[event_id]]
+        uncertain = set(fallback_uncertain)
+        ready = [
+            (by_id[event_id].timestamp, positions[event_id], event_id)
+            for event_id in by_id
+            if not incoming[event_id]
+        ]
+        heapq.heapify(ready)
         ordered = []
         while ready:
-            ready.sort(key=lambda event_id: (
-                by_id[event_id].timestamp,
-                positions[event_id],
-            ))
-            event_id = ready.pop(0)
+            if len(ready) > 1:
+                uncertain.update(item[2] for item in ready)
+            _, _, event_id = heapq.heappop(ready)
             ordered.append(by_id[event_id])
             for child in outgoing[event_id]:
                 incoming[child].discard(event_id)
                 if not incoming[child]:
-                    ready.append(child)
+                    heapq.heappush(ready, (
+                        by_id[child].timestamp,
+                        positions[child],
+                        child,
+                    ))
 
         if len(ordered) != len(events):
             included = {event.event_id for event in ordered}
@@ -611,50 +622,60 @@ class TraceIndex:
 
     def _retry_warnings(self, events: tuple[Event, ...]) -> list[Warning]:
         warnings = []
-        failed = tuple(
-            event
-            for event in events
-            if event.kind.endswith(".failed")
-            or event.operation["status"].lower() == "failed"
-        )
-        for (_, signature), histories in self._histories(failed).items():
-            for repeated in histories:
-                for start in range(len(repeated) - 2):
-                    window = repeated[start:start + 3]
-                    delays = [
-                        (after.timestamp - before.timestamp).total_seconds()
-                        for before, after in zip(window, window[1:])
-                    ]
-                    states = {self._state(event) for event in window}
-                    if delays[1] <= delays[0] and len(states) == 1:
-                        last = window[-1]
-                        warnings.append(self._warning(
-                            "RETRY", last.event_id, last.actor["id"],
-                            "repeated an unchanged failing call 3 times without increasing delay",
-                            event_ids=[event.event_id for event in window],
-                            delays=delays, signature=signature,
-                            state=next(iter(states)),
-                        ))
-                        break
-                else:
-                    continue
-                break
+        for (_, signature), histories in self._histories(
+            events, include_kind=False
+        ).items():
+            for history in histories:
+                runs: list[list[Event]] = [[]]
+                for event in history:
+                    if (
+                        event.kind.endswith(".failed")
+                        or event.operation["status"].lower() == "failed"
+                    ):
+                        runs[-1].append(event)
+                    elif runs[-1]:
+                        runs.append([])
+                for repeated in runs:
+                    for start in range(len(repeated) - 2):
+                        window = repeated[start:start + 3]
+                        delays = [
+                            (after.timestamp - before.timestamp).total_seconds()
+                            for before, after in zip(window, window[1:])
+                        ]
+                        states = {self._state(event) for event in window}
+                        if delays[1] <= delays[0] and len(states) == 1:
+                            last = window[-1]
+                            warnings.append(self._warning(
+                                "RETRY", last.event_id, last.actor["id"],
+                                "repeated an unchanged failing call 3 times without increasing delay",
+                                event_ids=[event.event_id for event in window],
+                                delays=delays, signature=signature,
+                                state=next(iter(states)),
+                            ))
+                            break
+                    else:
+                        continue
+                    break
         return warnings
 
     def _histories(
-        self, events: tuple[Event, ...]
+        self, events: tuple[Event, ...], *, include_kind: bool = True
     ) -> dict[tuple[str, str], list[list[Event]]]:
         groups: dict[tuple[str, str], list[list[Event]]] = {}
         for event in events:
             histories = groups.setdefault(
-                (event.emitter_id, self._signature(event)), [[]]
+                (
+                    event.emitter_id,
+                    self._signature(event, include_kind=include_kind),
+                ),
+                [[]],
             )
             if histories[-1] and event.sequence <= histories[-1][-1].sequence:
                 histories.append([])
             histories[-1].append(event)
         return groups
 
-    def _signature(self, event: Event) -> str:
+    def _signature(self, event: Event, *, include_kind: bool = True) -> str:
         raw = event.raw
         attributes = raw.get("attributes", {})
         if not isinstance(attributes, Mapping):
@@ -667,12 +688,14 @@ class TraceIndex:
                 for key in volatile:
                     if isinstance(key, str):
                         arguments.pop(key, None)
-        return self._json({
+        signature = {
             "actor_id": event.actor["id"],
             "arguments": arguments,
-            "kind": event.kind,
             "operation": event.operation.get("name"),
-        })
+        }
+        if include_kind:
+            signature["kind"] = event.kind
+        return self._json(signature)
 
     def _state(self, event: Event) -> str:
         attributes = event.raw.get("attributes", {})

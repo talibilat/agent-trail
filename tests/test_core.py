@@ -4,10 +4,12 @@ import hashlib
 import json
 import threading
 import unittest
+from unittest import mock
 
 from agent_tail.core import (
     Event,
     EventError,
+    JSONLReader,
     TraceIndex,
     read_jsonl,
     redact_text,
@@ -474,6 +476,22 @@ class RedactionTests(unittest.TestCase):
 
 
 class IngestionTests(unittest.TestCase):
+    def test_streaming_reader_retains_no_events_and_bounds_errors(self):
+        reader = JSONLReader(retain_events=False, max_errors=3)
+        for sequence in range(1, 2001):
+            reader.feed(json.dumps(event_data(
+                event_id=f"evt-{sequence}", span_id=f"span-{sequence}",
+                sequence=sequence,
+            )))
+        for _ in range(10):
+            reader.feed("not json")
+
+        self.assertEqual(reader.events, [])
+        self.assertEqual(reader.accepted_count, 2000)
+        self.assertEqual(len(reader.errors), 3)
+        self.assertEqual(reader.omitted_error_count, 7)
+        self.assertIn("7 additional ingestion errors omitted", reader.all_errors[-1].message)
+
     def test_redacts_rejected_event_error_messages(self):
         secret = "Bearer rejected-timestamp-secret"
         result = read_jsonl([json.dumps(event_data(timestamp=secret))])
@@ -511,6 +529,23 @@ class IngestionTests(unittest.TestCase):
 
 
 class TraceIndexTests(unittest.TestCase):
+    def test_large_topological_order_does_not_run_reachability_searches(self):
+        index = TraceIndex(max_bytes=64 * 1024 * 1024)
+        for sequence in range(3000):
+            index.add(Event.from_dict(event_data(
+                event_id=f"evt-{sequence}", span_id=f"span-{sequence}",
+                sequence=sequence,
+            )))
+
+        with mock.patch.object(
+            index, "_reaches", side_effect=AssertionError("pairwise reachability")
+        ):
+            ordered = index.ordered_events()
+
+        self.assertEqual(len(ordered), 3000)
+        self.assertEqual(ordered[0].event_id, "evt-0")
+        self.assertEqual(ordered[-1].event_id, "evt-2999")
+
     def test_exposes_immutable_event_count_and_insertion_view(self):
         index = TraceIndex()
         event = Event.from_dict(event_data())
@@ -906,6 +941,32 @@ class WarningTests(unittest.TestCase):
             )))
 
         self.assertNotIn("RETRY", {warning.code for warning in index.warnings()})
+
+    def test_success_resets_consecutive_retry_failures(self):
+        index = TraceIndex()
+        statuses = ("failed", "completed", "failed", "failed")
+        for sequence, status in enumerate(statuses, 1):
+            index.add(Event.from_dict(event_data(
+                event_id=f"retry-{sequence}", span_id=f"retry-{sequence}",
+                sequence=sequence, kind=f"tool.call.{status}",
+                operation={"status": status, "name": "read_file"},
+                attributes={"arguments": {"path": "same.py"}},
+            )))
+
+        self.assertNotIn("RETRY", {warning.code for warning in index.warnings()})
+
+        index.add(Event.from_dict(event_data(
+            event_id="retry-5", span_id="retry-5", sequence=5,
+            kind="tool.call.failed",
+            operation={"status": "failed", "name": "read_file"},
+            attributes={"arguments": {"path": "same.py"}},
+        )))
+
+        retry = next(warning for warning in index.warnings() if warning.code == "RETRY")
+        self.assertEqual(
+            json.loads(retry.evidence)["event_ids"],
+            ["retry-3", "retry-4", "retry-5"],
+        )
 
     def test_changed_material_failure_state_prevents_retry_warning(self):
         for state_key in (

@@ -2,10 +2,13 @@ import hashlib
 from queue import Empty, Queue
 import threading
 import unittest
+from unittest import mock
 
 from agent_tail.core import Event, TraceIndex, sanitize_event
 from agent_tail.ui import (
     UiState,
+    _curses_loop,
+    _truncate_cells,
     drain_event_updates,
     render_snapshot,
     run,
@@ -31,6 +34,13 @@ def event_data(**changes):
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_cell_truncation_handles_cjk_emoji_combining_and_controls(self):
+        self.assertEqual(_truncate_cells("ab界c", 4), "ab界")
+        self.assertEqual(_truncate_cells("a🙂b", 3), "a🙂")
+        self.assertEqual(_truncate_cells("e\N{COMBINING ACUTE ACCENT}x", 1), "é")
+        self.assertEqual(_truncate_cells("e\N{COMBINING ACUTE ACCENT}x", 0), "")
+        self.assertEqual(_truncate_cells("a\x00b", 1), "a\x00")
+
     def test_snapshot_keeps_essential_text_at_narrow_width(self):
         index = TraceIndex()
         index.add(Event.from_dict(event_data()))
@@ -205,6 +215,47 @@ class SnapshotTests(unittest.TestCase):
         self.assertIn("warning STALL", output)
         self.assertIn("error TimeoutError", output)
 
+    def test_parent_lane_uses_propagated_child_activity_and_actor_warning(self):
+        index = TraceIndex(stall_seconds=10)
+        index.add(Event.from_dict(event_data(
+            event_id="root", span_id="root", timestamp="2026-07-13T11:02:44Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="child", span_id="child", parent_span_id="root", sequence=2,
+            timestamp="2026-07-13T11:03:25Z", kind="tool.call.completed",
+            actor={"id": "tool-1"},
+            operation={"status": "completed", "name": "shell"},
+        )))
+
+        output = render_snapshot(
+            index, width=160, now="2026-07-13T11:03:40Z"
+        )
+        parent_lane = next(
+            line for line in output.splitlines() if line.startswith("reviewer-1 ")
+        )
+
+        self.assertIn("running read_file", parent_lane)
+        self.assertIn("elapsed 15.0s", parent_lane)
+        self.assertIn("warning STALL", parent_lane)
+
+    def test_lane_displays_actor_state_uncertainty(self):
+        index = TraceIndex()
+        for event_id, emitter, status in (
+            ("running", "worker-a", "running"),
+            ("failed", "worker-b", "failed"),
+        ):
+            index.add(Event.from_dict(event_data(
+                event_id=event_id, span_id=event_id, emitter_id=emitter,
+                operation={"status": status, "name": "read_file"},
+            )))
+
+        lane = next(
+            line for line in render_snapshot(index, width=120).splitlines()
+            if line.startswith("reviewer-1 ")
+        )
+
+        self.assertIn("uncertain", lane)
+
 
 class UiStateTests(unittest.TestCase):
     def test_keyboard_commands_update_plain_state(self):
@@ -239,6 +290,41 @@ class UiStateTests(unittest.TestCase):
 
 
 class EventReaderTests(unittest.TestCase):
+    def test_curses_loop_returns_reader_failure_after_quit(self):
+        error = RuntimeError("reader failed")
+        updates = Queue()
+        updates.put(error)
+        updates.put(None)
+
+        class Screen:
+            def timeout(self, _value):
+                pass
+
+            def getmaxyx(self):
+                return (20, 80)
+
+            def erase(self):
+                pass
+
+            def addnstr(self, *_args):
+                pass
+
+            def addstr(self, *_args):
+                pass
+
+            def refresh(self):
+                pass
+
+            def get_wch(self):
+                return "q"
+
+        with mock.patch(
+            "agent_tail.ui.start_event_reader", return_value=updates
+        ):
+            result = _curses_loop(Screen(), TraceIndex(), ())
+
+        self.assertIs(result, error)
+
     def test_drain_processes_all_current_events_eof_and_error(self):
         index = TraceIndex()
         state = UiState(event_count=0)
@@ -269,6 +355,7 @@ class EventReaderTests(unittest.TestCase):
 
         updates = start_event_reader(events())
 
+        self.assertEqual(updates.maxsize, 1)
         self.assertIs(updates.get(timeout=0.5), event)
         with self.assertRaises(Empty):
             updates.get_nowait()
