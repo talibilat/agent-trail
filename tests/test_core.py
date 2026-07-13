@@ -289,6 +289,37 @@ class RedactionTests(unittest.TestCase):
         self.assertIn(payload_secret, unsafe["payload"])
         self.assertIn("event_id", safe)
 
+    def test_dictionary_key_redaction_cannot_overwrite_literal_placeholder(self):
+        secret = "ghp_" + "a" * 36
+        placeholder = (
+            "[REDACTED:" + hashlib.sha256(secret.encode()).hexdigest()[:12] + "]"
+        )
+        original = {secret: "generated", placeholder: "literal"}
+        event = Event.from_dict(event_data(future_field=original))
+
+        safe = sanitize_event(event).raw["future_field"]
+        unsafe = sanitize_event(
+            event, unsafe_unredacted=True
+        ).raw["future_field"]
+
+        self.assertEqual(len(safe), 2)
+        self.assertEqual(safe[placeholder], "generated")
+        self.assertEqual(safe["[LITERAL]" + placeholder], "literal")
+        self.assertEqual(unsafe, original)
+
+    def test_repeated_literal_dictionary_key_prefixes_remain_distinct(self):
+        once = "[LITERAL]ordinary"
+        twice = "[LITERAL][LITERAL]ordinary"
+        event = Event.from_dict(event_data(
+            future_field={once: "once", twice: "twice"}
+        ))
+
+        safe = sanitize_event(event).raw["future_field"]
+
+        self.assertEqual(len(safe), 2)
+        self.assertEqual(safe["[LITERAL]" + once], "once")
+        self.assertEqual(safe["[LITERAL]" + twice], "twice")
+
     def test_redacts_provider_tokens_with_realistic_lengths(self):
         secrets = [
             *(

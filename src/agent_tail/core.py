@@ -222,7 +222,7 @@ def sanitize_event(
                 safe_key = (
                     key
                     if unsafe_unredacted or not isinstance(key, str)
-                    else _redact_deterministic(key)
+                    else _redact_identity(key)
                 )
                 redacted[safe_key] = (
                     "[REDACTED]"
