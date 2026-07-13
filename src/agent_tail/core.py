@@ -248,6 +248,7 @@ class ActorState:
     last_activity: datetime
     last_activity_event_id: str
     open_span_ids: tuple[str, ...]
+    uncertain: bool
 
 
 @dataclass(frozen=True)
@@ -268,7 +269,8 @@ class TraceIndex:
         "errored", "failed", "stopped", "succeeded", "success",
     }
     _STATE_KEYS = (
-        "output_hash", "file_hash", "checkpoint_id", "success", "retry_reason",
+        "output_hash", "error_hash", "output_id", "error_id", "file_hash",
+        "checkpoint_id", "success", "retry_reason",
     )
 
     def __init__(
@@ -279,6 +281,14 @@ class TraceIndex:
         orphan_grace_seconds: float = 5.0,
         max_bytes: int = 16 * 1024 * 1024,
     ) -> None:
+        for field_name, valid in (
+            ("loop_threshold", loop_threshold >= 2),
+            ("stall_seconds", stall_seconds >= 0),
+            ("orphan_grace_seconds", orphan_grace_seconds >= 0),
+            ("max_bytes", max_bytes > 0),
+        ):
+            if not valid:
+                raise ValueError(f"{field_name} is outside its valid range")
         self.loop_threshold = loop_threshold
         self.stall_seconds = stall_seconds
         self.orphan_grace_seconds = orphan_grace_seconds
@@ -286,7 +296,8 @@ class TraceIndex:
         self._events: list[Event] = []
         self._event_ids: set[str] = set()
         self._sizes: dict[str, int] = {}
-        self._eviction_warnings: list[Warning] = []
+        self._eviction_warning: Warning | None = None
+        self._eviction_count = 0
 
     def add(self, event: Event) -> None:
         if event.event_id in self._event_ids:
@@ -298,7 +309,7 @@ class TraceIndex:
 
     def trace(self, trace_id: str) -> TraceView:
         events = [event for event in self._events if event.trace_id == trace_id]
-        ordered, uncertain = self._order(events)
+        ordered, uncertain, outgoing = self._order(events)
         spans: dict[str, SpanState] = {}
         actor_events: dict[str, list[Event]] = {}
 
@@ -338,6 +349,15 @@ class TraceIndex:
 
         actors = {}
         for actor_id, activity in actor_events.items():
+            latest = [
+                event
+                for event in activity
+                if not any(
+                    other != event
+                    and self._reaches(outgoing, event.event_id, other.event_id)
+                    for other in activity
+                )
+            ]
             open_spans = tuple(
                 span_id
                 for span_id, span in spans.items()
@@ -356,13 +376,14 @@ class TraceIndex:
                 last_activity[actor_id].timestamp,
                 last_activity[actor_id].event_id,
                 open_spans,
+                len({event.emitter_id for event in latest}) > 1,
             )
 
         return TraceView(tuple(ordered), frozenset(uncertain), actors, spans)
 
     def warnings(self, *, now: str | datetime | None = None) -> tuple[Warning, ...]:
         current = self._parse_now(now)
-        warnings = list(self._eviction_warnings)
+        warnings = [self._eviction_warning] if self._eviction_warning else []
 
         for trace_id in dict.fromkeys(event.trace_id for event in self._events):
             view = self.trace(trace_id)
@@ -394,50 +415,55 @@ class TraceIndex:
 
         return tuple(warnings)
 
-    def _order(self, events: list[Event]) -> tuple[list[Event], set[str]]:
+    def _order(
+        self, events: list[Event]
+    ) -> tuple[list[Event], set[str], dict[str, set[str]]]:
         positions = {event.event_id: position for position, event in enumerate(self._events)}
         by_id = {event.event_id: event for event in events}
         outgoing = {event.event_id: set() for event in events}
+        causal_outgoing = {event.event_id: set() for event in events}
         incoming = {event.event_id: set() for event in events}
+        fallback_uncertain = set()
 
-        def edge(before: str, after: str) -> None:
+        def edge(before: str, after: str, *, causal: bool = True) -> None:
             if before != after:
                 outgoing[before].add(after)
                 incoming[after].add(before)
+                if causal:
+                    causal_outgoing[before].add(after)
 
         emitters: dict[str, list[Event]] = {}
         for event in events:
             emitters.setdefault(event.emitter_id, []).append(event)
         for emitter_events in emitters.values():
-            emitter_events.sort(key=lambda event: (event.sequence, positions[event.event_id]))
-            for before, after in zip(emitter_events, emitter_events[1:]):
-                if before.sequence < after.sequence:
-                    edge(before.event_id, after.event_id)
+            sequence_groups: dict[int, list[Event]] = {}
+            for event in emitter_events:
+                sequence_groups.setdefault(event.sequence, []).append(event)
+            sequences = sorted(sequence_groups)
+            for lower, higher in zip(sequences, sequences[1:]):
+                for before in sequence_groups[lower]:
+                    for after in sequence_groups[higher]:
+                        edge(before.event_id, after.event_id)
 
         spans: dict[str, list[Event]] = {}
         for event in events:
             spans.setdefault(event.span_id, []).append(event)
         for event in events:
             if event.parent_span_id in spans:
-                parent = min(
-                    spans[event.parent_span_id],
-                    key=lambda candidate: (
-                        candidate.sequence, positions[candidate.event_id]
-                    ),
-                )
-                edge(parent.event_id, event.event_id)
-
-        def reaches(start: str, target: str) -> bool:
-            pending = list(outgoing[start])
-            seen = set()
-            while pending:
-                node = pending.pop()
-                if node == target:
-                    return True
-                if node not in seen:
-                    seen.add(node)
-                    pending.extend(outgoing[node])
-            return False
+                parents = spans[event.parent_span_id]
+                starts = [parent for parent in parents if parent.kind.endswith(".started")]
+                if starts:
+                    for parent in starts:
+                        edge(parent.event_id, event.event_id)
+                else:
+                    parent = min(
+                        parents,
+                        key=lambda candidate: (
+                            candidate.timestamp, positions[candidate.event_id]
+                        ),
+                    )
+                    edge(parent.event_id, event.event_id, causal=False)
+                    fallback_uncertain.update((parent.event_id, event.event_id))
 
         ids = list(by_id)
         uncertain = {
@@ -445,11 +471,12 @@ class TraceIndex:
             for event_id in ids
             if any(
                 other != event_id
-                and not reaches(event_id, other)
-                and not reaches(other, event_id)
+                and not self._reaches(causal_outgoing, event_id, other)
+                and not self._reaches(causal_outgoing, other, event_id)
                 for other in ids
             )
         }
+        uncertain.update(fallback_uncertain)
         ready = [event_id for event_id in ids if not incoming[event_id]]
         ordered = []
         while ready:
@@ -470,14 +497,29 @@ class TraceIndex:
             remainder.sort(key=lambda event: (event.timestamp, positions[event.event_id]))
             ordered.extend(remainder)
             uncertain.update(event.event_id for event in remainder)
-        return ordered, uncertain
+        return ordered, uncertain, causal_outgoing
+
+    @staticmethod
+    def _reaches(outgoing: Mapping[str, set[str]], start: str, target: str) -> bool:
+        pending = list(outgoing[start])
+        seen = set()
+        while pending:
+            node = pending.pop()
+            if node == target:
+                return True
+            if node not in seen:
+                seen.add(node)
+                pending.extend(outgoing[node])
+        return False
 
     def _loop_warnings(self, events: tuple[Event, ...]) -> list[Warning]:
-        groups: dict[str, list[Event]] = {}
+        groups: dict[tuple[str, str], list[Event]] = {}
         for event in events:
-            groups.setdefault(self._signature(event), []).append(event)
+            groups.setdefault(
+                (event.emitter_id, self._signature(event)), []
+            ).append(event)
         warnings = []
-        for signature, repeated in groups.items():
+        for (_, signature), repeated in groups.items():
             for start in range(len(repeated) - self.loop_threshold + 1):
                 window = repeated[start:start + self.loop_threshold]
                 states = {self._state(event) for event in window}
@@ -493,25 +535,29 @@ class TraceIndex:
         return warnings
 
     def _retry_warnings(self, events: tuple[Event, ...]) -> list[Warning]:
-        groups: dict[str, list[Event]] = {}
+        groups: dict[tuple[str, str], list[Event]] = {}
         for event in events:
             if event.kind.endswith(".failed") or event.operation["status"].lower() == "failed":
-                groups.setdefault(self._signature(event), []).append(event)
+                groups.setdefault(
+                    (event.emitter_id, self._signature(event)), []
+                ).append(event)
         warnings = []
-        for signature, repeated in groups.items():
+        for (_, signature), repeated in groups.items():
             for start in range(len(repeated) - 2):
                 window = repeated[start:start + 3]
                 delays = [
                     (after.timestamp - before.timestamp).total_seconds()
                     for before, after in zip(window, window[1:])
                 ]
-                if delays[1] <= delays[0]:
+                states = {self._state(event) for event in window}
+                if delays[1] <= delays[0] and len(states) == 1:
                     last = window[-1]
                     warnings.append(self._warning(
                         "RETRY", last.event_id, last.actor["id"],
                         "repeated an unchanged failing call 3 times without increasing delay",
                         event_ids=[event.event_id for event in window],
                         delays=delays, signature=signature,
+                        state=next(iter(states)),
                     ))
                     break
         return warnings
@@ -560,14 +606,14 @@ class TraceIndex:
                 raw["payload"] = {"_agent_tail": metadata} if metadata else {}
                 smaller = Event.from_dict(raw)
                 old_size = self._sizes[event.event_id]
+                smaller_size = self._event_size(smaller)
+                if smaller_size >= old_size:
+                    continue
                 self._events[position] = smaller
-                self._sizes[event.event_id] = self._event_size(smaller)
-                self._eviction_warnings.append(self._warning(
-                    "EVICT", event.event_id, event.actor["id"],
-                    "evicted sanitized payload preview data",
-                    event_ids=[event.event_id], evicted="payload",
-                    bytes_freed=old_size - self._sizes[event.event_id],
-                ))
+                self._sizes[event.event_id] = smaller_size
+                self._record_eviction(
+                    event, "payload", old_size - self._sizes[event.event_id]
+                )
                 changed = True
                 break
             if changed:
@@ -575,11 +621,20 @@ class TraceIndex:
             event = self._events.pop(0)
             size = self._sizes.pop(event.event_id)
             self._event_ids.remove(event.event_id)
-            self._eviction_warnings.append(self._warning(
-                "EVICT", event.event_id, event.actor["id"],
-                "evicted event metadata",
-                event_ids=[event.event_id], evicted="metadata", bytes_freed=size,
-            ))
+            self._record_eviction(event, "metadata", size)
+
+    def _record_eviction(self, event: Event, evicted: str, bytes_freed: int) -> None:
+        self._eviction_count += 1
+        self._eviction_warning = self._warning(
+            "EVICT", event.event_id, event.actor["id"],
+            f"evicted indexed data {self._eviction_count} times",
+            count=self._eviction_count,
+            latest={
+                "bytes_freed": bytes_freed,
+                "event_id": event.event_id,
+                "evicted": evicted,
+            },
+        )
 
     @classmethod
     def _warning(

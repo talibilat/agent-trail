@@ -2,6 +2,7 @@ from dataclasses import FrozenInstanceError
 from datetime import datetime
 import hashlib
 import json
+import threading
 import unittest
 
 from agent_tail.core import Event, EventError, TraceIndex, read_jsonl, sanitize_event
@@ -346,6 +347,17 @@ class IngestionTests(unittest.TestCase):
 
 
 class TraceIndexTests(unittest.TestCase):
+    def test_rejects_invalid_thresholds(self):
+        for field, value in (
+            ("loop_threshold", 1),
+            ("stall_seconds", -0.1),
+            ("orphan_grace_seconds", -0.1),
+            ("max_bytes", 0),
+        ):
+            with self.subTest(field=field):
+                with self.assertRaisesRegex(ValueError, field):
+                    TraceIndex(**{field: value})
+
     def test_groups_and_orders_events_without_inventing_cross_emitter_order(self):
         index = TraceIndex()
         index.add(Event.from_dict(event_data(
@@ -405,8 +417,127 @@ class TraceIndexTests(unittest.TestCase):
 
         self.assertFalse(index.trace("trace-1").spans["span-1"].open)
 
+    def test_child_follows_all_explicit_parent_starts_across_emitters(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="start-a", span_id="root", emitter_id="worker-a", sequence=50,
+            timestamp="2026-07-13T11:05:00Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="start-b", span_id="root", emitter_id="worker-b", sequence=1,
+            timestamp="2026-07-13T11:04:00Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="child", span_id="child", parent_span_id="root",
+            emitter_id="worker-c", sequence=1,
+            timestamp="2026-07-13T11:02:00Z",
+        )))
+
+        event_ids = index.trace("trace-1").event_ids
+
+        self.assertLess(event_ids.index("start-a"), event_ids.index("child"))
+        self.assertLess(event_ids.index("start-b"), event_ids.index("child"))
+
+    def test_parent_fallback_uses_wall_clock_and_is_uncertain(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="late", span_id="root", emitter_id="worker-a", sequence=1,
+            timestamp="2026-07-13T11:03:00Z", kind="tool.call.progress",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="early", span_id="root", emitter_id="worker-b", sequence=99,
+            timestamp="2026-07-13T11:01:00Z", kind="tool.call.progress",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="child", span_id="child", parent_span_id="root",
+            emitter_id="worker-c", sequence=1,
+            timestamp="2026-07-13T11:02:00Z",
+        )))
+
+        view = index.trace("trace-1")
+
+        self.assertLess(view.event_ids.index("early"), view.event_ids.index("child"))
+        self.assertLess(view.event_ids.index("child"), view.event_ids.index("late"))
+        self.assertIn("child", view.uncertain_event_ids)
+
+    def test_duplicate_sequences_order_buckets_and_remain_uncertain(self):
+        index = TraceIndex()
+        for event_id, sequence, timestamp in (
+            ("low-a", 1, "2026-07-13T11:05:00Z"),
+            ("low-b", 1, "2026-07-13T11:04:00Z"),
+            ("high-a", 2, "2026-07-13T11:01:00Z"),
+            ("high-b", 2, "2026-07-13T11:02:00Z"),
+        ):
+            index.add(Event.from_dict(event_data(
+                event_id=event_id, span_id=event_id, sequence=sequence,
+                timestamp=timestamp,
+            )))
+
+        view = index.trace("trace-1")
+
+        self.assertLess(
+            max(view.event_ids.index("low-a"), view.event_ids.index("low-b")),
+            min(view.event_ids.index("high-a"), view.event_ids.index("high-b")),
+        )
+        self.assertTrue(
+            {"low-a", "low-b", "high-a", "high-b"}
+            .issubset(view.uncertain_event_ids)
+        )
+
+    def test_actor_state_is_uncertain_for_incomparable_latest_emitters(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="running", span_id="running", emitter_id="worker-a",
+            sequence=1, timestamp="2026-07-13T11:02:00Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="completed", span_id="completed", emitter_id="worker-b",
+            sequence=1, timestamp="2026-07-13T11:01:00Z",
+            kind="tool.call.completed",
+            operation={"status": "completed", "name": "read_file"},
+        )))
+
+        actor = index.trace("trace-1").actors["reviewer-1"]
+
+        self.assertTrue(actor.uncertain)
+
+    def test_actor_state_does_not_treat_parent_fallback_as_causal(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="parent", span_id="parent", emitter_id="worker-a",
+            sequence=1, timestamp="2026-07-13T11:01:00Z",
+            kind="tool.call.progress",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="child", span_id="child", parent_span_id="parent",
+            emitter_id="worker-b", sequence=1,
+            timestamp="2026-07-13T11:02:00Z",
+        )))
+
+        actor = index.trace("trace-1").actors["reviewer-1"]
+
+        self.assertTrue(actor.uncertain)
+
 
 class WarningTests(unittest.TestCase):
+    def test_empty_payload_does_not_stall_eviction(self):
+        index = TraceIndex(max_bytes=1)
+        errors = []
+
+        def add_event():
+            try:
+                index.add(Event.from_dict(event_data(payload={})))
+            except Exception as error:
+                errors.append(error)
+
+        thread = threading.Thread(target=add_event, daemon=True)
+
+        thread.start()
+        thread.join(0.5)
+
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(errors, [])
+
     def test_detects_loop_retry_stall_and_orphan_with_exact_evidence(self):
         index = TraceIndex(loop_threshold=4, stall_seconds=10, orphan_grace_seconds=0)
         for sequence in range(1, 5):
@@ -472,6 +603,28 @@ class WarningTests(unittest.TestCase):
 
         self.assertIn("LOOP", {warning.code for warning in index.warnings()})
 
+    def test_loop_and_retry_do_not_combine_emitters(self):
+        loop_index = TraceIndex(loop_threshold=2)
+        for sequence, emitter_id in enumerate(("worker-1", "worker-2"), 1):
+            loop_index.add(Event.from_dict(event_data(
+                event_id=f"loop-{sequence}", span_id=f"loop-{sequence}",
+                emitter_id=emitter_id, sequence=1,
+                attributes={"arguments": {"path": "same.py"}},
+            )))
+        retry_index = TraceIndex()
+        for sequence, emitter_id in enumerate(
+            ("worker-1", "worker-2", "worker-3"), 1
+        ):
+            retry_index.add(Event.from_dict(event_data(
+                event_id=f"retry-{sequence}", span_id=f"retry-{sequence}",
+                emitter_id=emitter_id, sequence=1, kind="tool.call.failed",
+                operation={"status": "failed", "name": "read_file"},
+                attributes={"arguments": {"path": "same.py"}},
+            )))
+
+        self.assertNotIn("LOOP", {w.code for w in loop_index.warnings()})
+        self.assertNotIn("RETRY", {w.code for w in retry_index.warnings()})
+
     def test_increasing_retry_delay_prevents_retry_warning(self):
         index = TraceIndex()
         for sequence, second in enumerate((0, 1, 3), 1):
@@ -483,6 +636,27 @@ class WarningTests(unittest.TestCase):
             )))
 
         self.assertNotIn("RETRY", {warning.code for warning in index.warnings()})
+
+    def test_changed_material_failure_state_prevents_retry_warning(self):
+        for state_key in (
+            "output_hash", "error_hash", "output_id", "error_id", "retry_reason",
+        ):
+            with self.subTest(state_key=state_key):
+                index = TraceIndex()
+                for sequence in range(1, 4):
+                    index.add(Event.from_dict(event_data(
+                        event_id=f"retry-{sequence}", span_id=f"retry-{sequence}",
+                        sequence=sequence, kind="tool.call.failed",
+                        operation={"status": "failed", "name": "read_file"},
+                        attributes={
+                            "arguments": {"path": "same.py"},
+                            state_key: sequence,
+                        },
+                    )))
+
+                self.assertNotIn(
+                    "RETRY", {warning.code for warning in index.warnings()}
+                )
 
     def test_evicts_payload_data_before_event_metadata(self):
         event = sanitize_event(Event.from_dict(event_data(payload={"text": "x" * 500})))
@@ -500,19 +674,32 @@ class WarningTests(unittest.TestCase):
         self.assertEqual(view.event_ids, ("evt-1",))
         self.assertEqual(set(view.events[0].raw["payload"]), {"_agent_tail"})
         eviction = next(warning for warning in index.warnings() if warning.code == "EVICT")
-        self.assertEqual(json.loads(eviction.evidence)["evicted"], "payload")
+        self.assertEqual(json.loads(eviction.evidence)["latest"]["evicted"], "payload")
 
         tiny = TraceIndex(max_bytes=1)
         tiny.add(event)
         self.assertEqual(tiny.trace("trace-1").event_ids, ())
-        self.assertEqual(
-            [
-                json.loads(warning.evidence)["evicted"]
-                for warning in tiny.warnings()
-                if warning.code == "EVICT"
-            ],
-            ["payload", "metadata"],
-        )
+        warnings = [warning for warning in tiny.warnings() if warning.code == "EVICT"]
+        self.assertEqual(len(warnings), 1)
+        evidence = json.loads(warnings[0].evidence)
+        self.assertEqual(evidence["count"], 2)
+        self.assertEqual(evidence["latest"]["evicted"], "metadata")
+
+    def test_eviction_warning_is_one_bounded_aggregate(self):
+        index = TraceIndex(max_bytes=1)
+        for sequence in range(1, 4):
+            index.add(sanitize_event(Event.from_dict(event_data(
+                event_id=f"evt-{sequence}", span_id=f"span-{sequence}",
+                sequence=sequence, payload={"text": "x" * 100},
+            ))))
+
+        warnings = [warning for warning in index.warnings() if warning.code == "EVICT"]
+        evidence = json.loads(warnings[0].evidence)
+
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(evidence["count"], 6)
+        self.assertEqual(evidence["latest"]["event_id"], "evt-3")
+        self.assertEqual(evidence["latest"]["evicted"], "metadata")
 
 
 if __name__ == "__main__":
