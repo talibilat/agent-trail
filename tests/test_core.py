@@ -4,7 +4,7 @@ import hashlib
 import json
 import unittest
 
-from agent_tail.core import Event, EventError, read_jsonl, sanitize_event
+from agent_tail.core import Event, EventError, TraceIndex, read_jsonl, sanitize_event
 
 
 def event_data(**changes):
@@ -343,6 +343,176 @@ class IngestionTests(unittest.TestCase):
 
         self.assertEqual([event.event_id for event in result.events], ["evt-1"])
         self.assertEqual(result.errors, [])
+
+
+class TraceIndexTests(unittest.TestCase):
+    def test_groups_and_orders_events_without_inventing_cross_emitter_order(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="child", span_id="child", parent_span_id="root", sequence=2,
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="root", span_id="root", sequence=1,
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="other", span_id="other", emitter_id="worker-2", sequence=1,
+        )))
+
+        view = index.trace("trace-1")
+
+        self.assertLess(view.event_ids.index("root"), view.event_ids.index("child"))
+        self.assertIn("other", view.uncertain_event_ids)
+        self.assertEqual(view.actors["reviewer-1"].status, "running")
+
+    def test_lifecycle_and_child_events_control_actor_activity(self):
+        index = TraceIndex(stall_seconds=10)
+        index.add(Event.from_dict(event_data(
+            event_id="root", span_id="root", timestamp="2026-07-13T11:02:44Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="child", span_id="child", parent_span_id="root", sequence=2,
+            timestamp="2026-07-13T11:03:25Z", kind="tool.call.completed",
+            actor={"id": "tool-1"},
+            operation={"status": "completed", "name": "read_file"},
+        )))
+
+        view = index.trace("trace-1")
+
+        self.assertTrue(view.spans["root"].open)
+        self.assertFalse(view.spans["child"].open)
+        self.assertNotIn(
+            "STALL",
+            {warning.code for warning in index.warnings(now="2026-07-13T11:03:30Z")},
+        )
+        stall = next(
+            warning
+            for warning in index.warnings(now="2026-07-13T11:03:40Z")
+            if warning.code == "STALL" and warning.actor_id == "reviewer-1"
+        )
+        self.assertEqual(stall.event_id, "child")
+
+    def test_waiting_is_open_and_terminal_status_closes_span(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="waiting", operation={"status": "waiting", "name": "read_file"},
+        )))
+        self.assertTrue(index.trace("trace-1").spans["span-1"].open)
+
+        index.add(Event.from_dict(event_data(
+            event_id="done", sequence=2, kind="future.kind",
+            operation={"status": "cancelled", "name": "read_file"},
+        )))
+
+        self.assertFalse(index.trace("trace-1").spans["span-1"].open)
+
+
+class WarningTests(unittest.TestCase):
+    def test_detects_loop_retry_stall_and_orphan_with_exact_evidence(self):
+        index = TraceIndex(loop_threshold=4, stall_seconds=10, orphan_grace_seconds=0)
+        for sequence in range(1, 5):
+            index.add(Event.from_dict(event_data(
+                event_id=f"loop-{sequence}", span_id=f"loop-{sequence}", sequence=sequence,
+                attributes={"arguments": {"path": "same.py"}},
+            )))
+        for sequence in range(5, 8):
+            index.add(Event.from_dict(event_data(
+                event_id=f"retry-{sequence}", span_id=f"retry-{sequence}", sequence=sequence,
+                kind="tool.call.failed", operation={"status": "failed", "name": "read_file"},
+                attributes={"arguments": {"path": "same.py"}},
+            )))
+        index.add(Event.from_dict(event_data(
+            event_id="orphan", span_id="orphan", parent_span_id="missing", sequence=8,
+        )))
+
+        warnings = index.warnings(now="2026-07-13T11:03:30Z")
+        codes = {warning.code for warning in warnings}
+
+        self.assertTrue({"LOOP", "RETRY", "STALL", "ORPHAN"}.issubset(codes))
+        retry = next(warning for warning in warnings if warning.code == "RETRY")
+        self.assertEqual(
+            json.loads(retry.evidence)["event_ids"],
+            ["retry-5", "retry-6", "retry-7"],
+        )
+        with self.assertRaises(FrozenInstanceError):
+            retry.code = "changed"
+
+    def test_output_state_change_prevents_loop_warning(self):
+        for state_key in (
+            "output_hash", "file_hash", "checkpoint_id", "success", "retry_reason",
+        ):
+            with self.subTest(state_key=state_key):
+                index = TraceIndex(loop_threshold=4)
+                for sequence in range(1, 5):
+                    index.add(Event.from_dict(event_data(
+                        event_id=f"evt-{sequence}", span_id=f"span-{sequence}",
+                        sequence=sequence,
+                        attributes={
+                            "arguments": {"path": "same.py"},
+                            state_key: sequence,
+                        },
+                    )))
+
+                self.assertNotIn("LOOP", {warning.code for warning in index.warnings()})
+
+    def test_signature_is_canonical_and_excludes_declared_volatile_arguments(self):
+        index = TraceIndex(loop_threshold=4)
+        for sequence in range(1, 5):
+            arguments = (
+                {"path": "same.py", "line": 3, "request_id": sequence}
+                if sequence % 2
+                else {"request_id": sequence, "line": 3, "path": "same.py"}
+            )
+            index.add(Event.from_dict(event_data(
+                event_id=f"evt-{sequence}", span_id=f"span-{sequence}", sequence=sequence,
+                attributes={
+                    "arguments": arguments,
+                    "volatile_argument_keys": ["request_id"],
+                },
+            )))
+
+        self.assertIn("LOOP", {warning.code for warning in index.warnings()})
+
+    def test_increasing_retry_delay_prevents_retry_warning(self):
+        index = TraceIndex()
+        for sequence, second in enumerate((0, 1, 3), 1):
+            index.add(Event.from_dict(event_data(
+                event_id=f"retry-{sequence}", span_id=f"retry-{sequence}", sequence=sequence,
+                timestamp=f"2026-07-13T11:02:{second:02d}Z", kind="tool.call.failed",
+                operation={"status": "failed", "name": "read_file"},
+                attributes={"arguments": {"path": "same.py"}},
+            )))
+
+        self.assertNotIn("RETRY", {warning.code for warning in index.warnings()})
+
+    def test_evicts_payload_data_before_event_metadata(self):
+        event = sanitize_event(Event.from_dict(event_data(payload={"text": "x" * 500})))
+        full_size = len(json.dumps(event.raw, separators=(",", ":")).encode())
+        metadata_only = event.raw
+        metadata_only["payload"] = {
+            "_agent_tail": metadata_only["payload"]["_agent_tail"]
+        }
+        metadata_size = len(json.dumps(metadata_only, separators=(",", ":")).encode())
+        index = TraceIndex(max_bytes=(full_size + metadata_size) // 2)
+
+        index.add(event)
+
+        view = index.trace("trace-1")
+        self.assertEqual(view.event_ids, ("evt-1",))
+        self.assertEqual(set(view.events[0].raw["payload"]), {"_agent_tail"})
+        eviction = next(warning for warning in index.warnings() if warning.code == "EVICT")
+        self.assertEqual(json.loads(eviction.evidence)["evicted"], "payload")
+
+        tiny = TraceIndex(max_bytes=1)
+        tiny.add(event)
+        self.assertEqual(tiny.trace("trace-1").event_ids, ())
+        self.assertEqual(
+            [
+                json.loads(warning.evidence)["evicted"]
+                for warning in tiny.warnings()
+                if warning.code == "EVICT"
+            ],
+            ["payload", "metadata"],
+        )
 
 
 if __name__ == "__main__":

@@ -222,3 +222,388 @@ def sanitize_event(
             raw["payload"] = {"value": safe_payload, "_agent_tail": metadata}
 
     return Event.from_dict(raw)
+
+
+@dataclass(frozen=True)
+class Warning:
+    code: str
+    event_id: str
+    actor_id: str
+    summary: str
+    evidence: str
+
+
+@dataclass(frozen=True)
+class SpanState:
+    parent_span_id: str | None
+    actor_id: str
+    status: str
+    open: bool
+    event_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ActorState:
+    status: str
+    last_activity: datetime
+    last_activity_event_id: str
+    open_span_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TraceView:
+    events: tuple[Event, ...]
+    uncertain_event_ids: frozenset[str]
+    actors: Mapping[str, ActorState]
+    spans: Mapping[str, SpanState]
+
+    @property
+    def event_ids(self) -> tuple[str, ...]:
+        return tuple(event.event_id for event in self.events)
+
+
+class TraceIndex:
+    _TERMINAL_STATUSES = {
+        "canceled", "cancelled", "complete", "completed", "done", "error",
+        "errored", "failed", "stopped", "succeeded", "success",
+    }
+    _STATE_KEYS = (
+        "output_hash", "file_hash", "checkpoint_id", "success", "retry_reason",
+    )
+
+    def __init__(
+        self,
+        *,
+        loop_threshold: int = 4,
+        stall_seconds: float = 30.0,
+        orphan_grace_seconds: float = 5.0,
+        max_bytes: int = 16 * 1024 * 1024,
+    ) -> None:
+        self.loop_threshold = loop_threshold
+        self.stall_seconds = stall_seconds
+        self.orphan_grace_seconds = orphan_grace_seconds
+        self.max_bytes = max_bytes
+        self._events: list[Event] = []
+        self._event_ids: set[str] = set()
+        self._sizes: dict[str, int] = {}
+        self._eviction_warnings: list[Warning] = []
+
+    def add(self, event: Event) -> None:
+        if event.event_id in self._event_ids:
+            raise ValueError(f"duplicate event ID: {event.event_id}")
+        self._events.append(event)
+        self._event_ids.add(event.event_id)
+        self._sizes[event.event_id] = self._event_size(event)
+        self._evict()
+
+    def trace(self, trace_id: str) -> TraceView:
+        events = [event for event in self._events if event.trace_id == trace_id]
+        ordered, uncertain = self._order(events)
+        spans: dict[str, SpanState] = {}
+        actor_events: dict[str, list[Event]] = {}
+
+        for event in ordered:
+            actor_id = event.actor["id"]
+            actor_events.setdefault(actor_id, []).append(event)
+            operation_status = event.operation["status"]
+            prior = spans.get(event.span_id)
+            is_open = prior.open if prior else False
+            if self._closes(event):
+                is_open = False
+            elif event.kind.endswith(".started") or operation_status.lower() in {
+                "running", "waiting",
+            }:
+                is_open = True
+            spans[event.span_id] = SpanState(
+                event.parent_span_id,
+                actor_id,
+                operation_status,
+                is_open,
+                (*prior.event_ids, event.event_id) if prior else (event.event_id,),
+            )
+
+        last_activity = {
+            actor_id: max(activity, key=lambda event: event.timestamp)
+            for actor_id, activity in actor_events.items()
+        }
+        for event in ordered:
+            parent_span_id = event.parent_span_id
+            seen = set()
+            while parent_span_id in spans and parent_span_id not in seen:
+                seen.add(parent_span_id)
+                parent = spans[parent_span_id]
+                if event.timestamp >= last_activity[parent.actor_id].timestamp:
+                    last_activity[parent.actor_id] = event
+                parent_span_id = parent.parent_span_id
+
+        actors = {}
+        for actor_id, activity in actor_events.items():
+            open_spans = tuple(
+                span_id
+                for span_id, span in spans.items()
+                if span.actor_id == actor_id and span.open
+            )
+            if open_spans:
+                status = next(
+                    spans[event.span_id].status
+                    for event in reversed(activity)
+                    if event.span_id in open_spans
+                )
+            else:
+                status = activity[-1].operation["status"]
+            actors[actor_id] = ActorState(
+                status,
+                last_activity[actor_id].timestamp,
+                last_activity[actor_id].event_id,
+                open_spans,
+            )
+
+        return TraceView(tuple(ordered), frozenset(uncertain), actors, spans)
+
+    def warnings(self, *, now: str | datetime | None = None) -> tuple[Warning, ...]:
+        current = self._parse_now(now)
+        warnings = list(self._eviction_warnings)
+
+        for trace_id in dict.fromkeys(event.trace_id for event in self._events):
+            view = self.trace(trace_id)
+            warnings.extend(self._loop_warnings(view.events))
+            warnings.extend(self._retry_warnings(view.events))
+            for actor_id, actor in view.actors.items():
+                elapsed = (current - actor.last_activity).total_seconds()
+                if actor.open_span_ids and elapsed >= self.stall_seconds:
+                    event_id = actor.last_activity_event_id
+                    warnings.append(self._warning(
+                        "STALL", event_id, actor_id,
+                        f"{actor_id} has produced no event for {elapsed:.1f} seconds",
+                        event_ids=[event_id], seconds=elapsed,
+                    ))
+
+            span_ids = set(view.spans)
+            for event in view.events:
+                if (
+                    event.parent_span_id
+                    and event.parent_span_id not in span_ids
+                    and (current - event.timestamp).total_seconds()
+                    >= self.orphan_grace_seconds
+                ):
+                    warnings.append(self._warning(
+                        "ORPHAN", event.event_id, event.actor["id"],
+                        f"parent span {event.parent_span_id} is absent",
+                        event_ids=[event.event_id], parent_span_id=event.parent_span_id,
+                    ))
+
+        return tuple(warnings)
+
+    def _order(self, events: list[Event]) -> tuple[list[Event], set[str]]:
+        positions = {event.event_id: position for position, event in enumerate(self._events)}
+        by_id = {event.event_id: event for event in events}
+        outgoing = {event.event_id: set() for event in events}
+        incoming = {event.event_id: set() for event in events}
+
+        def edge(before: str, after: str) -> None:
+            if before != after:
+                outgoing[before].add(after)
+                incoming[after].add(before)
+
+        emitters: dict[str, list[Event]] = {}
+        for event in events:
+            emitters.setdefault(event.emitter_id, []).append(event)
+        for emitter_events in emitters.values():
+            emitter_events.sort(key=lambda event: (event.sequence, positions[event.event_id]))
+            for before, after in zip(emitter_events, emitter_events[1:]):
+                if before.sequence < after.sequence:
+                    edge(before.event_id, after.event_id)
+
+        spans: dict[str, list[Event]] = {}
+        for event in events:
+            spans.setdefault(event.span_id, []).append(event)
+        for event in events:
+            if event.parent_span_id in spans:
+                parent = min(
+                    spans[event.parent_span_id],
+                    key=lambda candidate: (
+                        candidate.sequence, positions[candidate.event_id]
+                    ),
+                )
+                edge(parent.event_id, event.event_id)
+
+        def reaches(start: str, target: str) -> bool:
+            pending = list(outgoing[start])
+            seen = set()
+            while pending:
+                node = pending.pop()
+                if node == target:
+                    return True
+                if node not in seen:
+                    seen.add(node)
+                    pending.extend(outgoing[node])
+            return False
+
+        ids = list(by_id)
+        uncertain = {
+            event_id
+            for event_id in ids
+            if any(
+                other != event_id
+                and not reaches(event_id, other)
+                and not reaches(other, event_id)
+                for other in ids
+            )
+        }
+        ready = [event_id for event_id in ids if not incoming[event_id]]
+        ordered = []
+        while ready:
+            ready.sort(key=lambda event_id: (
+                by_id[event_id].timestamp,
+                positions[event_id],
+            ))
+            event_id = ready.pop(0)
+            ordered.append(by_id[event_id])
+            for child in outgoing[event_id]:
+                incoming[child].discard(event_id)
+                if not incoming[child]:
+                    ready.append(child)
+
+        if len(ordered) != len(events):
+            included = {event.event_id for event in ordered}
+            remainder = [event for event in events if event.event_id not in included]
+            remainder.sort(key=lambda event: (event.timestamp, positions[event.event_id]))
+            ordered.extend(remainder)
+            uncertain.update(event.event_id for event in remainder)
+        return ordered, uncertain
+
+    def _loop_warnings(self, events: tuple[Event, ...]) -> list[Warning]:
+        groups: dict[str, list[Event]] = {}
+        for event in events:
+            groups.setdefault(self._signature(event), []).append(event)
+        warnings = []
+        for signature, repeated in groups.items():
+            for start in range(len(repeated) - self.loop_threshold + 1):
+                window = repeated[start:start + self.loop_threshold]
+                states = {self._state(event) for event in window}
+                if len(states) == 1:
+                    last = window[-1]
+                    warnings.append(self._warning(
+                        "LOOP", last.event_id, last.actor["id"],
+                        f"repeated equivalent operation {len(window)} times without state change",
+                        event_ids=[event.event_id for event in window],
+                        signature=signature, state=next(iter(states)),
+                    ))
+                    break
+        return warnings
+
+    def _retry_warnings(self, events: tuple[Event, ...]) -> list[Warning]:
+        groups: dict[str, list[Event]] = {}
+        for event in events:
+            if event.kind.endswith(".failed") or event.operation["status"].lower() == "failed":
+                groups.setdefault(self._signature(event), []).append(event)
+        warnings = []
+        for signature, repeated in groups.items():
+            for start in range(len(repeated) - 2):
+                window = repeated[start:start + 3]
+                delays = [
+                    (after.timestamp - before.timestamp).total_seconds()
+                    for before, after in zip(window, window[1:])
+                ]
+                if delays[1] <= delays[0]:
+                    last = window[-1]
+                    warnings.append(self._warning(
+                        "RETRY", last.event_id, last.actor["id"],
+                        "repeated an unchanged failing call 3 times without increasing delay",
+                        event_ids=[event.event_id for event in window],
+                        delays=delays, signature=signature,
+                    ))
+                    break
+        return warnings
+
+    def _signature(self, event: Event) -> str:
+        raw = event.raw
+        attributes = raw.get("attributes", {})
+        if not isinstance(attributes, Mapping):
+            attributes = {}
+        arguments = attributes.get("arguments", {})
+        if isinstance(arguments, Mapping):
+            arguments = dict(arguments)
+            volatile = attributes.get("volatile_argument_keys", [])
+            if isinstance(volatile, list):
+                for key in volatile:
+                    if isinstance(key, str):
+                        arguments.pop(key, None)
+        return self._json({
+            "actor_id": event.actor["id"],
+            "arguments": arguments,
+            "kind": event.kind,
+            "operation": event.operation.get("name"),
+        })
+
+    def _state(self, event: Event) -> str:
+        attributes = event.raw.get("attributes", {})
+        if not isinstance(attributes, Mapping):
+            attributes = {}
+        return self._json({key: attributes.get(key) for key in self._STATE_KEYS})
+
+    def _closes(self, event: Event) -> bool:
+        return (
+            event.kind.endswith((".completed", ".failed"))
+            or event.operation["status"].lower() in self._TERMINAL_STATUSES
+        )
+
+    def _evict(self) -> None:
+        while sum(self._sizes.values()) > self.max_bytes:
+            changed = False
+            for position, event in enumerate(self._events):
+                raw = event.raw
+                payload = raw.get("payload")
+                if not isinstance(payload, dict) or set(payload) == {"_agent_tail"}:
+                    continue
+                metadata = payload.get("_agent_tail")
+                raw["payload"] = {"_agent_tail": metadata} if metadata else {}
+                smaller = Event.from_dict(raw)
+                old_size = self._sizes[event.event_id]
+                self._events[position] = smaller
+                self._sizes[event.event_id] = self._event_size(smaller)
+                self._eviction_warnings.append(self._warning(
+                    "EVICT", event.event_id, event.actor["id"],
+                    "evicted sanitized payload preview data",
+                    event_ids=[event.event_id], evicted="payload",
+                    bytes_freed=old_size - self._sizes[event.event_id],
+                ))
+                changed = True
+                break
+            if changed:
+                continue
+            event = self._events.pop(0)
+            size = self._sizes.pop(event.event_id)
+            self._event_ids.remove(event.event_id)
+            self._eviction_warnings.append(self._warning(
+                "EVICT", event.event_id, event.actor["id"],
+                "evicted event metadata",
+                event_ids=[event.event_id], evicted="metadata", bytes_freed=size,
+            ))
+
+    @classmethod
+    def _warning(
+        cls,
+        code: str,
+        event_id: str,
+        actor_id: str,
+        summary: str,
+        **evidence: object,
+    ) -> Warning:
+        return Warning(code, event_id, actor_id, summary, cls._json(evidence))
+
+    @staticmethod
+    def _json(value: object) -> str:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+    @classmethod
+    def _event_size(cls, event: Event) -> int:
+        return len(cls._json(event.raw).encode("utf-8"))
+
+    @staticmethod
+    def _parse_now(value: str | datetime | None) -> datetime:
+        if isinstance(value, datetime):
+            return value
+        if value is None:
+            return datetime.now().astimezone()
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
