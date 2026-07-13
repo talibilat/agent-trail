@@ -171,8 +171,16 @@ class RedactionTests(unittest.TestCase):
             ),
             *(prefix + "1" * 24 for prefix in ("xoxb-", "xoxp-", "xoxa-", "xoxr-")),
             "AIza" + "a" * 35,
+            "github_pat_" + "a" * 82,
+            "glpat-" + "a" * 20,
         ]
-        short_lookalikes = ["ghp_short", "xoxb-short", "AIza-short"]
+        short_lookalikes = [
+            "ghp_short",
+            "xoxb-short",
+            "AIza-short",
+            "github_pat_short",
+            "glpat-short",
+        ]
         event = Event.from_dict(
             event_data(payload={"secrets": secrets, "safe": short_lookalikes})
         )
@@ -210,15 +218,29 @@ class RedactionTests(unittest.TestCase):
                     "Authorization",
                     "Cookie",
                     "Set-Cookie",
+                    "CookieJar",
+                    "sessionToken",
+                    "client_secret",
+                    "db-password",
+                    "serviceApiKey",
                 )
+            )
+        }
+        unrelated = {
+            key: "kept"
+            for key in (
+                "oauth",
+                "tokenizer",
+                "secretary",
+                "passwordPolicy",
+                "apiKeyVersion",
             )
         }
         event = Event.from_dict(
             event_data(
                 attributes={
                     "nested": sensitive,
-                    "author": "kept",
-                    "tokenizer": "kept",
+                    "unrelated": unrelated,
                 }
             )
         )
@@ -229,8 +251,7 @@ class RedactionTests(unittest.TestCase):
             attributes["nested"],
             {key: "[REDACTED]" for key in sensitive},
         )
-        self.assertEqual(attributes["author"], "kept")
-        self.assertEqual(attributes["tokenizer"], "kept")
+        self.assertEqual(attributes["unrelated"], unrelated)
 
     def test_redacts_nested_secrets_and_bounds_payloads(self):
         secret = "sk-ant-" + "x" * 40

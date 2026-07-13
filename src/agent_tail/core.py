@@ -8,8 +8,8 @@ from typing import Iterable, Mapping
 
 
 _SENSITIVE_KEY = re.compile(
-    r"(?:auth|authorization|cookie|password|passwd|secret|token|"
-    r"apikey|credentials?)$",
+    r"^(?:auth|authorization|cookie|setcookie)"
+    r"|(?:token|secret|password|apikey|passwd|credentials?)$",
     re.IGNORECASE,
 )
 _KEY_SEPARATOR = re.compile(r"[^a-z0-9]+", re.IGNORECASE)
@@ -18,6 +18,8 @@ _SECRET_VALUE = re.compile(
     r"|\bsk-(?:ant-)?[A-Za-z0-9_-]{16,}"
     r"|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"
     r"|\bgh[opusr]_[A-Za-z0-9]{36,}\b"
+    r"|\bgithub_pat_[A-Za-z0-9_]{82,}\b"
+    r"|\bglpat-[A-Za-z0-9_-]{20,}\b"
     r"|\bxox[bpar]-[A-Za-z0-9-]{20,}\b"
     r"|\bAIza[A-Za-z0-9_-]{35,}\b"
     r"|(?s:-----BEGIN (?P<pem_label>(?:[A-Z0-9]+ )*PRIVATE KEY)-----.*?"
