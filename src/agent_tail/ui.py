@@ -11,11 +11,17 @@ from .core import Event, TraceIndex
 
 
 def _truncate_cells(value: str, max_cells: int) -> str:
+    value = "".join(
+        " " if character == "\t"
+        else "�" if unicodedata.category(character).startswith("C")
+        else character
+        for character in value
+    )
     cells = 0
     end = 0
     for end, character in enumerate(value, 1):
         if (
-            unicodedata.category(character).startswith(("C", "M"))
+            unicodedata.category(character).startswith("M")
             or unicodedata.combining(character)
         ):
             width = 0
@@ -120,6 +126,7 @@ def render_snapshot(
     events = list(index.ordered_events())
     warnings = index.warnings(now=current)
     warning_ids = {warning.event_id for warning in warnings}
+    warning_actor_ids = {warning.actor_id for warning in warnings}
     if state:
         events = [
             event for event in events
@@ -137,7 +144,11 @@ def render_snapshot(
                 or event.kind.endswith(".failed")
                 or event.operation["status"].lower() in {"error", "errored", "failed"}
             )
-            and (not state.warnings_only or event.event_id in warning_ids)
+            and (
+                not state.warnings_only
+                or event.event_id in warning_ids
+                or event.actor["id"] in warning_actor_ids
+            )
         ]
         selected = state.selected
     filters = ["FILTER"]

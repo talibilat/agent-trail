@@ -771,6 +771,33 @@ class TraceIndexTests(unittest.TestCase):
 
         self.assertTrue(actor.uncertain)
 
+    def test_staggered_ready_events_keep_full_causal_uncertainty(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="independent", span_id="independent", emitter_id="worker-b",
+            sequence=1, timestamp="2026-07-13T11:00:00Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="chain-start", span_id="chain-start", emitter_id="worker-a",
+            sequence=1, timestamp="2026-07-13T11:01:00Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="chain-end", span_id="chain-end", emitter_id="worker-a",
+            sequence=2, timestamp="2026-07-13T11:02:00Z",
+        )))
+
+        view = index.trace("trace-1")
+
+        self.assertEqual(
+            view.event_ids,
+            ("independent", "chain-start", "chain-end"),
+        )
+        self.assertEqual(
+            view.uncertain_event_ids,
+            {"independent", "chain-start", "chain-end"},
+        )
+        self.assertTrue(view.actors["reviewer-1"].uncertain)
+
     def test_actor_state_does_not_treat_parent_fallback_as_causal(self):
         index = TraceIndex()
         index.add(Event.from_dict(event_data(
@@ -950,7 +977,11 @@ class WarningTests(unittest.TestCase):
                 event_id=f"retry-{sequence}", span_id=f"retry-{sequence}",
                 sequence=sequence, kind=f"tool.call.{status}",
                 operation={"status": status, "name": "read_file"},
-                attributes={"arguments": {"path": "same.py"}},
+                attributes=(
+                    {"arguments": {"path": "same.py"}}
+                    if status == "failed"
+                    else {}
+                ),
             )))
 
         self.assertNotIn("RETRY", {warning.code for warning in index.warnings()})

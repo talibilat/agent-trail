@@ -403,7 +403,7 @@ class TraceIndex:
 
     def trace(self, trace_id: str) -> TraceView:
         events = [event for event in self._events if event.trace_id == trace_id]
-        ordered, uncertain, _ = self._order(events)
+        ordered, uncertain, (_, descendants) = self._order(events)
         spans: dict[str, SpanState] = {}
         actor_events: dict[str, list[Event]] = {}
 
@@ -444,29 +444,41 @@ class TraceIndex:
                     last_activity[parent.actor_id] = event
                 parent_span_id = parent.parent_span_id
 
+        actor_bits = {}
+        for position, event in enumerate(ordered):
+            actor_id = event.actor["id"]
+            actor_bits[actor_id] = actor_bits.get(actor_id, 0) | 1 << position
+
         actors = {}
         for actor_id, activity in actor_events.items():
-            display = activity[-1]
+            maxima = [
+                event
+                for event in activity
+                if not descendants[event.event_id] & actor_bits[actor_id]
+            ]
+            display = maxima[-1] if maxima else activity[-1]
             open_spans = tuple(
                 span_id
                 for span_id, span in spans.items()
                 if span.actor_id == actor_id and span.open
             )
             if open_spans:
-                status = next(
-                    spans[event.span_id].status
+                active = next(
+                    event
                     for event in reversed(activity)
                     if event.span_id in open_spans
                 )
+                status = spans[active.span_id].status
             else:
+                active = display
                 status = display.operation["status"]
             actors[actor_id] = ActorState(
                 status,
-                display.operation.get("name", "-"),
+                active.operation.get("name", "-"),
                 last_activity[actor_id].timestamp,
                 last_activity[actor_id].event_id,
                 open_spans,
-                display.event_id in uncertain,
+                len(maxima) != 1,
             )
 
         return TraceView(tuple(ordered), frozenset(uncertain), actors, spans)
@@ -507,11 +519,16 @@ class TraceIndex:
 
     def _order(
         self, events: list[Event]
-    ) -> tuple[list[Event], set[str], dict[str, set[str]]]:
+    ) -> tuple[
+        list[Event],
+        set[str],
+        tuple[dict[str, int], dict[str, int]],
+    ]:
         positions = {event.event_id: position for position, event in enumerate(self._events)}
         by_id = {event.event_id: event for event in events}
         outgoing = {event.event_id: set() for event in events}
         causal_outgoing = {event.event_id: set() for event in events}
+        causal_incoming = {event.event_id: set() for event in events}
         incoming = {event.event_id: set() for event in events}
         fallback_uncertain = set()
 
@@ -521,6 +538,7 @@ class TraceIndex:
                 incoming[after].add(before)
                 if causal:
                     causal_outgoing[before].add(after)
+                    causal_incoming[after].add(before)
 
         emitters: dict[str, list[Event]] = {}
         for event in events:
@@ -556,7 +574,6 @@ class TraceIndex:
                     edge(parent.event_id, event.event_id, causal=False)
                     fallback_uncertain.update((parent.event_id, event.event_id))
 
-        uncertain = set(fallback_uncertain)
         ready = [
             (by_id[event_id].timestamp, positions[event_id], event_id)
             for event_id in by_id
@@ -565,8 +582,6 @@ class TraceIndex:
         heapq.heapify(ready)
         ordered = []
         while ready:
-            if len(ready) > 1:
-                uncertain.update(item[2] for item in ready)
             _, _, event_id = heapq.heappop(ready)
             ordered.append(by_id[event_id])
             for child in outgoing[event_id]:
@@ -578,13 +593,40 @@ class TraceIndex:
                         child,
                     ))
 
+        remainder = []
         if len(ordered) != len(events):
             included = {event.event_id for event in ordered}
             remainder = [event for event in events if event.event_id not in included]
             remainder.sort(key=lambda event: (event.timestamp, positions[event.event_id]))
             ordered.extend(remainder)
-            uncertain.update(event.event_id for event in remainder)
-        return ordered, uncertain, causal_outgoing
+
+        bit = {
+            event.event_id: 1 << position
+            for position, event in enumerate(ordered)
+        }
+        ancestors = {event.event_id: 0 for event in ordered}
+        for event in ordered:
+            for parent in causal_incoming[event.event_id]:
+                ancestors[event.event_id] |= ancestors[parent] | bit[parent]
+
+        descendants = {event.event_id: 0 for event in ordered}
+        for event in reversed(ordered):
+            for child in causal_outgoing[event.event_id]:
+                descendants[event.event_id] |= descendants[child] | bit[child]
+
+        all_events = (1 << len(ordered)) - 1
+        uncertain = {
+            event.event_id
+            for event in ordered
+            if (
+                ancestors[event.event_id]
+                | descendants[event.event_id]
+                | bit[event.event_id]
+            ) != all_events
+        }
+        uncertain.update(fallback_uncertain)
+        uncertain.update(event.event_id for event in remainder)
+        return ordered, uncertain, (ancestors, descendants)
 
     @staticmethod
     def _reaches(outgoing: Mapping[str, set[str]], start: str, target: str) -> bool:
@@ -622,40 +664,51 @@ class TraceIndex:
 
     def _retry_warnings(self, events: tuple[Event, ...]) -> list[Warning]:
         warnings = []
-        for (_, signature), histories in self._histories(
-            events, include_kind=False
-        ).items():
-            for history in histories:
-                runs: list[list[Event]] = [[]]
-                for event in history:
-                    if (
-                        event.kind.endswith(".failed")
-                        or event.operation["status"].lower() == "failed"
-                    ):
-                        runs[-1].append(event)
-                    elif runs[-1]:
-                        runs.append([])
-                for repeated in runs:
-                    for start in range(len(repeated) - 2):
-                        window = repeated[start:start + 3]
-                        delays = [
-                            (after.timestamp - before.timestamp).total_seconds()
-                            for before, after in zip(window, window[1:])
-                        ]
-                        states = {self._state(event) for event in window}
-                        if delays[1] <= delays[0] and len(states) == 1:
-                            last = window[-1]
-                            warnings.append(self._warning(
-                                "RETRY", last.event_id, last.actor["id"],
-                                "repeated an unchanged failing call 3 times without increasing delay",
-                                event_ids=[event.event_id for event in window],
-                                delays=delays, signature=signature,
-                                state=next(iter(states)),
-                            ))
-                            break
-                    else:
-                        continue
-                    break
+        streaks: dict[tuple[str, str, str], tuple[str, str, list[Event], bool]] = {}
+        for event in events:
+            scope = (
+                event.emitter_id,
+                event.actor["id"],
+                self._json(event.operation.get("name")),
+            )
+            failed = (
+                event.kind.endswith(".failed")
+                or event.operation["status"].lower() == "failed"
+            )
+            if not failed:
+                streaks.pop(scope, None)
+                continue
+
+            signature = self._signature(event, include_kind=False)
+            state = self._state(event)
+            prior = streaks.get(scope)
+            if (
+                prior is None
+                or prior[0] != signature
+                or prior[1] != state
+                or event.sequence <= prior[2][-1].sequence
+            ):
+                repeated = [event]
+                warned = False
+            else:
+                repeated = [*prior[2][-2:], event]
+                warned = prior[3]
+
+            if len(repeated) >= 3 and not warned:
+                window = repeated[-3:]
+                delays = [
+                    (after.timestamp - before.timestamp).total_seconds()
+                    for before, after in zip(window, window[1:])
+                ]
+                if delays[1] <= delays[0]:
+                    warnings.append(self._warning(
+                        "RETRY", event.event_id, event.actor["id"],
+                        "repeated an unchanged failing call 3 times without increasing delay",
+                        event_ids=[item.event_id for item in window],
+                        delays=delays, signature=signature, state=state,
+                    ))
+                    warned = True
+            streaks[scope] = (signature, state, repeated, warned)
         return warnings
 
     def _histories(

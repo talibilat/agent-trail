@@ -3,6 +3,7 @@ from queue import Empty, Queue
 import threading
 import unittest
 from unittest import mock
+import unicodedata
 
 from agent_tail.core import Event, TraceIndex, sanitize_event
 from agent_tail.ui import (
@@ -39,7 +40,16 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(_truncate_cells("a🙂b", 3), "a🙂")
         self.assertEqual(_truncate_cells("e\N{COMBINING ACUTE ACCENT}x", 1), "é")
         self.assertEqual(_truncate_cells("e\N{COMBINING ACUTE ACCENT}x", 0), "")
-        self.assertEqual(_truncate_cells("a\x00b", 1), "a\x00")
+        self.assertEqual(_truncate_cells("a\x00b", 3), "a�b")
+        self.assertEqual(
+            _truncate_cells("\t\x1b\n\r\N{RIGHT-TO-LEFT OVERRIDE}\ud800", 6),
+            " �����",
+        )
+        output = _truncate_cells("safe\x00\x1b\n\N{RIGHT-TO-LEFT OVERRIDE}", 20)
+        self.assertFalse(any(
+            unicodedata.category(character).startswith("C")
+            for character in output
+        ))
 
     def test_snapshot_keeps_essential_text_at_narrow_width(self):
         index = TraceIndex()
@@ -238,6 +248,30 @@ class SnapshotTests(unittest.TestCase):
         self.assertIn("elapsed 15.0s", parent_lane)
         self.assertIn("warning STALL", parent_lane)
 
+    def test_warning_only_mode_keeps_propagated_stall_parent_lane(self):
+        index = TraceIndex(stall_seconds=10)
+        index.add(Event.from_dict(event_data(
+            event_id="root", span_id="root", timestamp="2026-07-13T11:02:44Z",
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="child", span_id="child", parent_span_id="root", sequence=2,
+            timestamp="2026-07-13T11:03:25Z", kind="tool.call.completed",
+            actor={"id": "tool-1"},
+            operation={"status": "completed", "name": "shell"},
+        )))
+
+        output = render_snapshot(
+            index,
+            width=160,
+            now="2026-07-13T11:03:40Z",
+            state=UiState(event_count=2, warnings_only=True),
+        )
+
+        self.assertIn("reviewer-1 running read_file", output)
+        self.assertIn("warning STALL", output)
+        self.assertIn("event root ", output)
+        self.assertIn("event child ", output)
+
     def test_lane_displays_actor_state_uncertainty(self):
         index = TraceIndex()
         for event_id, emitter, status in (
@@ -255,6 +289,26 @@ class SnapshotTests(unittest.TestCase):
         )
 
         self.assertIn("uncertain", lane)
+
+    def test_lane_pairs_open_span_status_with_its_operation(self):
+        index = TraceIndex()
+        index.add(Event.from_dict(event_data(
+            event_id="read", span_id="read", sequence=1,
+            operation={"status": "running", "name": "read_file"},
+        )))
+        index.add(Event.from_dict(event_data(
+            event_id="write", span_id="write", sequence=2,
+            kind="tool.call.completed",
+            operation={"status": "completed", "name": "write_file"},
+        )))
+
+        lane = next(
+            line for line in render_snapshot(index, width=120).splitlines()
+            if line.startswith("reviewer-1 ")
+        )
+
+        self.assertIn("running read_file", lane)
+        self.assertNotIn("running write_file", lane)
 
 
 class UiStateTests(unittest.TestCase):
