@@ -88,6 +88,67 @@
     }
     .metric strong { display: block; font-size: 1.45rem; }
     .metric span, .muted { color: var(--muted); }
+    .view-tabs, .view-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      padding: 0 1rem 1rem;
+    }
+    .view-tabs button, .view-toolbar button {
+      width: auto;
+      padding: 0.5rem 0.7rem;
+    }
+    .view-stage {
+      min-height: 420px;
+      margin: 0 1rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(139, 211, 255, 0.08), rgba(13, 19, 34, 0.92));
+      overflow: hidden;
+      position: relative;
+    }
+    .view-canvas {
+      position: relative;
+      width: 1200px;
+      min-height: 700px;
+      transform-origin: 0 0;
+    }
+    .edge-layer {
+      inset: 0;
+      overflow: visible;
+      position: absolute;
+      width: 1200px;
+      height: 700px;
+    }
+    .agent-card {
+      position: absolute;
+      width: 160px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(13, 19, 34, 0.96);
+      padding: 0.75rem;
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+    }
+    .agent-card[aria-current="true"] {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent) inset, 0 12px 34px rgba(139, 211, 255, 0.18);
+    }
+    .agent-card .agent-id { display: block; font-weight: 700; }
+    .agent-card .agent-meta { color: var(--muted); font-size: 0.78rem; }
+    .selection {
+      padding: 0 1rem 1rem;
+      color: var(--muted);
+    }
+    .dense-note {
+      position: absolute;
+      right: 1rem;
+      top: 1rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 0.35rem 0.6rem;
+      background: rgba(9, 11, 18, 0.82);
+      color: var(--warn);
+    }
     .timeline { display: grid; gap: 0.65rem; padding: 1rem; }
     .findings { display: grid; gap: 0.5rem; padding: 0 1rem 1rem; }
     .finding {
@@ -149,6 +210,24 @@
         <span id="warning-count" class="warning"></span>
       </div>
       <div id="metrics" class="metric-row"></div>
+      <div class="view-tabs" aria-label="Run views">
+        <button type="button" data-view="graph">Graph</button>
+        <button type="button" data-view="tree">Tree</button>
+        <button type="button" data-view="timeline">Timeline</button>
+      </div>
+      <div class="view-toolbar" aria-label="View controls">
+        <button type="button" data-action="zoom-in">Zoom in</button>
+        <button type="button" data-action="zoom-out">Zoom out</button>
+        <button type="button" data-action="pan-left">Pan left</button>
+        <button type="button" data-action="pan-right">Pan right</button>
+        <button type="button" data-action="pan-up">Pan up</button>
+        <button type="button" data-action="pan-down">Pan down</button>
+        <button type="button" data-action="focus">Focus selected</button>
+        <button type="button" data-action="show-more">Show more</button>
+        <button type="button" data-action="reset">Reset</button>
+      </div>
+      <div id="selection" class="selection"></div>
+      <div id="stage" class="view-stage"></div>
       <div id="findings" class="findings"></div>
       <div id="timeline" class="timeline"></div>
     </section>
@@ -158,12 +237,32 @@
     const timelineEl = document.querySelector('#timeline');
     const metricsEl = document.querySelector('#metrics');
     const findingsEl = document.querySelector('#findings');
+    const stageEl = document.querySelector('#stage');
+    const selectionEl = document.querySelector('#selection');
     const statusEl = document.querySelector('#status');
     const runCountEl = document.querySelector('#run-count');
     const warningCountEl = document.querySelector('#warning-count');
+    const viewButtons = [...document.querySelectorAll('[data-view]')];
+    const actionButtons = [...document.querySelectorAll('[data-action]')];
+    const svgNamespace = `http${'://'}www.w3.org/2000/svg`;
     let selectedTraceId = null;
+    let selectedView = 'graph';
+    let selectedAgentId = null;
+    let focusedAgentId = null;
+    let visibleLimit = 80;
+    let currentDetail = null;
+    let viewTransform = { scale: 1, x: 0, y: 0 };
     let cursor = 0;
     let events = null;
+
+    viewButtons.forEach((button) => button.addEventListener('click', () => {
+      selectedView = button.dataset.view;
+      renderDetail(currentDetail);
+    }));
+
+    actionButtons.forEach((button) => button.addEventListener('click', () => {
+      handleViewAction(button.dataset.action);
+    }));
 
     async function fetchJson(path) {
       const response = await fetch(path, { headers: { Accept: 'application/json' } });
@@ -212,9 +311,12 @@
     }
 
     function renderDetail(detail) {
+      if (!detail) return;
+      currentDetail = detail;
       cursor = Math.max(cursor, detail.cursor);
       const run = detail.run;
       warningCountEl.textContent = detail.warnings.length ? `${detail.warnings.length} warning(s)` : '';
+      if (!selectedAgentId && detail.actors.length) selectedAgentId = detail.actors[0].id;
       metricsEl.replaceChildren(
         metric('State', run.state),
         metric('Events', run.event_count),
@@ -232,6 +334,7 @@
         node.append(code, message);
         return node;
       }));
+      renderVisualView(detail);
       timelineEl.replaceChildren(...detail.events.map((event) => {
         const node = document.createElement('article');
         node.className = 'event';
@@ -267,6 +370,174 @@
       }
     }
 
+    function renderVisualView(detail) {
+      viewButtons.forEach((button) => {
+        button.setAttribute('aria-current', button.dataset.view === selectedView ? 'true' : 'false');
+      });
+      timelineEl.hidden = selectedView !== 'timeline';
+      stageEl.hidden = selectedView === 'timeline';
+      if (selectedView === 'timeline') {
+        stageEl.replaceChildren();
+      } else if (selectedView === 'graph') {
+        renderGraph(detail);
+      } else {
+        renderTree(detail);
+      }
+      renderSelection(detail);
+    }
+
+    function renderGraph(detail) {
+      const visibleAgents = visibleAgentsFor(detail);
+      const positions = new Map(visibleAgents.map((agent, index) => [agent.id, {
+        x: 90 + (index % 5) * 210,
+        y: 90 + Math.floor(index / 5) * 150
+      }]));
+      renderCanvas(detail, visibleAgents, positions, detail.links, limited(detail, visibleAgents));
+    }
+
+    function renderTree(detail) {
+      const visibleAgents = visibleAgentsFor(detail);
+      const byId = new Map(visibleAgents.map((agent) => [agent.id, agent]));
+      const roots = visibleAgents.filter((agent) => !agent.parent_id || !byId.has(agent.parent_id));
+      const levels = [];
+      const visited = new Set();
+      const queue = roots.map((agent) => ({ agent, depth: 0 }));
+      while (queue.length) {
+        const { agent, depth } = queue.shift();
+        if (visited.has(agent.id)) continue;
+        visited.add(agent.id);
+        if (!levels[depth]) levels[depth] = [];
+        levels[depth].push(agent);
+        agent.child_ids.forEach((childId) => {
+          if (byId.has(childId)) queue.push({ agent: byId.get(childId), depth: depth + 1 });
+        });
+      }
+      const positions = new Map();
+      levels.forEach((agents, depth) => agents.forEach((agent, index) => {
+        positions.set(agent.id, { x: 90 + index * 220, y: 80 + depth * 170 });
+      }));
+      visibleAgents.forEach((agent, index) => {
+        if (!positions.has(agent.id)) positions.set(agent.id, { x: 90 + index * 220, y: 80 + levels.length * 170 });
+      });
+      renderCanvas(
+        detail,
+        visibleAgents,
+        positions,
+        detail.links.filter((link) => link.type === 'spawn'),
+        limited(detail, visibleAgents)
+      );
+    }
+
+    function renderCanvas(detail, agents, positions, links, dense) {
+      const canvas = document.createElement('div');
+      canvas.className = 'view-canvas';
+      canvas.style.transform = `translate(${viewTransform.x}px, ${viewTransform.y}px) scale(${viewTransform.scale})`;
+      const svg = document.createElementNS(svgNamespace, 'svg');
+      svg.classList.add('edge-layer');
+      links.forEach((link) => {
+        const source = positions.get(link.source_actor_id);
+        const target = positions.get(link.target_actor_id);
+        if (!source || !target) return;
+        const line = document.createElementNS(svgNamespace, 'line');
+        line.setAttribute('x1', source.x + 80);
+        line.setAttribute('y1', source.y + 42);
+        line.setAttribute('x2', target.x + 80);
+        line.setAttribute('y2', target.y + 42);
+        line.setAttribute('stroke', link.type === 'message' ? '#ffc46b' : '#8bd3ff');
+        line.setAttribute('stroke-width', link.type === 'spawn' ? '3' : '2');
+        line.setAttribute('stroke-dasharray', link.type === 'message' ? '6 6' : '0');
+        svg.append(line);
+      });
+      canvas.append(svg, ...agents.map((agent) => agentCard(detail, agent, positions.get(agent.id))));
+      if (dense) {
+        const note = document.createElement('div');
+        note.className = 'dense-note';
+        note.textContent = `Showing ${agents.length} of ${focusPool(detail).length} agents`;
+        canvas.append(note);
+      }
+      stageEl.replaceChildren(canvas);
+    }
+
+    function visibleAgentsFor(detail) {
+      return focusPool(detail).slice(0, visibleLimit);
+    }
+
+    function limited(detail, agents) {
+      return agents.length < focusPool(detail).length;
+    }
+
+    function focusPool(detail) {
+      if (!focusedAgentId) return detail.actors;
+      const byId = new Map(detail.actors.map((agent) => [agent.id, agent]));
+      const included = new Set([focusedAgentId]);
+      const visitChildren = (agentId) => {
+        const agent = byId.get(agentId);
+        if (!agent) return;
+        agent.child_ids.forEach((childId) => {
+          if (!included.has(childId)) {
+            included.add(childId);
+            visitChildren(childId);
+          }
+        });
+      };
+      visitChildren(focusedAgentId);
+      return detail.actors.filter((agent) => included.has(agent.id));
+    }
+
+    function agentCard(detail, agent, position) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'agent-card';
+      card.style.left = `${position.x}px`;
+      card.style.top = `${position.y}px`;
+      card.setAttribute('aria-current', agent.id === selectedAgentId ? 'true' : 'false');
+      const warningCount = detail.warnings.filter((warning) => warning.actor_id === agent.id).length;
+      const usage = agent.usage.total_tokens.available ? `${agent.usage.total_tokens.value} tokens` : 'usage unavailable';
+      card.append(
+        label('span', 'agent-id', agent.id),
+        label('span', 'agent-meta', `${agent.status} · ${text(agent.role)} · ${text(agent.model)}`),
+        label('span', 'agent-meta', `${usage}${warningCount ? ` · ${warningCount} warning(s)` : ''}`)
+      );
+      card.addEventListener('click', () => {
+        selectedAgentId = agent.id;
+        renderDetail(detail);
+      });
+      return card;
+    }
+
+    function renderSelection(detail) {
+      const agent = detail.actors.find((candidate) => candidate.id === selectedAgentId);
+      if (!agent) {
+        selectionEl.textContent = 'Select an agent to inspect graph context.';
+        return;
+      }
+      const usage = agent.usage.total_tokens.available ? `${agent.usage.total_tokens.value} tokens` : 'usage unavailable';
+      const focusText = focusedAgentId === agent.id ? ' Focused subtree.' : '';
+      selectionEl.textContent = `Selected ${agent.id}: ${agent.status}, role ${text(agent.role)}, model ${text(agent.model)}, parent ${text(agent.parent_id)}, ${usage}.${focusText}`;
+    }
+
+    function handleViewAction(action) {
+      if (action === 'zoom-in') viewTransform.scale = Math.min(2.5, viewTransform.scale + 0.15);
+      if (action === 'zoom-out') viewTransform.scale = Math.max(0.45, viewTransform.scale - 0.15);
+      if (action === 'pan-left') viewTransform.x -= 60;
+      if (action === 'pan-right') viewTransform.x += 60;
+      if (action === 'pan-up') viewTransform.y -= 60;
+      if (action === 'pan-down') viewTransform.y += 60;
+      if (action === 'show-more') visibleLimit += 80;
+      if (action === 'reset') {
+        viewTransform = { scale: 1, x: 0, y: 0 };
+        focusedAgentId = null;
+        visibleLimit = 80;
+      }
+      if (action === 'focus' && currentDetail?.actors.length) {
+        selectedAgentId = selectedAgentId || currentDetail.actors[0].id;
+        focusedAgentId = selectedAgentId;
+        visibleLimit = 80;
+        viewTransform = { scale: 1.15, x: 40, y: 20 };
+      }
+      renderDetail(currentDetail);
+    }
+
     function metric(label, value) {
       const node = document.createElement('div');
       node.className = 'metric';
@@ -280,6 +551,13 @@
 
     function code(value) {
       const node = document.createElement('code');
+      node.textContent = value;
+      return node;
+    }
+
+    function label(tag, className, value) {
+      const node = document.createElement(tag);
+      node.className = className;
       node.textContent = value;
       return node;
     }

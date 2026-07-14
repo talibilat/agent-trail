@@ -75,6 +75,13 @@ class ServeTests(unittest.TestCase):
         self.assertNotIn("http://", html)
         self.assertIn("textContent", html)
         self.assertIn("finding.kind", html)
+        self.assertIn('data-view="graph"', html)
+        self.assertIn('data-view="tree"', html)
+        self.assertIn('data-action="zoom-in"', html)
+        self.assertIn('data-action="show-more"', html)
+        self.assertIn("focusedAgentId", html)
+        self.assertIn("link.type === 'spawn'", html)
+        self.assertIn('Selected ${agent.id}', html)
         self.assertEqual(runs["runs"][0]["trace_id"], "trace/1")
         self.assertEqual(detail["events"][0]["event_id"], "evt-1")
 
