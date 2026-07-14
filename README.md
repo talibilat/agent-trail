@@ -14,6 +14,35 @@ agent-tail --help
 
 For development without installation, prefix commands with `PYTHONPATH=src python -m agent_tail`.
 
+## Serve Mode
+
+Launch the local browser flight recorder against a growing JSONL file:
+
+```bash
+agent-tail serve run.jsonl
+```
+
+Use `--open` to open the printed URL automatically, or choose a loopback port with `--port`.
+The server follows regular files after reaching the current EOF and receives new standard-input events until stdin disconnects.
+
+The server binds to `127.0.0.1` by default.
+A non-loopback host requires `--remote-access`, prints a prominent warning, and generates a token-protected launch URL.
+Remote access cannot be combined with `--unsafe-unredacted`.
+
+Serve mode provides graph, tree, swimlane, sequence, playback, search, inspectors, warning history, and lazy sanitized payload details through the same ingestion and trace-index behavior as the terminal application.
+The packaged browser UI has no runtime CDN dependency.
+
+To run the browser E2E suite locally:
+
+```bash
+python -m pip install '.[test]'
+python -m playwright install chromium firefox webkit
+PYTHONPATH=src python -m unittest tests.test_e2e
+```
+
+The automated release matrix drives installed stable Chrome plus Playwright Firefox and WebKit.
+Stable Safari must allow JavaScript from Apple Events or SafariDriver automation before its full installed-browser journey can be automated; without that local setting, release verification is limited to loading the dashboard in installed Safari and the passing WebKit journey.
+
 ## Read Events
 
 Read a JSONL file:
@@ -112,4 +141,10 @@ The interactive terminal UI provides these controls:
 
 ## Deferred Scope
 
-Version 1 defers sockets, public harness adapters, HTML and Mermaid exports, a graph pane, persistence, replay, hosting, fan-out warnings, per-tool policies, and custom keybindings.
+Version 1 defers sockets, public harness adapters, HTML and Mermaid exports, persistence, replay, hosting, fan-out warnings, per-tool policies, and custom keybindings.
+
+Serve mode remains process-local and does not persist run history across restarts.
+One actor ID represents one logical agent invocation, and primary parentage uses the first causal cross-actor relationship that introduces the actor.
+Run titles fall back to sanitized trace IDs.
+Dense graph and tree views use progressive reveal rather than automatic clustering.
+The local API is versioned as `v1` but remains experimental for external consumers.
