@@ -149,6 +149,40 @@
       background: rgba(9, 11, 18, 0.82);
       color: var(--warn);
     }
+    .playback {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0 1rem 1rem;
+    }
+    .playback button, .playback select { width: auto; padding: 0.5rem 0.7rem; }
+    .playback input { width: 100%; accent-color: var(--accent); }
+    .swimlane, .sequence-view { display: grid; gap: 0.75rem; padding: 1rem; }
+    .lane, .sequence-row {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(13, 19, 34, 0.88);
+      padding: 0.75rem;
+    }
+    .lane-track {
+      position: relative;
+      height: 26px;
+      margin-top: 0.5rem;
+      border-radius: 999px;
+      background: #080d18;
+      overflow: hidden;
+    }
+    .lane-event {
+      position: absolute;
+      top: 5px;
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      background: var(--accent);
+      border: 2px solid #0d1322;
+    }
+    .sequence-row strong { color: var(--accent); }
     .timeline { display: grid; gap: 0.65rem; padding: 1rem; }
     .findings { display: grid; gap: 0.5rem; padding: 0 1rem 1rem; }
     .finding {
@@ -213,7 +247,20 @@
       <div class="view-tabs" aria-label="Run views">
         <button type="button" data-view="graph">Graph</button>
         <button type="button" data-view="tree">Tree</button>
+        <button type="button" data-view="swimlane">Swimlane</button>
+        <button type="button" data-view="sequence">Sequence</button>
         <button type="button" data-view="timeline">Timeline</button>
+      </div>
+      <div class="playback" aria-label="Playback controls">
+        <button type="button" id="playback-toggle">Play</button>
+        <input id="scrubber" type="range" min="0" max="0" step="0.1" value="0">
+        <select id="speed" aria-label="Playback speed">
+          <option value="0.5">0.5x</option>
+          <option value="1" selected>1x</option>
+          <option value="2">2x</option>
+          <option value="4">4x</option>
+        </select>
+        <button type="button" id="jump-live">Jump to live</button>
       </div>
       <div class="view-toolbar" aria-label="View controls">
         <button type="button" data-action="zoom-in">Zoom in</button>
@@ -242,6 +289,10 @@
     const statusEl = document.querySelector('#status');
     const runCountEl = document.querySelector('#run-count');
     const warningCountEl = document.querySelector('#warning-count');
+    const playbackToggleEl = document.querySelector('#playback-toggle');
+    const scrubberEl = document.querySelector('#scrubber');
+    const speedEl = document.querySelector('#speed');
+    const jumpLiveEl = document.querySelector('#jump-live');
     const viewButtons = [...document.querySelectorAll('[data-view]')];
     const actionButtons = [...document.querySelectorAll('[data-action]')];
     const svgNamespace = `http${'://'}www.w3.org/2000/svg`;
@@ -252,6 +303,12 @@
     let visibleLimit = 80;
     let currentDetail = null;
     let viewTransform = { scale: 1, x: 0, y: 0 };
+    let playbackTraceId = null;
+    let playbackTime = null;
+    let liveFollow = true;
+    let playing = false;
+    let playbackTimer = null;
+    let playbackSpeed = 1;
     let cursor = 0;
     let events = null;
 
@@ -263,6 +320,23 @@
     actionButtons.forEach((button) => button.addEventListener('click', () => {
       handleViewAction(button.dataset.action);
     }));
+    playbackToggleEl.addEventListener('click', () => setPlaying(!playing));
+    scrubberEl.addEventListener('input', () => {
+      playbackTime = Number(scrubberEl.value);
+      liveFollow = false;
+      setPlaying(false);
+      renderDetail(currentDetail);
+    });
+    speedEl.addEventListener('change', () => {
+      playbackSpeed = Number(speedEl.value);
+      if (playing) startPlaybackTimer();
+    });
+    jumpLiveEl.addEventListener('click', () => {
+      liveFollow = true;
+      playbackTime = durationOf(currentDetail);
+      setPlaying(false);
+      renderDetail(currentDetail);
+    });
 
     async function fetchJson(path) {
       const response = await fetch(path, { headers: { Accept: 'application/json' } });
@@ -315,16 +389,22 @@
       currentDetail = detail;
       cursor = Math.max(cursor, detail.cursor);
       const run = detail.run;
-      warningCountEl.textContent = detail.warnings.length ? `${detail.warnings.length} warning(s)` : '';
+      syncPlayback(detail);
+      const visibleEvents = eventsAtHorizon(detail);
+      const visibleAgents = agentsAtHorizon(detail);
+      const visibleWarnings = detail.warnings.filter((warning) => !warning.event_id || visibleEvents.some((event) => event.event_id === warning.event_id));
+      const visibleFindings = detail.findings.filter((finding) => !finding.event_id || visibleEvents.some((event) => event.event_id === finding.event_id));
+      warningCountEl.textContent = visibleWarnings.length ? `${visibleWarnings.length} warning(s)` : '';
       if (!selectedAgentId && detail.actors.length) selectedAgentId = detail.actors[0].id;
       metricsEl.replaceChildren(
         metric('State', run.state),
-        metric('Events', run.event_count),
-        metric('Actors', run.actor_count),
-        metric('Warnings', run.warning_count),
-        metric('Source', detail.source.state)
+        metric('Events', `${visibleEvents.length}/${run.event_count}`),
+        metric('Actors', `${visibleAgents.length}/${run.actor_count}`),
+        metric('Warnings', `${visibleWarnings.length}/${run.warning_count}`),
+        metric('Source', detail.source.state),
+        metric('Playback', liveFollow ? 'live' : `${playbackTime.toFixed(1)}s`)
       );
-      findingsEl.replaceChildren(...detail.findings.map((finding) => {
+      findingsEl.replaceChildren(...visibleFindings.map((finding) => {
         const node = document.createElement('div');
         node.className = 'finding';
         const code = document.createElement('strong');
@@ -335,7 +415,7 @@
         return node;
       }));
       renderVisualView(detail);
-      timelineEl.replaceChildren(...detail.events.map((event) => {
+      timelineEl.replaceChildren(...visibleEvents.map((event) => {
         const node = document.createElement('article');
         node.className = 'event';
         const top = document.createElement('div');
@@ -380,6 +460,10 @@
         stageEl.replaceChildren();
       } else if (selectedView === 'graph') {
         renderGraph(detail);
+      } else if (selectedView === 'swimlane') {
+        renderSwimlane(detail);
+      } else if (selectedView === 'sequence') {
+        renderSequence(detail);
       } else {
         renderTree(detail);
       }
@@ -392,7 +476,7 @@
         x: 90 + (index % 5) * 210,
         y: 90 + Math.floor(index / 5) * 150
       }]));
-      renderCanvas(detail, visibleAgents, positions, detail.links, limited(detail, visibleAgents));
+      renderCanvas(detail, visibleAgents, positions, linksAtHorizon(detail), limited(detail, visibleAgents));
     }
 
     function renderTree(detail) {
@@ -423,9 +507,54 @@
         detail,
         visibleAgents,
         positions,
-        detail.links.filter((link) => link.type === 'spawn'),
+        linksAtHorizon(detail).filter((link) => link.type === 'spawn'),
         limited(detail, visibleAgents)
       );
+    }
+
+    function renderSwimlane(detail) {
+      const duration = Math.max(durationOf(detail), 1);
+      const visibleEvents = eventsAtHorizon(detail);
+      const rows = detail.actors.map((agent) => {
+        const horizonAgent = agentsAtHorizon(detail).find((candidate) => candidate.id === agent.id);
+        const row = document.createElement('div');
+        row.className = 'lane';
+        row.append(label('strong', '', `${agent.id} · ${horizonAgent ? horizonAgent.status : 'not started'}`));
+        const track = document.createElement('div');
+        track.className = 'lane-track';
+        visibleEvents.filter((event) => event.actor.id === agent.id).forEach((event) => {
+          const dot = document.createElement('span');
+          dot.className = 'lane-event';
+          dot.title = `${event.kind} ${event.offset_seconds.toFixed(1)}s`;
+          dot.style.left = `${Math.min(96, Math.max(0, event.offset_seconds / duration * 100))}%`;
+          track.append(dot);
+        });
+        const statuses = visibleEvents
+          .filter((event) => event.actor.id === agent.id)
+          .map((event) => `${event.offset_seconds.toFixed(1)}s ${event.operation.status}`)
+          .join(' · ');
+        row.append(track, label('div', 'agent-meta', statuses || 'no visible activity'));
+        return row;
+      });
+      stageEl.replaceChildren(container('swimlane', rows));
+    }
+
+    function renderSequence(detail) {
+      const visibleIds = new Set(eventsAtHorizon(detail).map((event) => event.event_id));
+      const rows = linksAtHorizon(detail)
+        .filter((link) => link.type === 'message' && visibleIds.has(link.event_id))
+        .map((link) => {
+          const row = document.createElement('div');
+          row.className = 'sequence-row';
+          row.append(
+            label('strong', '', link.source_actor_id),
+            ` → ${text(link.target_actor_id || link.unresolved_target)} `,
+            label('span', 'muted', link.unresolved_target ? 'unresolved target' : 'message.sent')
+          );
+          return row;
+        });
+      if (!rows.length) rows.push(label('div', 'sequence-row muted', 'No message.sent handoffs at this playback time.'));
+      stageEl.replaceChildren(container('sequence-view', rows));
     }
 
     function renderCanvas(detail, agents, positions, links, dense) {
@@ -467,8 +596,9 @@
     }
 
     function focusPool(detail) {
-      if (!focusedAgentId) return detail.actors;
-      const byId = new Map(detail.actors.map((agent) => [agent.id, agent]));
+      const pool = agentsAtHorizon(detail);
+      if (!focusedAgentId) return pool;
+      const byId = new Map(pool.map((agent) => [agent.id, agent]));
       const included = new Set([focusedAgentId]);
       const visitChildren = (agentId) => {
         const agent = byId.get(agentId);
@@ -481,7 +611,7 @@
         });
       };
       visitChildren(focusedAgentId);
-      return detail.actors.filter((agent) => included.has(agent.id));
+      return pool.filter((agent) => included.has(agent.id));
     }
 
     function agentCard(detail, agent, position) {
@@ -491,7 +621,10 @@
       card.style.left = `${position.x}px`;
       card.style.top = `${position.y}px`;
       card.setAttribute('aria-current', agent.id === selectedAgentId ? 'true' : 'false');
-      const warningCount = detail.warnings.filter((warning) => warning.actor_id === agent.id).length;
+      const visibleIds = new Set(eventsAtHorizon(detail).map((event) => event.event_id));
+      const warningCount = detail.warnings.filter((warning) => (
+        warning.actor_id === agent.id && (!warning.event_id || visibleIds.has(warning.event_id))
+      )).length;
       const usage = agent.usage.total_tokens.available ? `${agent.usage.total_tokens.value} tokens` : 'usage unavailable';
       card.append(
         label('span', 'agent-id', agent.id),
@@ -506,7 +639,7 @@
     }
 
     function renderSelection(detail) {
-      const agent = detail.actors.find((candidate) => candidate.id === selectedAgentId);
+      const agent = agentsAtHorizon(detail).find((candidate) => candidate.id === selectedAgentId);
       if (!agent) {
         selectionEl.textContent = 'Select an agent to inspect graph context.';
         return;
@@ -538,6 +671,84 @@
       renderDetail(currentDetail);
     }
 
+    function syncPlayback(detail) {
+      const duration = durationOf(detail);
+      const terminal = detail.run.state === 'completed' || detail.run.state === 'failed';
+      if (playbackTraceId !== detail.run.trace_id) {
+        playbackTraceId = detail.run.trace_id;
+        playbackTime = duration;
+        liveFollow = !terminal;
+        playing = false;
+      }
+      if (liveFollow) playbackTime = duration;
+      playbackTime = Math.min(Math.max(playbackTime, 0), duration);
+      scrubberEl.max = String(duration);
+      scrubberEl.value = String(playbackTime);
+      playbackToggleEl.textContent = playing ? 'Pause' : 'Play';
+      jumpLiveEl.hidden = liveFollow;
+    }
+
+    function durationOf(detail) {
+      return Math.max(0, detail?.duration_seconds || detail?.run?.duration_seconds || 0);
+    }
+
+    function eventsAtHorizon(detail) {
+      return detail.events.filter((event) => event.offset_seconds <= playbackTime + 0.0001);
+    }
+
+    function linksAtHorizon(detail) {
+      const visibleIds = new Set(eventsAtHorizon(detail).map((event) => event.event_id));
+      return detail.links.filter((link) => !link.event_id || visibleIds.has(link.event_id));
+    }
+
+    function agentsAtHorizon(detail) {
+      const byId = new Map(detail.actors.map((agent) => [agent.id, agent]));
+      const lastEvent = new Map();
+      const visibleEvents = eventsAtHorizon(detail);
+      visibleEvents.forEach((event) => lastEvent.set(event.actor.id, event));
+      return [...lastEvent.keys()].map((actorId) => {
+        const agent = byId.get(actorId) || { id: actorId, child_ids: [] };
+        const event = lastEvent.get(actorId);
+        return {
+          ...agent,
+          status: event.operation.status,
+          operation: event.operation.name || agent.operation,
+          usage: usageFor(visibleEvents.filter((visibleEvent) => visibleEvent.actor.id === actorId)),
+        };
+      });
+    }
+
+    function usageFor(events) {
+      const fields = ['input_tokens', 'output_tokens', 'total_tokens', 'cost_usd'];
+      const result = Object.fromEntries(fields.map((field) => [field, { available: false, value: null }]));
+      events.forEach((event) => fields.forEach((field) => {
+        const usage = event.usage[field];
+        if (usage.available) {
+          result[field].available = true;
+          result[field].value = (result[field].value || 0) + usage.value;
+        }
+      }));
+      return result;
+    }
+
+    function setPlaying(next) {
+      playing = next;
+      if (playing) liveFollow = false;
+      startPlaybackTimer();
+      renderDetail(currentDetail);
+    }
+
+    function startPlaybackTimer() {
+      if (playbackTimer) window.clearInterval(playbackTimer);
+      playbackTimer = null;
+      if (!playing) return;
+      playbackTimer = window.setInterval(() => {
+        playbackTime = Math.min(durationOf(currentDetail), playbackTime + 0.25 * playbackSpeed);
+        if (playbackTime >= durationOf(currentDetail)) setPlaying(false);
+        else renderDetail(currentDetail);
+      }, 250);
+    }
+
     function metric(label, value) {
       const node = document.createElement('div');
       node.className = 'metric';
@@ -559,6 +770,13 @@
       const node = document.createElement(tag);
       node.className = className;
       node.textContent = value;
+      return node;
+    }
+
+    function container(className, children) {
+      const node = document.createElement('div');
+      node.className = className;
+      node.replaceChildren(...children);
       return node;
     }
 
