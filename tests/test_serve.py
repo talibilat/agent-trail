@@ -67,6 +67,7 @@ class ServeTests(unittest.TestCase):
         base_url = f"http://{server.server_address[0]}:{server.server_address[1]}"
 
         html = urlopen(base_url + "/", timeout=2).read().decode("utf-8")
+        root_response = urlopen(base_url + "/", timeout=2)
         runs = json.loads(urlopen(base_url + "/api/v1/runs", timeout=2).read())
         detail = json.loads(urlopen(base_url + "/api/v1/runs/trace%2F1", timeout=2).read())
         payload = json.loads(urlopen(base_url + "/api/v1/runs/trace%2F1/events/evt-1/payload", timeout=2).read())
@@ -74,6 +75,7 @@ class ServeTests(unittest.TestCase):
         self.assertIn("Agent Tail", html)
         self.assertNotIn("https://", html)
         self.assertNotIn("http://", html)
+        self.assertNotIn("Access-Control-Allow-Origin", root_response.headers)
         self.assertIn("textContent", html)
         self.assertIn("finding.kind", html)
         self.assertIn('data-view="graph"', html)
@@ -120,6 +122,37 @@ class ServeTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as raised:
             urlopen(base_url + "/api/v1/runs/missing", timeout=2).read()
         self.assertEqual(raised.exception.code, 404)
+
+    def test_remote_token_protects_api_routes(self):
+        store = RunStore.from_lines([json.dumps(event_data()) + "\n"])
+        server = make_server(store, host="127.0.0.1", port=0)
+        server.access_token = "secret-token"
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        base_url = f"http://{server.server_address[0]}:{server.server_address[1]}"
+
+        with self.assertRaises(HTTPError) as raised:
+            urlopen(base_url + "/api/v1/runs", timeout=2).read()
+        authorized = json.loads(
+            urlopen(base_url + "/api/v1/runs?token=secret-token", timeout=2).read()
+        )
+
+        self.assertEqual(raised.exception.code, 401)
+        self.assertEqual(authorized["runs"][0]["trace_id"], "trace-1")
+
+    def test_remote_access_guardrails_reject_unsafe_configurations(self):
+        with self.assertRaisesRegex(ValueError, "remote-access"):
+            serve(
+                io.StringIO(""),
+                config=ServeConfig(host="0.0.0.0"),
+            )
+        with self.assertRaisesRegex(ValueError, "unsafe-unredacted"):
+            serve(
+                io.StringIO(""),
+                config=ServeConfig(remote_access=True, unsafe_unredacted=True),
+            )
 
     def test_growing_file_appends_are_delivered_over_sse_and_reconnect(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -282,6 +315,17 @@ class ServeTests(unittest.TestCase):
         self.assertFalse(payload["payload"]["metadata"]["truncated"])
         self.assertIn("x" * 100, payload["payload"]["preview"]["text"])
         self.assertNotIn("hidden", json.dumps(payload))
+
+    def test_lazy_payload_detail_respects_payload_eviction(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(payload={"text": "x" * 5000})) + "\n"
+        ], max_bytes=1000)
+
+        payload = store.event_payload("trace-1", "evt-1")
+        encoded = json.dumps(payload)
+
+        self.assertNotIn("x" * 100, encoded)
+        self.assertIn("metadata", encoded)
 
     def test_runtime_warning_history_marks_resolved_warnings(self):
         store = RunStore(source_kind="stdin")
@@ -452,13 +496,19 @@ class ServeTests(unittest.TestCase):
         ):
             result = serve(
                 io.StringIO(json.dumps(event_data()) + "\n"),
-                config=ServeConfig(port=0, open_browser=True),
+                config=ServeConfig(
+                    port=0,
+                    open_browser=True,
+                    remote_access=True,
+                    access_token="test-token",
+                ),
                 open_url=opened.append,
             )
 
         self.assertEqual(result, 0)
-        self.assertIn("http://127.0.0.1:43210/", stdout.getvalue())
-        self.assertEqual(opened, ["http://127.0.0.1:43210/"])
+        self.assertIn("http://127.0.0.1:43210/?token=test-token", stdout.getvalue())
+        self.assertIn("WARNING: remote access is enabled", stdout.getvalue())
+        self.assertEqual(opened, ["http://127.0.0.1:43210/?token=test-token"])
 
     def test_serve_cli_input_validation_errors_return_two(self):
         with mock.patch.object(cli.sys, "stderr", io.StringIO()):
