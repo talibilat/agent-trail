@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Tail Serve Mode - Backend Readiness</title>
+  <style>
+    :root { color-scheme: dark; --bg:#090b12; --panel:#111827; --line:#2a3549; --text:#edf2ff; --muted:#9aa8c1; --accent:#8bd3ff; --warn:#ffc46b; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:radial-gradient(circle at 15% 0%,#1d2a44,transparent 34%),var(--bg); color:var(--text); font:16px/1.6 system-ui,sans-serif; }
+    main { width:min(1100px,calc(100% - 2rem)); margin:0 auto; padding:4rem 0; }
+    header { margin-bottom:2rem; }
+    h1 { font-size:clamp(2.2rem,6vw,4.8rem); line-height:1; margin:0 0 1rem; letter-spacing:-.05em; }
+    h2 { margin-top:2.5rem; color:var(--accent); }
+    h3 { margin-bottom:.35rem; }
+    p,li { color:var(--muted); }
+    .lede { font-size:1.2rem; max-width:760px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:1rem; }
+    .card { border:1px solid var(--line); border-radius:18px; background:rgba(17,24,39,.88); padding:1.25rem; }
+    .status { display:inline-block; border:1px solid #397858; border-radius:999px; padding:.25rem .65rem; color:#8ee5ad; }
+    code { color:var(--accent); }
+    table { display:block; width:100%; max-width:100%; overflow-x:auto; border-collapse:collapse; }
+    th,td { border-bottom:1px solid var(--line); padding:.7rem; text-align:left; vertical-align:top; }
+    th { color:var(--text); }
+    .warning { color:var(--warn); }
+    @media(max-width:650px){ main{padding:2rem 0} table{font-size:.85rem} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="status">Implementation ready</span>
+    <h1>Serve mode backend readiness</h1>
+    <p class="lede">This report describes the backend that is implemented in Agent Tail 0.1.0, the existing core behavior it reuses, the serve-specific behavior it introduces, and the boundaries that remain intentionally local and process-scoped.</p>
+  </header>
+
+  <h2>Readiness summary</h2>
+  <div class="grid">
+    <article class="card"><h3>Ingestion</h3><p>Ready for one JSONL file or standard input. Files are followed after EOF, partial lines are held until newline completion, and replacement or truncation is reported.</p></article>
+    <article class="card"><h3>Projection</h3><p>Ready for graph, tree, swimlane, sequence, inspector, warning, usage, and playback views. Layout coordinates remain client-owned.</p></article>
+    <article class="card"><h3>Streaming</h3><p>Ready through typed Server-Sent Events with monotonically increasing cursors, snapshot reconciliation, heartbeats, and reconnect recovery.</p></article>
+    <article class="card"><h3>Security</h3><p>Loopback by default. Remote binding requires an explicit flag, generated token access, and rejects unsafe unredacted mode.</p></article>
+  </div>
+
+  <h2>Reused core behavior</h2>
+  <table>
+    <thead><tr><th>Capability</th><th>Authoritative implementation</th><th>Serve-mode use</th></tr></thead>
+    <tbody>
+      <tr><td>Envelope validation</td><td><code>Event.from_dict</code> and <code>JSONLReader</code></td><td>Every accepted browser event passes the same required-field, schema, timestamp, and duplicate-ID checks as CLI input.</td></tr>
+      <tr><td>Sanitization</td><td><code>sanitize_event</code></td><td>Redaction occurs before indexing, projection, SSE, snapshots, and lazy payload responses. Structural identities use deterministic redaction.</td></tr>
+      <tr><td>Ordering</td><td><code>TraceIndex.trace</code></td><td>Emitter sequence and causal ancestry remain authoritative. The projection exposes <code>uncertain</code> markers instead of inventing a total order.</td></tr>
+      <tr><td>Actor and span state</td><td><code>TraceIndex.trace</code></td><td>Agent status, open spans, activity, operation, and uncertainty are based on the existing actor/span state model.</td></tr>
+      <tr><td>Warnings</td><td><code>TraceIndex.warnings</code></td><td>LOOP, RETRY, STALL, ORPHAN, and EVICT remain heuristic core warnings. Serve mode records active/resolved warning history around them.</td></tr>
+      <tr><td>Memory budget</td><td><code>TraceIndex._evict</code></td><td>Payload and metadata eviction remain visible. Lazy retained payload copies are removed when indexed data is evicted.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>New serve-mode behavior</h2>
+  <div class="grid">
+    <article class="card"><h3>Source lifecycle</h3><p>Separates source connectivity from trace completion. File EOF means caught up; stdin EOF means disconnected; only <code>trace.completed</code> and <code>trace.failed</code> terminate runs.</p></article>
+    <article class="card"><h3>Run projection</h3><p>Produces agents, event offsets, usage totals, primary parents, causal links, message links, unresolved endpoints, source findings, runtime warnings, and lifecycle state.</p></article>
+    <article class="card"><h3>HTTP API</h3><p>Serves an offline shell, versioned snapshots, run details, lazy payload details, and SSE from a standard-library threaded HTTP server.</p></article>
+    <article class="card"><h3>Browser application</h3><p>Provides graph, tree, swimlane, sequence, playback, inspectors, filters, warning history, progressive reveal, and live-follow behavior without runtime third-party assets.</p></article>
+  </div>
+
+  <h2>Known approximations</h2>
+  <ul>
+    <li><strong>Representative span per actor:</strong> one actor ID represents one logical invocation, and projected parentage uses the first causal cross-actor span relationship that introduces the actor.</li>
+    <li><strong>Fallback run titles:</strong> run identity is the sanitized trace ID; no separate title contract is implemented.</li>
+    <li><strong>Process-local run list:</strong> all runs come from the current input stream and current server process.</li>
+    <li><strong>No cross-restart history:</strong> there is no database or persistence layer.</li>
+    <li><strong>Warning resolution:</strong> runtime warning history is observed while snapshots are requested; there is no separate durable warning journal.</li>
+    <li><strong>Dense rendering:</strong> the client initially renders 80 agents and offers progressive reveal rather than automatic clustering.</li>
+  </ul>
+
+  <h2>Verification evidence</h2>
+  <p>Automated coverage launches the real serve command, drives packaged Chromium UI with Playwright, appends to a growing file, verifies SSE and reconnect recovery, exercises all visual views and investigation controls, checks sanitization and compatibility, and measures first useful paint with 100 agents.</p>
+  <p class="warning">The redaction ruleset is intentionally bounded. Users must still review browser output before sharing trace data.</p>
+</main>
+</body>
+</html>
