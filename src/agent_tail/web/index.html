@@ -158,6 +158,32 @@
     }
     .playback button, .playback select { width: auto; padding: 0.5rem 0.7rem; }
     .playback input { width: 100%; accent-color: var(--accent); }
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.5rem;
+      padding: 0 1rem 1rem;
+    }
+    .filters input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #0d1322;
+      color: var(--text);
+      padding: 0.55rem;
+    }
+    .inspector, .warnings-drawer {
+      margin: 0 1rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(13, 19, 34, 0.92);
+      padding: 1rem;
+    }
+    .inspector dl { display: grid; grid-template-columns: 140px 1fr; gap: 0.35rem 0.75rem; margin: 0; }
+    .inspector dt { color: var(--muted); }
+    .inspector dd { margin: 0; word-break: break-word; }
+    .warnings-drawer[hidden] { display: none; }
+    .drawer-item { border-top: 1px solid var(--line); padding: 0.6rem 0; }
     .swimlane, .sequence-view { display: grid; gap: 0.75rem; padding: 1rem; }
     .lane, .sequence-row {
       border: 1px solid var(--line);
@@ -262,6 +288,11 @@
         </select>
         <button type="button" id="jump-live">Jump to live</button>
       </div>
+      <div class="filters" aria-label="Search and filters">
+        <input id="search" type="search" placeholder="Search events and agents">
+        <input id="actor-filter" type="search" placeholder="Filter actor">
+        <input id="kind-filter" type="search" placeholder="Filter kind">
+      </div>
       <div class="view-toolbar" aria-label="View controls">
         <button type="button" data-action="zoom-in">Zoom in</button>
         <button type="button" data-action="zoom-out">Zoom out</button>
@@ -272,8 +303,11 @@
         <button type="button" data-action="focus">Focus selected</button>
         <button type="button" data-action="show-more">Show more</button>
         <button type="button" data-action="reset">Reset</button>
+        <button type="button" data-action="warnings">Warnings</button>
       </div>
       <div id="selection" class="selection"></div>
+      <section id="inspector" class="inspector" aria-label="Inspector"></section>
+      <section id="warnings-drawer" class="warnings-drawer" hidden aria-label="Warnings drawer"></section>
       <div id="stage" class="view-stage"></div>
       <div id="findings" class="findings"></div>
       <div id="timeline" class="timeline"></div>
@@ -293,13 +327,20 @@
     const scrubberEl = document.querySelector('#scrubber');
     const speedEl = document.querySelector('#speed');
     const jumpLiveEl = document.querySelector('#jump-live');
+    const searchEl = document.querySelector('#search');
+    const actorFilterEl = document.querySelector('#actor-filter');
+    const kindFilterEl = document.querySelector('#kind-filter');
+    const inspectorEl = document.querySelector('#inspector');
+    const warningsDrawerEl = document.querySelector('#warnings-drawer');
     const viewButtons = [...document.querySelectorAll('[data-view]')];
     const actionButtons = [...document.querySelectorAll('[data-action]')];
     const svgNamespace = `http${'://'}www.w3.org/2000/svg`;
     let selectedTraceId = null;
     let selectedView = 'graph';
     let selectedAgentId = null;
+    let selectedEventId = null;
     let focusedAgentId = null;
+    let warningsOpen = false;
     let visibleLimit = 80;
     let currentDetail = null;
     let viewTransform = { scale: 1, x: 0, y: 0 };
@@ -336,6 +377,9 @@
       playbackTime = durationOf(currentDetail);
       setPlaying(false);
       renderDetail(currentDetail);
+    });
+    [searchEl, actorFilterEl, kindFilterEl].forEach((input) => {
+      input.addEventListener('input', () => renderDetail(currentDetail));
     });
 
     async function fetchJson(path) {
@@ -391,14 +435,15 @@
       const run = detail.run;
       syncPlayback(detail);
       const visibleEvents = eventsAtHorizon(detail);
-      const visibleAgents = agentsAtHorizon(detail);
+      const filteredEvents = filterEvents(visibleEvents);
+      const visibleAgents = filteredAgentsAtHorizon(detail);
       const visibleWarnings = detail.warnings.filter((warning) => !warning.event_id || visibleEvents.some((event) => event.event_id === warning.event_id));
       const visibleFindings = detail.findings.filter((finding) => !finding.event_id || visibleEvents.some((event) => event.event_id === finding.event_id));
       warningCountEl.textContent = visibleWarnings.length ? `${visibleWarnings.length} warning(s)` : '';
       if (!selectedAgentId && detail.actors.length) selectedAgentId = detail.actors[0].id;
       metricsEl.replaceChildren(
         metric('State', run.state),
-        metric('Events', `${visibleEvents.length}/${run.event_count}`),
+        metric('Events', `${filteredEvents.length}/${run.event_count}`),
         metric('Actors', `${visibleAgents.length}/${run.actor_count}`),
         metric('Warnings', `${visibleWarnings.length}/${run.warning_count}`),
         metric('Source', detail.source.state),
@@ -414,8 +459,10 @@
         node.append(code, message);
         return node;
       }));
+      renderInspector(detail);
+      renderWarningsDrawer(detail, visibleWarnings, visibleFindings);
       renderVisualView(detail);
-      timelineEl.replaceChildren(...visibleEvents.map((event) => {
+      timelineEl.replaceChildren(...filteredEvents.map((event) => {
         const node = document.createElement('article');
         node.className = 'event';
         const top = document.createElement('div');
@@ -443,6 +490,11 @@
           payload.textContent = JSON.stringify(event.payload.preview, null, 2);
           node.append(payload);
         }
+        node.addEventListener('click', () => {
+          selectedEventId = event.event_id;
+          selectedAgentId = event.actor.id;
+          renderDetail(detail);
+        });
         return node;
       }));
       if (!detail.events.length) {
@@ -514,7 +566,7 @@
 
     function renderSwimlane(detail) {
       const duration = Math.max(durationOf(detail), 1);
-      const visibleEvents = eventsAtHorizon(detail);
+      const visibleEvents = filterEvents(eventsAtHorizon(detail));
       const rows = detail.actors.map((agent) => {
         const horizonAgent = agentsAtHorizon(detail).find((candidate) => candidate.id === agent.id);
         const row = document.createElement('div');
@@ -540,7 +592,7 @@
     }
 
     function renderSequence(detail) {
-      const visibleIds = new Set(eventsAtHorizon(detail).map((event) => event.event_id));
+      const visibleIds = new Set(filterEvents(eventsAtHorizon(detail)).map((event) => event.event_id));
       const rows = linksAtHorizon(detail)
         .filter((link) => link.type === 'message' && visibleIds.has(link.event_id))
         .map((link) => {
@@ -596,7 +648,7 @@
     }
 
     function focusPool(detail) {
-      const pool = agentsAtHorizon(detail);
+      const pool = filteredAgentsAtHorizon(detail);
       if (!focusedAgentId) return pool;
       const byId = new Map(pool.map((agent) => [agent.id, agent]));
       const included = new Set([focusedAgentId]);
@@ -657,6 +709,7 @@
       if (action === 'pan-up') viewTransform.y -= 60;
       if (action === 'pan-down') viewTransform.y += 60;
       if (action === 'show-more') visibleLimit += 80;
+      if (action === 'warnings') warningsOpen = !warningsOpen;
       if (action === 'reset') {
         viewTransform = { scale: 1, x: 0, y: 0 };
         focusedAgentId = null;
@@ -669,6 +722,131 @@
         viewTransform = { scale: 1.15, x: 40, y: 20 };
       }
       renderDetail(currentDetail);
+    }
+
+    function renderInspector(detail) {
+      const event = detail.events.find((candidate) => candidate.event_id === selectedEventId);
+      const agent = filteredAgentsAtHorizon(detail).find((candidate) => candidate.id === selectedAgentId)
+        || agentsAtHorizon(detail).find((candidate) => candidate.id === selectedAgentId);
+      if (event) {
+        const payloadPreview = event.payload ? JSON.stringify(event.payload.preview) : 'none';
+        inspectorEl.replaceChildren(
+          label('h2', '', 'Event inspector'),
+          definitionList({
+            event_id: event.event_id,
+            trace_id: event.trace_id,
+            span_id: event.span_id,
+            parent_span_id: event.parent_span_id,
+            emitter_id: event.emitter_id,
+            sequence: event.sequence,
+            actor: event.actor.id,
+            kind: event.kind,
+            operation_name: text(event.operation.name),
+            status: event.operation.status,
+            timestamp: event.timestamp,
+            usage: JSON.stringify(event.usage),
+            attributes: JSON.stringify(event.attributes || {}),
+            payload_preview: payloadPreview,
+          }),
+          payloadButton(detail.run.trace_id, event.event_id)
+        );
+        return;
+      }
+      if (agent) {
+        const relatedEvents = detail.events.filter((eventItem) => eventItem.actor.id === agent.id);
+        const warningDetails = detail.warnings.filter((warning) => warning.actor_id === agent.id);
+        inspectorEl.replaceChildren(
+          label('h2', '', 'Agent inspector'),
+          definitionList({
+            id: agent.id,
+            role: text(agent.role),
+            model: text(agent.model),
+            status: agent.status,
+            parent: text(agent.parent_id),
+            operation: text(agent.operation),
+            last_activity: text(agent.last_activity),
+            related_events: relatedEvents.map((eventItem) => eventItem.event_id).join(', '),
+            warnings: warningDetails.map((warning) => warning.code).join(', ') || 'none',
+            usage: JSON.stringify(agent.usage),
+            cost_usd: agent.usage.cost_usd.available ? agent.usage.cost_usd.value : 'unavailable',
+          })
+        );
+        return;
+      }
+      inspectorEl.textContent = 'Select an agent or event to inspect details.';
+    }
+
+    function renderWarningsDrawer(detail, warnings, findings) {
+      warningsDrawerEl.hidden = !warningsOpen;
+      if (!warningsOpen) return;
+      const items = [
+        ...warnings.map((warning) => ({
+          kind: warning.category || 'runtime',
+          code: warning.code,
+          message: warning.summary,
+          event_id: warning.event_id,
+          active: warning.active !== false,
+          trigger_time: eventTime(detail, warning.event_id),
+          detected_at: warning.detected_at || 'unavailable',
+          resolved_at: warning.resolved_at || 'unavailable',
+        })),
+        ...findings.map((finding) => ({
+          kind: finding.kind,
+          code: finding.code,
+          message: finding.message,
+          event_id: finding.event_id,
+          active: false,
+          trigger_time: eventTime(detail, finding.event_id),
+          detected_at: finding.detected_at || 'unavailable',
+          resolved_at: 'unavailable',
+        })),
+      ];
+      warningsDrawerEl.replaceChildren(
+        label('h2', '', 'Warnings and findings'),
+        ...items.map((item) => {
+          const node = document.createElement('div');
+          node.className = 'drawer-item';
+          node.textContent = `${item.kind}:${item.code} ${item.active ? 'active' : 'resolved'} event ${text(item.event_id)} trigger ${text(item.trigger_time)} detected ${text(item.detected_at)} resolved ${text(item.resolved_at)} ${item.message}`;
+          return node;
+        })
+      );
+    }
+
+    function eventTime(detail, eventId) {
+      return detail.events.find((event) => event.event_id === eventId)?.timestamp || 'unavailable';
+    }
+
+    function definitionList(values) {
+      const list = document.createElement('dl');
+      Object.entries(values).forEach(([key, value]) => {
+        list.append(label('dt', '', key), label('dd', '', text(value)));
+      });
+      return list;
+    }
+
+    function payloadButton(traceId, eventId) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Load retained payload';
+      button.addEventListener('click', async () => {
+        const payload = await fetchJson(`/api/v1/runs/${encodeURIComponent(traceId)}/events/${encodeURIComponent(eventId)}/payload`);
+        const pre = document.createElement('pre');
+        pre.textContent = JSON.stringify(payload.payload, null, 2);
+        inspectorEl.append(pre);
+      });
+      return button;
+    }
+
+    function filterEvents(events) {
+      const search = searchEl.value.trim().toLowerCase();
+      const actor = actorFilterEl.value.trim().toLowerCase();
+      const kind = kindFilterEl.value.trim().toLowerCase();
+      return events.filter((event) => {
+        const encoded = JSON.stringify(event).toLowerCase();
+        return (!search || encoded.includes(search))
+          && (!actor || event.actor.id.toLowerCase().includes(actor))
+          && (!kind || event.kind.toLowerCase().includes(kind));
+      });
     }
 
     function syncPlayback(detail) {
@@ -697,7 +875,7 @@
     }
 
     function linksAtHorizon(detail) {
-      const visibleIds = new Set(eventsAtHorizon(detail).map((event) => event.event_id));
+      const visibleIds = new Set(filterEvents(eventsAtHorizon(detail)).map((event) => event.event_id));
       return detail.links.filter((link) => !link.event_id || visibleIds.has(link.event_id));
     }
 
@@ -716,6 +894,11 @@
           usage: usageFor(visibleEvents.filter((visibleEvent) => visibleEvent.actor.id === actorId)),
         };
       });
+    }
+
+    function filteredAgentsAtHorizon(detail) {
+      const ids = new Set(filterEvents(eventsAtHorizon(detail)).map((event) => event.actor.id));
+      return agentsAtHorizon(detail).filter((agent) => ids.has(agent.id));
     }
 
     function usageFor(events) {
@@ -800,6 +983,7 @@
       events.addEventListener('event', refresh);
       events.addEventListener('finding', refresh);
       events.addEventListener('source', refresh);
+      events.addEventListener('heartbeat', refresh);
       events.onerror = () => {
         events.close();
         events = null;
