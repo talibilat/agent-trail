@@ -267,6 +267,98 @@ class ServeTests(unittest.TestCase):
                 )
             ))
 
+    def test_projection_includes_agents_links_usage_and_warnings(self):
+        lines = [
+            json.dumps(event_data(
+                actor={"id": "lead", "role": "planner"},
+                span_id="lead-span",
+                usage={"input_tokens": 10, "cost_usd": 0.25},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="child-start",
+                actor={"id": "worker", "role": "executor"},
+                span_id="worker-span",
+                parent_span_id="lead-span",
+                sequence=2,
+                attributes={"model": "model-a"},
+                usage={"output_tokens": 4, "total_tokens": 14},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="handoff",
+                actor={"id": "lead"},
+                span_id="lead-msg",
+                sequence=3,
+                kind="message.sent",
+                attributes={"to": "worker"},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="missing-handoff",
+                actor={"id": "worker"},
+                span_id="worker-msg",
+                sequence=4,
+                kind="message.sent",
+                attributes={"to": "missing-agent"},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="other-parent",
+                actor={"id": "observer"},
+                span_id="observer-span",
+                sequence=5,
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="ambiguous",
+                actor={"id": "worker"},
+                span_id="worker-later",
+                parent_span_id="observer-span",
+                sequence=6,
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="fallback-parent",
+                actor={"id": "fallback"},
+                span_id="fallback-root",
+                emitter_id="fallback-parent-emitter",
+                sequence=1,
+                timestamp="2026-07-13T11:03:00Z",
+                kind="tool.call.progress",
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="uncertain-child",
+                actor={"id": "uncertain-worker"},
+                span_id="uncertain-child",
+                parent_span_id="fallback-root",
+                emitter_id="uncertain-child-emitter",
+                sequence=1,
+                timestamp="2026-07-13T11:02:00Z",
+            )) + "\n",
+        ]
+        store = RunStore.from_lines(lines)
+
+        detail = store.run_detail("trace-1")
+        worker = next(actor for actor in detail["actors"] if actor["id"] == "worker")
+        uncertain = next(
+            event for event in detail["events"]
+            if event["event_id"] == "uncertain-child"
+        )
+        links = {(link["type"], link.get("source_actor_id"), link.get("target_actor_id"), link.get("unresolved_target")) for link in detail["links"]}
+        warning_codes = {warning["code"] for warning in detail["warnings"]}
+
+        self.assertEqual(worker["parent_id"], "lead")
+        self.assertEqual(worker["role"], "executor")
+        self.assertEqual(worker["model"], "model-a")
+        self.assertIn(("spawn", "lead", "worker", None), links)
+        self.assertIn(("message", "lead", "worker", None), links)
+        self.assertIn(("message", "worker", None, "missing-agent"), links)
+        self.assertNotIn(("spawn", "fallback", "uncertain-worker", None), links)
+        self.assertEqual(detail["unresolved_endpoints"][0]["id"], "missing-agent")
+        self.assertIn("AMBIGUOUS_PARENT", warning_codes)
+        self.assertEqual(detail["run"]["warning_count"], len(detail["warnings"]))
+        self.assertEqual(detail["usage"]["input_tokens"], {"available": True, "value": 10})
+        self.assertEqual(detail["usage"]["output_tokens"], {"available": True, "value": 4})
+        self.assertEqual(detail["usage"]["cost_usd"], {"available": True, "value": 0.25})
+        self.assertFalse(detail["events"][2]["usage"]["input_tokens"]["available"])
+        self.assertEqual(detail["duration_seconds"], 60.0)
+        self.assertTrue(uncertain["uncertain"])
+
     def test_serve_cli_dispatches_without_changing_default_invocation(self):
         with mock.patch.object(cli, "serve", return_value=0) as serve:
             result = cli.main(["serve", "-", "--host", "127.0.0.1", "--port", "0"])
