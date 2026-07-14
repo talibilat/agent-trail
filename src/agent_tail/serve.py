@@ -45,6 +45,7 @@ class RunStore:
         self._errors = tuple(errors)
         self._findings: list[dict[str, object]] = []
         self._payload_details: dict[tuple[str, str], object] = {}
+        self._last_eviction_count = 0
         self._warning_history: dict[tuple[str, str, str], dict[str, object]] = {}
         self._terminal_traces: dict[str, str] = {}
         self._source_status: dict[str, object] = {
@@ -114,7 +115,10 @@ class RunStore:
             self._payload_details[(safe.trace_id, safe.event_id)] = _payload_preview(retained)
             prior_terminal_state = self._terminal_traces.get(safe.trace_id)
             self._index.add(safe)
-            self._sync_payload_details()
+            eviction_count = self._index.eviction_count
+            if eviction_count != self._last_eviction_count:
+                self._sync_payload_details()
+                self._last_eviction_count = eviction_count
             terminal_state = _terminal_state(safe)
             if terminal_state:
                 self._terminal_traces[safe.trace_id] = terminal_state
