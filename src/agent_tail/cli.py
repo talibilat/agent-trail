@@ -7,8 +7,10 @@ import re
 import sys
 from typing import Iterable, TextIO
 import unicodedata
+import webbrowser
 
 from .core import IngestionError, JSONLReader, TraceIndex, redact_text, sanitize_event
+from .serve import ServeConfig, serve
 from .ui import render_snapshot, run
 
 
@@ -34,7 +36,25 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
+def serve_parser() -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(prog="agent-tail serve")
+    result.add_argument("input", help="JSONL file or - for standard input")
+    result.add_argument("--host", default="127.0.0.1")
+    result.add_argument("--port", type=int, default=8765)
+    result.add_argument("--open", action="store_true", dest="open_browser")
+    result.add_argument("--full-payloads", action="store_true")
+    result.add_argument("--unsafe-unredacted", action="store_true")
+    result.add_argument("--loop-threshold", type=int, default=4)
+    result.add_argument("--stall-seconds", type=float, default=30.0)
+    result.add_argument("--max-bytes", type=_positive_int, default=16 * 1024 * 1024)
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["serve"]:
+        return _serve_main(argv[1:])
+
     arguments = parser().parse_args(argv)
     if arguments.snapshot_stream and arguments.input != "-":
         parser().error("--snapshot-stream requires standard input")
@@ -107,6 +127,43 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     _print_errors(reader.all_errors)
     return 0 if reader.accepted_count else 1
+
+
+def _serve_main(argv: list[str]) -> int:
+    arguments = serve_parser().parse_args(argv)
+    if arguments.port < 0 or arguments.port > 65535:
+        serve_parser().error("--port must be between 0 and 65535")
+
+    source: TextIO
+    close_source = False
+    if arguments.input == "-":
+        source = sys.stdin
+    else:
+        try:
+            source = open(arguments.input, encoding="utf-8")
+            close_source = True
+        except OSError as error:
+            print(f"agent-tail: {arguments.input}: {error.strerror}", file=sys.stderr)
+            return 2
+
+    config = ServeConfig(
+        host=arguments.host,
+        port=arguments.port,
+        open_browser=arguments.open_browser,
+        full_payloads=arguments.full_payloads,
+        unsafe_unredacted=arguments.unsafe_unredacted,
+        loop_threshold=arguments.loop_threshold,
+        stall_seconds=arguments.stall_seconds,
+        max_bytes=arguments.max_bytes,
+    )
+    try:
+        return serve(source, config=config, open_url=webbrowser.open)
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"agent-tail: {error}", file=sys.stderr)
+        return 2
+    finally:
+        if close_source:
+            source.close()
 
 
 def _print_errors(errors: Iterable[IngestionError]) -> None:
