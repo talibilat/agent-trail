@@ -69,6 +69,7 @@ class ServeTests(unittest.TestCase):
         html = urlopen(base_url + "/", timeout=2).read().decode("utf-8")
         runs = json.loads(urlopen(base_url + "/api/v1/runs", timeout=2).read())
         detail = json.loads(urlopen(base_url + "/api/v1/runs/trace%2F1", timeout=2).read())
+        payload = json.loads(urlopen(base_url + "/api/v1/runs/trace%2F1/events/evt-1/payload", timeout=2).read())
 
         self.assertIn("Agent Tail", html)
         self.assertNotIn("https://", html)
@@ -93,6 +94,19 @@ class ServeTests(unittest.TestCase):
         self.assertIn('id="scrubber"', html)
         self.assertIn('id="speed"', html)
         self.assertIn('id="jump-live"', html)
+        self.assertIn('id="search"', html)
+        self.assertIn('id="actor-filter"', html)
+        self.assertIn('id="kind-filter"', html)
+        self.assertIn('id="inspector"', html)
+        self.assertIn('id="warnings-drawer"', html)
+        self.assertIn('Load retained payload', html)
+        self.assertIn('operation_name', html)
+        self.assertIn('payload_preview', html)
+        self.assertIn('related_events', html)
+        self.assertIn('cost_usd', html)
+        self.assertIn('detected_at', html)
+        self.assertIn("events.addEventListener('heartbeat'", html)
+        self.assertIn('renderWarningsDrawer', html)
         self.assertIn('renderSwimlane', html)
         self.assertIn('renderSequence', html)
         self.assertIn('eventsAtHorizon', html)
@@ -101,6 +115,7 @@ class ServeTests(unittest.TestCase):
         self.assertIn('Selected ${agent.id}', html)
         self.assertEqual(runs["runs"][0]["trace_id"], "trace/1")
         self.assertEqual(detail["events"][0]["event_id"], "evt-1")
+        self.assertEqual(payload["event_id"], "evt-1")
 
         with self.assertRaises(HTTPError) as raised:
             urlopen(base_url + "/api/v1/runs/missing", timeout=2).read()
@@ -254,6 +269,33 @@ class ServeTests(unittest.TestCase):
 
         self.assertIn("INVALID_JSON", codes)
         self.assertIn("DUPLICATE_EVENT", codes)
+
+    def test_lazy_payload_detail_retains_sanitized_full_payload(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(payload={"text": "x" * 5000, "token": "Bearer hidden"})) + "\n"
+        ])
+
+        detail = store.run_detail("trace-1")
+        payload = store.event_payload("trace-1", "evt-1")
+
+        self.assertTrue(detail["events"][0]["payload"]["metadata"]["truncated"])
+        self.assertFalse(payload["payload"]["metadata"]["truncated"])
+        self.assertIn("x" * 100, payload["payload"]["preview"]["text"])
+        self.assertNotIn("hidden", json.dumps(payload))
+
+    def test_runtime_warning_history_marks_resolved_warnings(self):
+        store = RunStore(source_kind="stdin")
+        store.set_source_status(connected=True, state="reading")
+        store.feed_line(json.dumps(event_data(
+            timestamp="2000-01-01T00:00:00Z",
+        )) + "\n")
+
+        active = json.loads(json.dumps(store.run_detail("trace-1")["warnings"]))
+        store.set_source_status(connected=False, state="disconnected")
+        resolved = store.run_detail("trace-1")["warnings"]
+
+        self.assertTrue(any(warning["code"] == "STALL" and warning["active"] for warning in active))
+        self.assertTrue(any(warning["code"] == "STALL" and not warning["active"] for warning in resolved))
 
     def test_file_replacement_and_truncation_are_source_findings(self):
         with tempfile.TemporaryDirectory() as directory:

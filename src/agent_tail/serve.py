@@ -41,6 +41,8 @@ class RunStore:
             self._index = TraceIndex()
         self._errors = tuple(errors)
         self._findings: list[dict[str, object]] = []
+        self._payload_details: dict[tuple[str, str], object] = {}
+        self._warning_history: dict[tuple[str, str, str], dict[str, object]] = {}
         self._terminal_traces: dict[str, str] = {}
         self._source_status: dict[str, object] = {
             "kind": source_kind,
@@ -101,6 +103,12 @@ class RunStore:
                 full_payloads=full_payloads,
                 unsafe_unredacted=unsafe_unredacted,
             )
+            retained = sanitize_event(
+                event,
+                full_payloads=True,
+                unsafe_unredacted=unsafe_unredacted,
+            )
+            self._payload_details[(safe.trace_id, safe.event_id)] = _payload_preview(retained)
             prior_terminal_state = self._terminal_traces.get(safe.trace_id)
             self._index.add(safe)
             terminal_state = _terminal_state(safe)
@@ -201,7 +209,7 @@ class RunStore:
             if trace_id not in trace_ids:
                 return None
             view = self._index.trace(trace_id)
-            now = max((event.timestamp for event in view.events), default=_epoch())
+            now = self._warning_now(view.events)
             projection = _relationships(view)
             started_at = min((event.timestamp for event in view.events), default=None)
             return {
@@ -238,19 +246,7 @@ class RunStore:
                     }
                     for actor_id, actor in view.actors.items()
                 ],
-                "warnings": [
-                    {
-                        "category": "runtime",
-                        "code": warning.code,
-                        "event_id": warning.event_id,
-                        "trace_id": warning.trace_id,
-                        "actor_id": warning.actor_id,
-                        "summary": warning.summary,
-                        "evidence": warning.evidence,
-                    }
-                    for warning in self._index.warnings(now=now)
-                    if warning.trace_id == trace_id
-                ] + projection["warnings"],
+                "warnings": self._warnings_for_trace(trace_id, now) + projection["warnings"],
                 "links": projection["links"],
                 "unresolved_endpoints": projection["unresolved_endpoints"],
                 "source": dict(self._source_status),
@@ -286,6 +282,60 @@ class RunStore:
             "warning_count": runtime_warning_count + len(projection["warnings"]),
             "state": self._lifecycle_state(trace_id),
         }
+
+    def event_payload(self, trace_id: str, event_id: str) -> dict[str, object] | None:
+        with self._lock:
+            for event in self._index.trace(trace_id).events:
+                if event.event_id == event_id:
+                    return {
+                        "api_version": "v1",
+                        "trace_id": trace_id,
+                        "event_id": event_id,
+                        "payload": self._payload_details.get(
+                            (trace_id, event_id),
+                            _payload_preview(event),
+                        ),
+                    }
+            return None
+
+    def _warning_now(self, events: Iterable[Event]) -> datetime:
+        event_list = list(events)
+        if self._source_status.get("connected"):
+            return datetime.now(timezone.utc)
+        return max((event.timestamp for event in event_list), default=_epoch())
+
+    def _warnings_for_trace(
+        self,
+        trace_id: str,
+        now: datetime,
+    ) -> list[dict[str, object]]:
+        current_keys = set()
+        for warning in self._index.warnings(now=now):
+            if warning.trace_id != trace_id:
+                continue
+            key = (warning.code, warning.event_id, warning.actor_id)
+            current_keys.add(key)
+            prior = self._warning_history.get(key, {})
+            self._warning_history[key] = {
+                "category": "runtime",
+                "code": warning.code,
+                "event_id": warning.event_id,
+                "trace_id": warning.trace_id,
+                "actor_id": warning.actor_id,
+                "summary": warning.summary,
+                "evidence": warning.evidence,
+                "active": True,
+                "detected_at": prior.get("detected_at", now.isoformat()),
+                "resolved_at": None,
+            }
+        for key, record in list(self._warning_history.items()):
+            if record.get("trace_id") == trace_id and key not in current_keys and record.get("active"):
+                record["active"] = False
+                record["resolved_at"] = now.isoformat()
+        return [
+            record for record in self._warning_history.values()
+            if record.get("trace_id") == trace_id
+        ]
 
     def _lifecycle_state(self, trace_id: str) -> str:
         terminal_state = self._terminal_traces.get(trace_id)
@@ -348,6 +398,7 @@ class RunStore:
             "kind": event.kind,
             "actor": event.actor,
             "operation": event.operation,
+            "attributes": _attributes(event),
             "usage": _usage_summary((event,)),
             "payload": _payload_preview(event),
             "uncertain": uncertain,
@@ -565,7 +616,19 @@ class _Handler(BaseHTTPRequestHandler):
             return
         prefix = "/api/v1/runs/"
         if path.startswith(prefix):
-            trace_id = unquote(path.removeprefix(prefix))
+            suffix = path.removeprefix(prefix)
+            parts = suffix.split("/")
+            if len(parts) == 4 and parts[1] == "events" and parts[3] == "payload":
+                payload = self.run_store.event_payload(
+                    unquote(parts[0]),
+                    unquote(parts[2]),
+                )
+                if payload is None:
+                    self._send_json({"error": "event not found"}, HTTPStatus.NOT_FOUND)
+                else:
+                    self._send_json(payload)
+                return
+            trace_id = unquote(suffix)
             detail = self.run_store.run_detail(trace_id)
             if detail is None:
                 self._send_json({"error": "run not found"}, HTTPStatus.NOT_FOUND)
