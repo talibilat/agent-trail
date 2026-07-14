@@ -6,6 +6,7 @@ import json
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import secrets
 import sys
 import threading
 import time
@@ -22,6 +23,8 @@ class ServeConfig:
     open_browser: bool = False
     full_payloads: bool = False
     unsafe_unredacted: bool = False
+    remote_access: bool = False
+    access_token: str | None = None
     loop_threshold: int = 4
     stall_seconds: float = 30.0
     max_bytes: int = 16 * 1024 * 1024
@@ -111,6 +114,7 @@ class RunStore:
             self._payload_details[(safe.trace_id, safe.event_id)] = _payload_preview(retained)
             prior_terminal_state = self._terminal_traces.get(safe.trace_id)
             self._index.add(safe)
+            self._sync_payload_details()
             terminal_state = _terminal_state(safe)
             if terminal_state:
                 self._terminal_traces[safe.trace_id] = terminal_state
@@ -298,6 +302,17 @@ class RunStore:
                     }
             return None
 
+    def _sync_payload_details(self) -> None:
+        retained_keys = set()
+        for event in self._index.events:
+            key = (event.trace_id, event.event_id)
+            retained_keys.add(key)
+            payload = event.raw.get("payload")
+            if isinstance(payload, dict) and set(payload) == {"_agent_tail"}:
+                self._payload_details.pop(key, None)
+        for key in set(self._payload_details) - retained_keys:
+            self._payload_details.pop(key, None)
+
     def _warning_now(self, events: Iterable[Event]) -> datetime:
         event_list = list(events)
         if self._source_status.get("connected"):
@@ -459,10 +474,32 @@ def _serve_store(
     config: ServeConfig,
     open_url: Callable[[str], object] | None = None,
 ) -> int:
+    _validate_remote_access(config)
+    if config.remote_access and not config.access_token:
+        config = ServeConfig(
+            host=config.host,
+            port=config.port,
+            open_browser=config.open_browser,
+            full_payloads=config.full_payloads,
+            unsafe_unredacted=config.unsafe_unredacted,
+            remote_access=config.remote_access,
+            access_token=secrets.token_urlsafe(24),
+            loop_threshold=config.loop_threshold,
+            stall_seconds=config.stall_seconds,
+            max_bytes=config.max_bytes,
+        )
     server = make_server(store, host=config.host, port=config.port)
+    server.access_token = config.access_token
     host, port = server.server_address[:2]
     url = f"http://{host}:{port}/"
+    if config.access_token:
+        url += f"?token={config.access_token}"
     print(f"Agent Tail serve mode listening on {url}", flush=True)
+    if config.remote_access:
+        print(
+            "WARNING: remote access is enabled; share the token URL only with trusted clients.",
+            flush=True,
+        )
     if config.open_browser and open_url is not None:
         open_url(url)
     try:
@@ -589,7 +626,9 @@ def make_server(store: RunStore, *, host: str = "127.0.0.1", port: int = 8765) -
     class Handler(_Handler):
         run_store = store
 
-    return _Server((host, port), Handler)
+    server = _Server((host, port), Handler)
+    server.access_token = None
+    return server
 
 
 class _Server(ThreadingHTTPServer):
@@ -603,6 +642,9 @@ class _Handler(BaseHTTPRequestHandler):
     run_store: RunStore
 
     def do_GET(self) -> None:
+        if not self._authorized():
+            self._send_json({"error": "unauthorized"}, HTTPStatus.UNAUTHORIZED)
+            return
         path = urlparse(self.path).path
         if path in {"/", "/index.html"}:
             self._send_bytes(_static_index(), "text/html; charset=utf-8")
@@ -663,6 +705,15 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    def _authorized(self) -> bool:
+        token = getattr(self.server, "access_token", None)
+        if not token:
+            return True
+        parsed = urlparse(self.path)
+        query_token = parse_qs(parsed.query).get("token", [None])[0]
+        auth = self.headers.get("Authorization", "")
+        return query_token == token or auth == f"Bearer {token}"
 
     def _send_sse(self, after: int) -> None:
         self.send_response(HTTPStatus.OK)
@@ -911,3 +962,11 @@ def _cursor_from_path(path: str) -> int:
         return max(0, int(values[0]))
     except (TypeError, ValueError):
         return 0
+
+
+def _validate_remote_access(config: ServeConfig) -> None:
+    remote_host = config.host not in {"127.0.0.1", "localhost", "::1"}
+    if remote_host and not config.remote_access:
+        raise ValueError("non-loopback host requires --remote-access")
+    if config.remote_access and config.unsafe_unredacted:
+        raise ValueError("--unsafe-unredacted cannot be combined with remote access")

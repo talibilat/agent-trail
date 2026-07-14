@@ -42,6 +42,7 @@ def serve_parser() -> argparse.ArgumentParser:
     result.add_argument("--host", default="127.0.0.1")
     result.add_argument("--port", type=int, default=8765)
     result.add_argument("--open", action="store_true", dest="open_browser")
+    result.add_argument("--remote-access", action="store_true")
     result.add_argument("--full-payloads", action="store_true")
     result.add_argument("--unsafe-unredacted", action="store_true")
     result.add_argument("--loop-threshold", type=int, default=4)
@@ -140,6 +141,7 @@ def _serve_main(argv: list[str]) -> int:
         open_browser=arguments.open_browser,
         full_payloads=arguments.full_payloads,
         unsafe_unredacted=arguments.unsafe_unredacted,
+        remote_access=arguments.remote_access,
         loop_threshold=arguments.loop_threshold,
         stall_seconds=arguments.stall_seconds,
         max_bytes=arguments.max_bytes,

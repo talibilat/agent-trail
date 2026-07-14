@@ -352,6 +352,7 @@
     let playbackSpeed = 1;
     let cursor = 0;
     let events = null;
+    const accessToken = new URLSearchParams(window.location.search).get('token');
 
     viewButtons.forEach((button) => button.addEventListener('click', () => {
       selectedView = button.dataset.view;
@@ -383,7 +384,7 @@
     });
 
     async function fetchJson(path) {
-      const response = await fetch(path, { headers: { Accept: 'application/json' } });
+      const response = await fetch(apiPath(path), { headers: { Accept: 'application/json' } });
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
       return response.json();
     }
@@ -963,6 +964,12 @@
       return node;
     }
 
+    function apiPath(path) {
+      if (!accessToken) return path;
+      const separator = path.includes('?') ? '&' : '?';
+      return `${path}${separator}token=${encodeURIComponent(accessToken)}`;
+    }
+
     async function init() {
       try {
         const data = await fetchJson('/api/v1/runs');
@@ -978,7 +985,7 @@
 
     function connectEvents() {
       if (events) events.close();
-      events = new EventSource(`/api/v1/events?cursor=${cursor}`);
+      events = new EventSource(apiPath(`/api/v1/events?cursor=${cursor}`));
       const refresh = () => init();
       events.addEventListener('event', refresh);
       events.addEventListener('finding', refresh);
