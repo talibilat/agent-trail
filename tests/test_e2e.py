@@ -28,6 +28,66 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
+    def test_primary_journey_in_chrome_firefox_and_webkit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "cross-browser.jsonl")
+            source.write_text(json.dumps(event_data()) + "\n", encoding="utf-8")
+            port = _free_port()
+            process = subprocess.Popen(
+                [sys.executable, "-m", "agent_tail", "serve", str(source), "--port", str(port)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+            base_url = f"http://127.0.0.1:{port}"
+
+            with sync_playwright() as playwright:
+                browsers = (
+                    ("chrome", playwright.chromium, {"channel": "chrome"}),
+                    ("firefox", playwright.firefox, {}),
+                    ("webkit", playwright.webkit, {}),
+                )
+                for index, (browser_name, browser_type, options) in enumerate(browsers, 2):
+                    with self.subTest(browser=browser_name):
+                        browser = browser_type.launch(headless=True, **options)
+                        page = browser.new_page()
+                        page.goto(base_url, wait_until="domcontentloaded")
+                        expect(page.get_by_text("Agent Tail", exact=True)).to_be_visible()
+                        expect(page.locator(".agent-card")).to_have_count(1)
+                        for view in ("Tree", "Swimlane", "Sequence", "Graph"):
+                            page.get_by_role("button", name=view, exact=True).click()
+                            expect(page.locator("#stage")).to_be_visible()
+                        page.locator(".agent-card").first.click()
+                        expect(page.get_by_text("Agent inspector", exact=True)).to_be_visible()
+                        page.get_by_role("button", name="Warnings", exact=True).click()
+                        expect(page.locator("#warnings-drawer")).to_be_visible()
+                        page.locator("#actor-filter").fill("reviewer")
+                        expect(page.locator(".agent-card")).to_have_count(1)
+                        page.locator("#scrubber").evaluate(
+                            "element => { element.value = '0'; element.dispatchEvent(new Event('input', { bubbles: true })); }"
+                        )
+                        expect(page.get_by_role("button", name="Jump to live")).to_be_visible()
+                        page.get_by_role("button", name="Jump to live").click()
+                        live_event_id = f"{browser_name}-live"
+                        with source.open("a", encoding="utf-8") as handle:
+                            handle.write(json.dumps(event_data(
+                                event_id=live_event_id,
+                                span_id=f"span-{browser_name}",
+                                sequence=index,
+                            )) + "\n")
+                        page.get_by_role("button", name="Timeline", exact=True).click()
+                        expect(page.get_by_text(live_event_id, exact=True)).to_be_visible()
+                        browser.close()
+
+            final = _wait_for_event(base_url, "webkit-live")
+
+        self.assertIn("chrome-live", [event["event_id"] for event in final["events"]])
+        self.assertIn("firefox-live", [event["event_id"] for event in final["events"]])
+        self.assertIn("webkit-live", [event["event_id"] for event in final["events"]])
+
     def test_real_serve_command_ui_api_sse_reconnect_and_sanitization(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "run.jsonl")
@@ -223,6 +283,16 @@ def _read_sse_data(response) -> dict[str, object]:
         if line.startswith("data: "):
             return json.loads(line.removeprefix("data: "))
     raise AssertionError("SSE data frame was not received")
+
+
+def _wait_for_event(base_url: str, event_id: str) -> dict[str, object]:
+    deadline = time.time() + 3
+    while time.time() < deadline:
+        detail = json.loads(urlopen(base_url + "/api/v1/runs/trace-1", timeout=3).read())
+        if any(event["event_id"] == event_id for event in detail["events"]):
+            return detail
+        time.sleep(0.05)
+    raise AssertionError(f"event did not arrive: {event_id}")
 
 
 if __name__ == "__main__":
