@@ -89,6 +89,14 @@
     .metric strong { display: block; font-size: 1.45rem; }
     .metric span, .muted { color: var(--muted); }
     .timeline { display: grid; gap: 0.65rem; padding: 1rem; }
+    .findings { display: grid; gap: 0.5rem; padding: 0 1rem 1rem; }
+    .finding {
+      border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
+      border-radius: 12px;
+      padding: 0.65rem;
+      background: rgba(255, 196, 107, 0.08);
+      color: var(--warn);
+    }
     .event {
       border: 1px solid var(--line);
       border-radius: 14px;
@@ -141,6 +149,7 @@
         <span id="warning-count" class="warning"></span>
       </div>
       <div id="metrics" class="metric-row"></div>
+      <div id="findings" class="findings"></div>
       <div id="timeline" class="timeline"></div>
     </section>
   </main>
@@ -148,10 +157,13 @@
     const runsEl = document.querySelector('#runs');
     const timelineEl = document.querySelector('#timeline');
     const metricsEl = document.querySelector('#metrics');
+    const findingsEl = document.querySelector('#findings');
     const statusEl = document.querySelector('#status');
     const runCountEl = document.querySelector('#run-count');
     const warningCountEl = document.querySelector('#warning-count');
     let selectedTraceId = null;
+    let cursor = 0;
+    let events = null;
 
     async function fetchJson(path) {
       const response = await fetch(path, { headers: { Accept: 'application/json' } });
@@ -164,6 +176,7 @@
     }
 
     function renderRuns(data) {
+      cursor = data.cursor;
       runCountEl.textContent = data.runs.length;
       runsEl.replaceChildren(...data.runs.map((run, index) => {
         const button = document.createElement('button');
@@ -175,16 +188,17 @@
         name.textContent = traceId;
         const summary = document.createElement('span');
         summary.className = 'muted';
-        summary.textContent = `${run.event_count} events, ${run.actor_count} actors`;
+        summary.textContent = `${run.state} · ${run.event_count} events, ${run.actor_count} actors`;
         button.append(name, document.createElement('br'), summary);
         button.addEventListener('click', () => selectRun(traceId));
         return button;
       }));
-      if (data.ingestion_errors.length) {
-        statusEl.textContent = `${data.ingestion_errors.length} ingestion issue(s)`;
+      if (data.findings.length) {
+        statusEl.textContent = `${data.source.state} · ${data.findings.length} finding(s)`;
         statusEl.className = 'warning';
       } else {
-        statusEl.textContent = 'Snapshot loaded';
+        const connection = data.source.connected ? 'connected' : 'disconnected';
+        statusEl.textContent = `${data.source.kind} ${connection} · ${data.source.state}`;
         statusEl.className = 'muted';
       }
     }
@@ -198,13 +212,26 @@
     }
 
     function renderDetail(detail) {
+      cursor = Math.max(cursor, detail.cursor);
       const run = detail.run;
       warningCountEl.textContent = detail.warnings.length ? `${detail.warnings.length} warning(s)` : '';
       metricsEl.replaceChildren(
+        metric('State', run.state),
         metric('Events', run.event_count),
         metric('Actors', run.actor_count),
-        metric('Warnings', run.warning_count)
+        metric('Warnings', run.warning_count),
+        metric('Source', detail.source.state)
       );
+      findingsEl.replaceChildren(...detail.findings.map((finding) => {
+        const node = document.createElement('div');
+        node.className = 'finding';
+        const code = document.createElement('strong');
+        code.textContent = `${finding.kind}:${finding.code}`;
+        const message = document.createElement('div');
+        message.textContent = finding.message;
+        node.append(code, message);
+        return node;
+      }));
       timelineEl.replaceChildren(...detail.events.map((event) => {
         const node = document.createElement('article');
         node.className = 'event';
@@ -263,10 +290,25 @@
         renderRuns(data);
         if (selectedTraceId) await selectRun(selectedTraceId);
         else statusEl.textContent = 'No accepted runs';
+        connectEvents();
       } catch (error) {
         statusEl.textContent = `Failed to load: ${error.message}`;
         statusEl.className = 'warning';
       }
+    }
+
+    function connectEvents() {
+      if (events) events.close();
+      events = new EventSource(`/api/v1/events?cursor=${cursor}`);
+      const refresh = () => init();
+      events.addEventListener('event', refresh);
+      events.addEventListener('finding', refresh);
+      events.addEventListener('source', refresh);
+      events.onerror = () => {
+        events.close();
+        events = null;
+        setTimeout(init, 1000);
+      };
     }
 
     init();
