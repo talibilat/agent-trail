@@ -396,6 +396,10 @@ class TraceIndex:
         return len(self._events)
 
     @property
+    def eviction_count(self) -> int:
+        return self._eviction_count
+
+    @property
     def events(self) -> tuple[Event, ...]:
         return tuple(self._events)
 
