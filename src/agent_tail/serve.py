@@ -202,28 +202,45 @@ class RunStore:
                 return None
             view = self._index.trace(trace_id)
             now = max((event.timestamp for event in view.events), default=_epoch())
+            projection = _relationships(view)
+            started_at = min((event.timestamp for event in view.events), default=None)
             return {
                 "api_version": "v1",
                 "cursor": self._cursor,
-                "run": self._summary(trace_id),
+                "run": self._summary(trace_id, projection=projection),
+                "duration_seconds": _duration_seconds(view.events),
+                "usage": _usage_summary(view.events),
                 "events": [
-                    self._event_message(event, event.event_id in view.uncertain_event_ids)
+                    self._event_message(
+                        event,
+                        event.event_id in view.uncertain_event_ids,
+                        started_at=started_at,
+                    )
                     for event in view.events
                 ],
                 "actors": [
                     {
                         "id": actor_id,
+                        "parent_id": projection["parents"].get(actor_id),
+                        "child_ids": projection["children"].get(actor_id, []),
+                        "role": _actor_role(view.events, actor_id),
+                        "model": _actor_model(view.events, actor_id),
                         "status": actor.status,
                         "operation": actor.operation,
                         "last_activity": actor.last_activity.isoformat(),
                         "last_activity_event_id": actor.last_activity_event_id,
                         "open_span_ids": list(actor.open_span_ids),
                         "uncertain": actor.uncertain,
+                        "usage": _usage_summary(
+                            event for event in view.events
+                            if event.actor["id"] == actor_id
+                        ),
                     }
                     for actor_id, actor in view.actors.items()
                 ],
                 "warnings": [
                     {
+                        "category": "runtime",
                         "code": warning.code,
                         "event_id": warning.event_id,
                         "trace_id": warning.trace_id,
@@ -233,7 +250,9 @@ class RunStore:
                     }
                     for warning in self._index.warnings(now=now)
                     if warning.trace_id == trace_id
-                ],
+                ] + projection["warnings"],
+                "links": projection["links"],
+                "unresolved_endpoints": projection["unresolved_endpoints"],
                 "source": dict(self._source_status),
                 "findings": [
                     finding for finding in self._findings
@@ -241,19 +260,30 @@ class RunStore:
                 ],
             }
 
-    def _summary(self, trace_id: str) -> dict[str, object]:
+    def _summary(
+        self,
+        trace_id: str,
+        *,
+        projection: dict[str, object] | None = None,
+    ) -> dict[str, object]:
         view = self._index.trace(trace_id)
         timestamps = [event.timestamp for event in view.events]
+        if projection is None:
+            projection = _relationships(view)
+        runtime_warning_count = sum(
+            1 for warning in self._index.warnings(now=max(timestamps, default=_epoch()))
+            if warning.trace_id == trace_id
+        )
         return {
             "trace_id": trace_id,
             "event_count": len(view.events),
             "actor_count": len(view.actors),
             "started_at": min(timestamps).isoformat() if timestamps else None,
             "ended_at": max(timestamps).isoformat() if timestamps else None,
-            "warning_count": sum(
-                1 for warning in self._index.warnings(now=max(timestamps, default=_epoch()))
-                if warning.trace_id == trace_id
-            ),
+            "duration_seconds": _duration_seconds(view.events),
+            "usage": _usage_summary(view.events),
+            "uncertain_event_count": len(view.uncertain_event_ids),
+            "warning_count": runtime_warning_count + len(projection["warnings"]),
             "state": self._lifecycle_state(trace_id),
         }
 
@@ -297,9 +327,15 @@ class RunStore:
         self,
         event: Event,
         uncertain: bool | None = None,
+        *,
+        started_at: datetime | None = None,
     ) -> dict[str, object]:
         if uncertain is None:
             uncertain = event.event_id in self._index.trace(event.trace_id).uncertain_event_ids
+        if started_at is None:
+            offset_seconds = 0.0
+        else:
+            offset_seconds = (event.timestamp - started_at).total_seconds()
         return {
             "event_id": event.event_id,
             "trace_id": event.trace_id,
@@ -308,9 +344,11 @@ class RunStore:
             "emitter_id": event.emitter_id,
             "sequence": event.sequence,
             "timestamp": event.timestamp.isoformat(),
+            "offset_seconds": offset_seconds,
             "kind": event.kind,
             "actor": event.actor,
             "operation": event.operation,
+            "usage": _usage_summary((event,)),
             "payload": _payload_preview(event),
             "uncertain": uncertain,
         }
@@ -602,6 +640,198 @@ def _payload_preview(event: Event) -> object:
 
 def _epoch() -> datetime:
     return datetime.fromtimestamp(0, timezone.utc)
+
+
+def _duration_seconds(events: Iterable[Event]) -> float | None:
+    event_list = list(events)
+    if not event_list:
+        return None
+    return (
+        max(event.timestamp for event in event_list)
+        - min(event.timestamp for event in event_list)
+    ).total_seconds()
+
+
+def _relationships(view) -> dict[str, object]:
+    actor_ids = set(view.actors)
+    events_by_id = {event.event_id: event for event in view.events}
+    introduced_actor_ids: set[str] = set()
+    parents: dict[str, str] = {}
+    children: dict[str, list[str]] = {}
+    links: list[dict[str, object]] = []
+    warnings: list[dict[str, object]] = []
+    unresolved: dict[str, dict[str, object]] = {}
+
+    def add_link(link: dict[str, object]) -> None:
+        identity = (
+            link.get("type"),
+            link.get("source_actor_id"),
+            link.get("target_actor_id"),
+            link.get("unresolved_target"),
+            link.get("event_id"),
+        )
+        if not any(
+            identity == (
+                existing.get("type"),
+                existing.get("source_actor_id"),
+                existing.get("target_actor_id"),
+                existing.get("unresolved_target"),
+                existing.get("event_id"),
+            )
+            for existing in links
+        ):
+            links.append(link)
+
+    for event in view.events:
+        actor_id = event.actor["id"]
+        introduces_actor = actor_id not in introduced_actor_ids
+        parent_actor_id = None
+        if event.parent_span_id and event.parent_span_id in view.spans:
+            parent_span = view.spans[event.parent_span_id]
+            has_causal_start = any(
+                events_by_id[event_id].kind.endswith(".started")
+                for event_id in parent_span.event_ids
+                if event_id in events_by_id
+            )
+            if has_causal_start and parent_span.actor_id != actor_id:
+                parent_actor_id = parent_span.actor_id
+        if parent_actor_id:
+            if introduces_actor:
+                parents[actor_id] = parent_actor_id
+                children.setdefault(parent_actor_id, []).append(actor_id)
+                add_link({
+                    "type": "spawn",
+                    "source_actor_id": parent_actor_id,
+                    "target_actor_id": actor_id,
+                    "event_id": event.event_id,
+                })
+            elif actor_id not in parents:
+                add_link({
+                    "type": "causal",
+                    "source_actor_id": parent_actor_id,
+                    "target_actor_id": actor_id,
+                    "event_id": event.event_id,
+                })
+            elif parents[actor_id] != parent_actor_id:
+                add_link({
+                    "type": "causal",
+                    "source_actor_id": parent_actor_id,
+                    "target_actor_id": actor_id,
+                    "event_id": event.event_id,
+                })
+                warnings.append({
+                    "category": "projection",
+                    "code": "AMBIGUOUS_PARENT",
+                    "event_id": event.event_id,
+                    "trace_id": event.trace_id,
+                    "actor_id": actor_id,
+                    "summary": "actor has multiple causal parent candidates",
+                    "evidence": f"primary {parents[actor_id]}, later {parent_actor_id}",
+                })
+            else:
+                add_link({
+                    "type": "causal",
+                    "source_actor_id": parent_actor_id,
+                    "target_actor_id": actor_id,
+                    "event_id": event.event_id,
+                })
+
+        attributes = _attributes(event)
+        target = attributes.get("to")
+        if event.kind == "message.sent" and isinstance(target, str):
+            link = {
+                "type": "message",
+                "source_actor_id": actor_id,
+                "event_id": event.event_id,
+            }
+            if target in actor_ids:
+                link["target_actor_id"] = target
+            else:
+                link["unresolved_target"] = target
+                unresolved[target] = {
+                    "id": target,
+                    "introduced_by_event_id": event.event_id,
+                }
+            add_link(link)
+
+        introduced_actor_ids.add(actor_id)
+
+    return {
+        "parents": parents,
+        "children": children,
+        "links": links,
+        "warnings": warnings,
+        "unresolved_endpoints": list(unresolved.values()),
+    }
+
+
+def _actor_role(events: Iterable[Event], actor_id: str) -> object:
+    for event in events:
+        if event.actor["id"] == actor_id and "role" in event.actor:
+            return event.actor["role"]
+    return None
+
+
+def _actor_model(events: Iterable[Event], actor_id: str) -> object:
+    for event in events:
+        if event.actor["id"] != actor_id:
+            continue
+        actor = event.actor
+        if "model" in actor:
+            return actor["model"]
+        attributes = _attributes(event)
+        if "model" in attributes:
+            return attributes["model"]
+    return None
+
+
+def _usage_summary(events: Iterable[Event]) -> dict[str, object]:
+    totals = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+    }
+    available = {key: False for key in totals}
+    for event in events:
+        usage = _usage(event)
+        for key in ("input_tokens", "output_tokens", "total_tokens", "cost_usd"):
+            value = usage.get(key)
+            if _number(value):
+                totals[key] += value
+                available[key] = True
+    return {
+        key: {"available": available[key], "value": totals[key] if available[key] else None}
+        for key in totals
+    }
+
+
+def _usage(event: Event) -> dict[str, object]:
+    raw = event.raw
+    usage = raw.get("usage")
+    if isinstance(usage, dict):
+        result = dict(usage)
+    else:
+        result = {}
+    attributes = _attributes(event)
+    attribute_usage = attributes.get("usage")
+    if isinstance(attribute_usage, dict):
+        result.update(attribute_usage)
+    for key in ("input_tokens", "output_tokens", "total_tokens", "cost_usd"):
+        if key in attributes and key not in result:
+            result[key] = attributes[key]
+        if key in raw and key not in result:
+            result[key] = raw[key]
+    return result
+
+
+def _attributes(event: Event) -> dict[str, object]:
+    attributes = event.raw.get("attributes")
+    return dict(attributes) if isinstance(attributes, dict) else {}
+
+
+def _number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _terminal_state(event: Event) -> str | None:
