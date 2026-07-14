@@ -10,7 +10,7 @@ import unicodedata
 import webbrowser
 
 from .core import IngestionError, JSONLReader, TraceIndex, redact_text, sanitize_event
-from .serve import ServeConfig, serve
+from .serve import ServeConfig, serve, serve_file
 from .ui import render_snapshot, run
 
 
@@ -134,18 +134,6 @@ def _serve_main(argv: list[str]) -> int:
     if arguments.port < 0 or arguments.port > 65535:
         serve_parser().error("--port must be between 0 and 65535")
 
-    source: TextIO
-    close_source = False
-    if arguments.input == "-":
-        source = sys.stdin
-    else:
-        try:
-            source = open(arguments.input, encoding="utf-8")
-            close_source = True
-        except OSError as error:
-            print(f"agent-tail: {arguments.input}: {error.strerror}", file=sys.stderr)
-            return 2
-
     config = ServeConfig(
         host=arguments.host,
         port=arguments.port,
@@ -157,13 +145,12 @@ def _serve_main(argv: list[str]) -> int:
         max_bytes=arguments.max_bytes,
     )
     try:
-        return serve(source, config=config, open_url=webbrowser.open)
+        if arguments.input == "-":
+            return serve(sys.stdin, config=config, open_url=webbrowser.open)
+        return serve_file(Path(arguments.input), config=config, open_url=webbrowser.open)
     except (OSError, UnicodeError, ValueError) as error:
         print(f"agent-tail: {error}", file=sys.stderr)
         return 2
-    finally:
-        if close_source:
-            source.close()
 
 
 def _print_errors(errors: Iterable[IngestionError]) -> None:
