@@ -28,6 +28,49 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
+    def test_multi_trace_run_picker_stays_within_top_bar(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "multi-trace.jsonl")
+            source.write_text("".join((
+                json.dumps(event_data()) + "\n",
+                json.dumps(event_data(
+                    event_id="trace-2-event",
+                    trace_id="trace-2",
+                    span_id="trace-2-span",
+                )) + "\n",
+            )), encoding="utf-8")
+            port = _free_port()
+            process = subprocess.Popen(
+                [sys.executable, "-m", "agent_tail", "serve", str(source), "--port", str(port)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(channel="chrome", headless=True)
+                page = browser.new_page(viewport={"width": 1440, "height": 900})
+                page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
+                expect(page.locator("#runs > button")).to_have_count(1)
+                self.assertEqual(round(page.locator("header.topbar").bounding_box()["height"]), 52)
+                page.locator("#runs > button").click()
+                expect(page.locator(".run-menu")).to_be_visible()
+                expect(page.locator(".run-menu button")).to_have_count(2)
+                page.locator(".run-menu button").filter(has_text="trace-2").click()
+                expect(page.locator("#runs > button")).to_contain_text("trace-2")
+                page.set_viewport_size({"width": 390, "height": 844})
+                expect(page.locator("#actor-filter")).to_be_visible()
+                expect(page.locator("#kind-filter")).to_be_visible()
+                page.locator("#scrubber").evaluate(
+                    "element => { element.value = '0'; element.dispatchEvent(new Event('input', { bubbles: true })); }"
+                )
+                expect(page.get_by_role("button", name="Jump to live")).to_be_visible()
+                page.get_by_role("button", name="Jump to live").click()
+                browser.close()
+
     def test_primary_journey_in_chrome_firefox_and_webkit(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "cross-browser.jsonl")
@@ -64,6 +107,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         expect(page.get_by_text("Agent inspector", exact=True)).to_be_visible()
                         page.get_by_role("button", name="Warnings", exact=True).click()
                         expect(page.locator("#warnings-drawer")).to_be_visible()
+                        page.get_by_role("button", name="Close warnings").click()
                         page.locator("#actor-filter").fill("reviewer")
                         expect(page.locator(".agent-card")).to_have_count(1)
                         page.locator("#scrubber").evaluate(
@@ -138,6 +182,7 @@ class ServeEndToEndTests(unittest.TestCase):
 
                 page.get_by_role("button", name="Warnings", exact=True).click()
                 expect(page.locator("#warnings-drawer")).to_be_visible()
+                page.get_by_role("button", name="Close warnings").click()
                 page.locator("#search").fill("evt-1")
                 expect(page.locator(".event")).to_have_count(1)
                 page.locator("#search").fill("")
@@ -235,8 +280,10 @@ class ServeEndToEndTests(unittest.TestCase):
                 page = browser.new_page()
                 started = time.perf_counter()
                 page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
-                expect(page.locator(".agent-card")).to_have_count(80, timeout=10_000)
+                expect(page.locator(".agent-card")).to_have_count(12, timeout=10_000)
                 first_useful_paint = time.perf_counter() - started
+                page.get_by_role("button", name="Show more").click()
+                expect(page.locator(".agent-card")).to_have_count(92)
                 page.get_by_role("button", name="Show more").click()
                 expect(page.locator(".agent-card")).to_have_count(100)
                 page.get_by_role("button", name="Tree", exact=True).click()

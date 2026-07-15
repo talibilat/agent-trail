@@ -25,6 +25,8 @@
       color: var(--text);
       font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+    body.light-mode { filter: invert(.88) hue-rotate(180deg); }
+    body.light-mode img, body.light-mode svg { filter: invert(1) hue-rotate(180deg); }
     header {
       display: flex;
       align-items: center;
@@ -241,77 +243,400 @@
       font-size: 0.78rem;
     }
 
-    @media (max-width: 760px) {
-      main { grid-template-columns: 1fr; }
-      .metric-row { grid-template-columns: 1fr; }
-      header { align-items: flex-start; flex-direction: column; }
+    /* Flight recorder composition from the supplied orchestration design. */
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      min-height: 100%;
+      background: #080b12;
+      font-family: "IBM Plex Sans", "SF Pro Text", system-ui, sans-serif;
+    }
+    button, input, select { font: inherit; }
+    header.topbar {
+      position: relative;
+      z-index: 30;
+      height: 52px;
+      padding: 0 16px;
+      border-bottom: 1px solid #1e2940;
+      background: #111725;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 14px;
+      backdrop-filter: none;
+    }
+    .brand { display: flex; align-items: center; gap: 9px; flex: none; }
+    .brand-mark {
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #b18cff, #33c9ff);
+      color: #080b12;
+      font: 700 10px "IBM Plex Mono", ui-monospace, monospace;
+    }
+    .brand-name { font-size: 14px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; }
+    .brand-badge {
+      border: 1px solid #1e2940;
+      border-radius: 4px;
+      padding: 2px 6px;
+      color: #5a6883;
+      font: 500 9px "IBM Plex Mono", ui-monospace, monospace;
+      letter-spacing: .5px;
+    }
+    .top-divider { width: 1px; height: 24px; background: #1e2940; }
+    .run-picker { position: relative; width: min(310px, 28vw); }
+    .run-picker-label { color: #5a6883; font: 600 8px "IBM Plex Mono", monospace; letter-spacing: 1px; }
+    .runs { position: relative; display: block; padding: 0; }
+    .runs button {
+      display: block;
+      width: 100%;
+      padding: 5px 10px;
+      border-color: #1e2940;
+      border-radius: 7px;
+      background: #0d1320;
+      line-height: 1.2;
+    }
+    .runs button strong { font-size: 11px; }
+    .runs button .muted { font: 400 9px "IBM Plex Mono", monospace; }
+    .run-menu { position: absolute; top: 40px; left: 0; z-index: 60; width: 300px; max-height: min(420px,calc(100vh - 70px)); overflow-y: auto; padding: 6px; border: 1px solid #1e2940; border-radius: 9px; background: #111725; box-shadow: 0 18px 40px rgba(0,0,0,.5); }
+    .run-menu[hidden] { display: none; }
+    .run-menu button { margin-bottom: 4px; }
+    .run-count { color: #5a6883; font: 500 9px "IBM Plex Mono", monospace; }
+    .top-spacer { flex: 1; }
+    .top-search {
+      width: 220px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 10px;
+      border: 1px solid #1e2940;
+      border-radius: 7px;
+      background: #0d1320;
+    }
+    .top-search span { color: #5a6883; }
+    .top-search input {
+      min-width: 0;
+      width: 100%;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: #e6edf7;
+      font: 400 11px "IBM Plex Mono", monospace;
+    }
+    .warning-button, .theme-button {
+      width: auto;
+      padding: 7px 10px;
+      border-color: #1e2940;
+      border-radius: 7px;
+      background: #0d1320;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .warning-button { color: #ffb454; }
+    .warning-button::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: #ffb454; }
+    .theme-button { width: 34px; color: #8896ad; text-align: center; }
+    .source-status { color: #ffb454; font: 600 10px "IBM Plex Mono", monospace; white-space: nowrap; }
+    .metric-row {
+      height: 74px;
+      padding: 0;
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+      border-bottom: 1px solid #1e2940;
+      background: #0d1320;
+    }
+    .metric {
+      min-width: 155px;
+      flex: 1 0 155px;
+      border: 0;
+      border-right: 1px solid #1e2940;
+      border-radius: 0;
+      padding: 13px 16px 10px;
+      background: transparent;
+    }
+    .metric strong { color: #33c9ff; font: 600 20px "IBM Plex Mono", monospace; line-height: 1.1; }
+    .metric:nth-child(2) strong { color: #37e39b; }
+    .metric:nth-child(3) strong { color: #b18cff; }
+    .metric:nth-child(4) strong { color: #ffb454; }
+    .metric span { display: block; margin-top: 4px; color: #5a6883; font: 500 9px "IBM Plex Mono", monospace; letter-spacing: .8px; text-transform: uppercase; }
+    main.workspace {
+      height: calc(100vh - 126px);
+      min-height: 0;
+      padding: 0;
+      display: flex;
+      gap: 0;
+    }
+    .stage-shell {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #080b12;
+      overflow: hidden;
+    }
+    .stage-head {
+      height: 48px;
+      flex: none;
+      padding: 8px 14px;
+      border-bottom: 1px solid #1e2940;
+      background: #111725;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .view-tabs { display: flex; gap: 4px; padding: 0; flex-wrap: nowrap; }
+    .view-tabs button {
+      width: auto;
+      padding: 6px 10px;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      background: transparent;
+      color: #8896ad;
+      font-size: 11px;
+    }
+    .view-tabs button[aria-current="true"] { border-color: #7aa2ff; background: rgba(122,162,255,.12); color: #a7c0ff; box-shadow: none; }
+    .stage-head-spacer { flex: 1; }
+    .filters { display: flex; gap: 5px; padding: 0; width: min(360px, 35vw); }
+    .filters input {
+      min-width: 0;
+      height: 30px;
+      padding: 5px 8px;
+      border-color: #1e2940;
+      border-radius: 6px;
+      background: #0d1320;
+      font: 400 9px "IBM Plex Mono", monospace;
+    }
+    .view-toolbar { display: flex; gap: 4px; padding: 0; flex-wrap: nowrap; }
+    .view-toolbar button { width: auto; padding: 6px 8px; border-radius: 6px; border-color: #1e2940; background: #0d1320; color: #8896ad; font-size: 10px; }
+    .view-toolbar button[data-action^="pan-"] { display: none; }
+    .stage-content { position: relative; min-height: 0; flex: 1; overflow: hidden; }
+    .view-stage {
+      position: absolute;
+      inset: 0;
+      min-height: 0;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      overflow: hidden;
+      background-color: #080b12;
+      background-image: radial-gradient(circle at 1px 1px, #141c2e 1px, transparent 0);
+      background-size: 26px 26px;
+    }
+    .view-canvas { min-height: 100%; }
+    .agent-card {
+      width: 132px;
+      min-height: 50px;
+      padding: 6px 8px 6px 44px;
+      border-color: transparent;
+      border-radius: 8px;
+      background: rgba(13,19,32,.72);
+      box-shadow: none;
+      overflow: visible;
+    }
+    .agent-card::before {
+      content: "";
+      position: absolute;
+      left: 7px;
+      top: 8px;
+      width: 28px;
+      height: 28px;
+      border: 2px solid #33c9ff;
+      border-radius: 50%;
+      background: #111725;
+      box-shadow: 0 0 0 4px rgba(51,201,255,.08), 0 0 14px rgba(51,201,255,.18);
+    }
+    .agent-card.status-waiting::before { border-color: #ffb454; box-shadow: 0 0 0 4px rgba(255,180,84,.08), 0 0 14px rgba(255,180,84,.18); }
+    .agent-card.status-done::before { border-color: #37e39b; box-shadow: 0 0 0 4px rgba(55,227,155,.08), 0 0 14px rgba(55,227,155,.18); }
+    .agent-card.status-failed::before { border-color: #ff5d6c; box-shadow: 0 0 0 4px rgba(255,93,108,.08), 0 0 14px rgba(255,93,108,.18); }
+    .agent-card.status-stalled::before { border-color: #ffb454; animation: node-pulse 1.6s ease infinite; }
+    .agent-card.role-orchestrator::before { border-color: #b18cff; box-shadow: 0 0 0 4px rgba(177,140,255,.1), 0 0 14px rgba(177,140,255,.22); }
+    @keyframes node-pulse { 50% { box-shadow: 0 0 0 8px rgba(255,180,84,0); } }
+    .agent-card[aria-current="true"] { border-color: #7aa2ff; background: rgba(122,162,255,.12); box-shadow: none; }
+    .agent-card .agent-id { font: 600 10px "IBM Plex Sans", sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .agent-card .agent-meta { display: block; font: 400 8px "IBM Plex Mono", monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .selection, .findings { display: none; }
+    .timeline { position: absolute; inset: 0; margin: 0; padding: 14px; overflow: auto; background: #080b12; }
+    .timeline[hidden], .view-stage[hidden] { display: none !important; }
+    .event { border-color: #1e2940; border-radius: 8px; background: #0d1320; }
+    .swimlane, .sequence-view { position: absolute; inset: 0; overflow: auto; padding: 18px; background: #080b12; }
+    .lane, .sequence-row { border-color: #1e2940; border-radius: 8px; background: #0d1320; }
+    .transport {
+      height: 60px;
+      flex: none;
+      padding: 0 16px;
+      border-top: 1px solid #1e2940;
+      background: #111725;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .transport-clock { width: 112px; text-align: center; }
+    .transport-clock strong { display: block; color: #e6edf7; font: 600 12px "IBM Plex Mono", monospace; }
+    .transport-clock span { display: block; margin-top: 2px; color: #5a6883; font: 400 8px "IBM Plex Mono", monospace; text-transform: uppercase; }
+    .playback { display: contents; }
+    .playback button, .playback select { width: auto; padding: 6px 9px; border-color: #1e2940; border-radius: 7px; background: #0d1320; font-size: 10px; }
+    #playback-toggle { width: 38px; height: 38px; padding: 0; border-radius: 9px; background: #33c9ff; color: #080b12; text-align: center; font-weight: 700; }
+    #scrubber { flex: 1; accent-color: #33c9ff; }
+    #speed { color: #e6edf7; }
+    #jump-live { color: #8896ad; }
+    .inspector-shell {
+      width: 376px;
+      flex: none;
+      overflow: auto;
+      border-left: 1px solid #1e2940;
+      background: #111725;
+    }
+    .inspector {
+      min-height: 100%;
+      margin: 0;
+      padding: 16px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    .inspector h2 { padding-bottom: 12px; border-bottom: 1px solid #1e2940; color: #e6edf7; font-size: 14px; }
+    .inspector-header { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid #1e2940; }
+    .inspector-avatar { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border: 2px solid #33c9ff; border-radius: 50%; color: #33c9ff; font: 700 11px "IBM Plex Mono", monospace; }
+    .inspector-title { flex: 1; min-width: 0; }
+    .inspector-title strong { display: block; font-size: 14px; }
+    .inspector-title span { color: #8896ad; font: 400 9px "IBM Plex Mono", monospace; }
+    .status-pill { padding: 3px 7px; border: 1px solid #37e39b; border-radius: 999px; color: #37e39b; font: 600 9px "IBM Plex Mono", monospace; }
+    .inspector-block { padding: 14px 0; border-bottom: 1px solid #1e2940; }
+    .inspector-block:last-child { border-bottom: 0; }
+    .inspector-label { margin-bottom: 9px; color: #5a6883; font: 600 9px "IBM Plex Mono", monospace; letter-spacing: 1px; }
+    .usage-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+    .usage-card { padding: 8px; border: 1px solid #1e2940; border-radius: 8px; background: #0d1320; }
+    .usage-card span { display: block; color: #8896ad; font: 400 8px "IBM Plex Mono", monospace; }
+    .usage-card strong { display: block; margin-top: 3px; color: #33c9ff; font: 600 14px "IBM Plex Mono", monospace; }
+    .relationship-row, .inspector-event { display: flex; align-items: center; gap: 8px; margin-top: 7px; color: #8896ad; font: 400 10px "IBM Plex Mono", monospace; }
+    .relationship-row button, .inspector-event { width: auto; padding: 4px 7px; border-color: #1e2940; border-radius: 6px; background: #0d1320; color: #e6edf7; }
+    .inspector dl { grid-template-columns: 106px 1fr; gap: 8px 10px; font: 400 10px "IBM Plex Mono", monospace; }
+    .inspector dt { color: #5a6883; }
+    .inspector dd { color: #e6edf7; }
+    .warnings-drawer {
+      position: fixed;
+      z-index: 80;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 420px;
+      margin: 0;
+      overflow: auto;
+      border: 0;
+      border-left: 1px solid #1e2940;
+      border-radius: 0;
+      background: #111725;
+      box-shadow: -20px 0 50px rgba(0,0,0,.5);
+    }
+    .warnings-backdrop { position: fixed; z-index: 79; inset: 0; background: rgba(0,0,0,.5); }
+    .warnings-backdrop[hidden] { display: none; }
+    .drawer-item { display: block; width: 100%; margin-bottom: 8px; padding: 10px; border: 1px solid #1e2940; border-radius: 8px; background: #0d1320; font-size: 11px; color: #8896ad; text-align: left; }
+    .drawer-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; margin: -1rem -1rem 1rem; padding: 14px 16px; border-bottom: 1px solid #1e2940; background: #111725; }
+    .drawer-head h2 { flex: 1; margin: 0; color: #e6edf7; font-size: 14px; }
+    .drawer-head button { width: auto; padding: 5px 10px; border-color: #1e2940; background: #0d1320; color: #8896ad; }
+    @media (max-width: 980px) {
+      .brand-badge, .top-divider, .run-count, .theme-button { display: none; }
+      .run-picker { width: 220px; }
+      .top-search { width: 180px; }
+      .inspector-shell { width: 300px; }
+      .stage-head { flex-wrap: wrap; height: auto; }
+      .filters { order: 3; width: 100%; }
+    }
+    @media (max-width: 720px) {
+      html, body { overflow: auto; }
+      header.topbar { height: auto; min-height: 52px; flex-wrap: wrap; padding: 8px; }
+      .run-picker { order: 3; width: 100%; }
+      .top-search { display: none; }
+      .metric-row { height: 68px; }
+      main.workspace { height: auto; min-height: calc(100vh - 120px); display: block; }
+      .stage-shell { min-height: 620px; }
+      .stage-head { height: auto; flex-wrap: wrap; }
+      .view-tabs { overflow-x: auto; width: 100%; }
+      .filters { display: flex; }
+      .view-toolbar { display: flex; }
+      .view-toolbar button { display: none; }
+      .view-toolbar button[data-action="show-more"], .view-toolbar button[data-action="reset"], .view-toolbar button[data-action="focus"] { display: block; }
+      .inspector-shell { display: block; width: 100%; min-height: 320px; max-height: none; overflow: visible; border-left: 0; border-top: 1px solid #1e2940; background: #111725; }
+      .inspector { min-height: 320px; }
+      .transport { min-height: 60px; height: auto; padding: 8px; flex-wrap: wrap; }
+      .transport-clock { width: 100px; }
+      #scrubber { min-width: 110px; }
+      #jump-live { margin-left: auto; }
+      .warnings-drawer { width: min(420px,100vw); }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>Agent Tail</h1>
-      <div class="muted">Local flight recorder</div>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">AT</span>
+      <span class="brand-name">Agent Tail</span>
+      <span class="brand-badge">FLIGHT&nbsp;RECORDER</span>
     </div>
-    <div id="status" class="muted">Loading runs...</div>
-  </header>
-  <main>
-    <section class="panel" aria-labelledby="runs-heading">
-      <div class="panel-head">
-        <h2 id="runs-heading">Runs</h2>
-        <span id="run-count" class="muted">0</span>
-      </div>
+    <span class="top-divider"></span>
+    <div class="run-picker">
+      <span class="run-picker-label">CURRENT TRACE</span>
       <div id="runs" class="runs"></div>
+    </div>
+    <span id="run-count" class="run-count">0 traces</span>
+    <div class="top-spacer"></div>
+    <label class="top-search"><span>⌕</span><input id="search" type="search" placeholder="filter agents, kinds, traces…"></label>
+    <button type="button" class="warning-button" data-action="warnings" aria-label="Warnings"><span id="warning-count">0 warnings</span></button>
+    <button type="button" class="theme-button" aria-label="Theme">☼</button>
+    <div id="status" class="source-status">Loading runs...</div>
+  </header>
+  <div id="metrics" class="metric-row"></div>
+  <main class="workspace">
+    <section class="stage-shell" aria-label="Orchestration visualization">
+      <div class="stage-head">
+        <div class="view-tabs" aria-label="Run views">
+          <button type="button" data-view="graph" aria-label="Graph">◉ Graph</button>
+          <button type="button" data-view="tree" aria-label="Tree">├ Tree</button>
+          <button type="button" data-view="swimlane" aria-label="Swimlane">▦ Swimlane</button>
+          <button type="button" data-view="sequence" aria-label="Sequence">⇄ Sequence</button>
+          <button type="button" data-view="timeline" aria-label="Timeline">≡ Timeline</button>
+        </div>
+        <div class="stage-head-spacer"></div>
+        <div class="filters" aria-label="Filters">
+          <input id="actor-filter" type="search" placeholder="agent">
+          <input id="kind-filter" type="search" placeholder="kind">
+        </div>
+        <div class="view-toolbar" aria-label="View controls">
+          <button type="button" data-action="zoom-in">Zoom in</button>
+          <button type="button" data-action="zoom-out">Zoom out</button>
+          <button type="button" data-action="pan-left">Pan left</button>
+          <button type="button" data-action="pan-right">Pan right</button>
+          <button type="button" data-action="pan-up">Pan up</button>
+          <button type="button" data-action="pan-down">Pan down</button>
+          <button type="button" data-action="focus">◎ Focus</button>
+          <button type="button" data-action="show-more" aria-label="Show more">More</button>
+          <button type="button" data-action="reset">Reset</button>
+        </div>
+      </div>
+      <div class="stage-content">
+        <div id="selection" class="selection"></div>
+        <div id="stage" class="view-stage"></div>
+        <div id="findings" class="findings"></div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+      <div class="transport">
+        <div class="playback" aria-label="Playback controls">
+          <button type="button" id="playback-toggle">▶</button>
+          <div class="transport-clock"><strong id="playback-clock">00:00 / 00:00</strong><span id="playback-mode">streaming</span></div>
+          <input id="scrubber" type="range" min="0" max="0" step="0.1" value="0">
+          <select id="speed" aria-label="Playback speed">
+            <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option>
+          </select>
+          <button type="button" id="jump-live" aria-label="Jump to live">● LIVE</button>
+        </div>
+      </div>
     </section>
-    <section class="panel" aria-labelledby="detail-heading">
-      <div class="panel-head">
-        <h2 id="detail-heading">Timeline</h2>
-        <span id="warning-count" class="warning"></span>
-      </div>
-      <div id="metrics" class="metric-row"></div>
-      <div class="view-tabs" aria-label="Run views">
-        <button type="button" data-view="graph">Graph</button>
-        <button type="button" data-view="tree">Tree</button>
-        <button type="button" data-view="swimlane">Swimlane</button>
-        <button type="button" data-view="sequence">Sequence</button>
-        <button type="button" data-view="timeline">Timeline</button>
-      </div>
-      <div class="playback" aria-label="Playback controls">
-        <button type="button" id="playback-toggle">Play</button>
-        <input id="scrubber" type="range" min="0" max="0" step="0.1" value="0">
-        <select id="speed" aria-label="Playback speed">
-          <option value="0.5">0.5x</option>
-          <option value="1" selected>1x</option>
-          <option value="2">2x</option>
-          <option value="4">4x</option>
-        </select>
-        <button type="button" id="jump-live">Jump to live</button>
-      </div>
-      <div class="filters" aria-label="Search and filters">
-        <input id="search" type="search" placeholder="Search events and agents">
-        <input id="actor-filter" type="search" placeholder="Filter actor">
-        <input id="kind-filter" type="search" placeholder="Filter kind">
-      </div>
-      <div class="view-toolbar" aria-label="View controls">
-        <button type="button" data-action="zoom-in">Zoom in</button>
-        <button type="button" data-action="zoom-out">Zoom out</button>
-        <button type="button" data-action="pan-left">Pan left</button>
-        <button type="button" data-action="pan-right">Pan right</button>
-        <button type="button" data-action="pan-up">Pan up</button>
-        <button type="button" data-action="pan-down">Pan down</button>
-        <button type="button" data-action="focus">Focus selected</button>
-        <button type="button" data-action="show-more">Show more</button>
-        <button type="button" data-action="reset">Reset</button>
-        <button type="button" data-action="warnings">Warnings</button>
-      </div>
-      <div id="selection" class="selection"></div>
+    <aside class="inspector-shell">
       <section id="inspector" class="inspector" aria-label="Inspector"></section>
-      <section id="warnings-drawer" class="warnings-drawer" hidden aria-label="Warnings drawer"></section>
-      <div id="stage" class="view-stage"></div>
-      <div id="findings" class="findings"></div>
-      <div id="timeline" class="timeline"></div>
-    </section>
+    </aside>
+    <div id="warnings-backdrop" class="warnings-backdrop" hidden></div>
+    <section id="warnings-drawer" class="warnings-drawer" hidden role="dialog" aria-modal="true" aria-label="Warnings drawer"></section>
   </main>
   <script>
     const runsEl = document.querySelector('#runs');
@@ -324,6 +649,8 @@
     const runCountEl = document.querySelector('#run-count');
     const warningCountEl = document.querySelector('#warning-count');
     const playbackToggleEl = document.querySelector('#playback-toggle');
+    const playbackClockEl = document.querySelector('#playback-clock');
+    const playbackModeEl = document.querySelector('#playback-mode');
     const scrubberEl = document.querySelector('#scrubber');
     const speedEl = document.querySelector('#speed');
     const jumpLiveEl = document.querySelector('#jump-live');
@@ -332,6 +659,8 @@
     const kindFilterEl = document.querySelector('#kind-filter');
     const inspectorEl = document.querySelector('#inspector');
     const warningsDrawerEl = document.querySelector('#warnings-drawer');
+    const warningsBackdropEl = document.querySelector('#warnings-backdrop');
+    const themeButtonEl = document.querySelector('.theme-button');
     const viewButtons = [...document.querySelectorAll('[data-view]')];
     const actionButtons = [...document.querySelectorAll('[data-action]')];
     const svgNamespace = `http${'://'}www.w3.org/2000/svg`;
@@ -341,7 +670,7 @@
     let selectedEventId = null;
     let focusedAgentId = null;
     let warningsOpen = false;
-    let visibleLimit = 80;
+    let visibleLimit = initialVisibleLimit();
     let currentDetail = null;
     let viewTransform = { scale: 1, x: 0, y: 0 };
     let playbackTraceId = null;
@@ -352,6 +681,8 @@
     let playbackSpeed = 1;
     let cursor = 0;
     let events = null;
+    let runMenuOpen = false;
+    let dragPoint = null;
     const accessToken = new URLSearchParams(window.location.search).get('token');
 
     viewButtons.forEach((button) => button.addEventListener('click', () => {
@@ -382,6 +713,40 @@
     [searchEl, actorFilterEl, kindFilterEl].forEach((input) => {
       input.addEventListener('input', () => renderDetail(currentDetail));
     });
+    warningsBackdropEl.addEventListener('click', () => {
+      warningsOpen = false;
+      renderDetail(currentDetail);
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && warningsOpen) {
+        warningsOpen = false;
+        renderDetail(currentDetail);
+      }
+    });
+    themeButtonEl.addEventListener('click', () => {
+      document.body.classList.toggle('light-mode');
+      themeButtonEl.textContent = document.body.classList.contains('light-mode') ? '◐' : '☼';
+    });
+    stageEl.addEventListener('wheel', (event) => {
+      if (!['graph', 'tree'].includes(selectedView)) return;
+      event.preventDefault();
+      viewTransform.scale = Math.min(2.5, Math.max(0.45, viewTransform.scale - event.deltaY * 0.001));
+      renderDetail(currentDetail);
+    }, { passive: false });
+    stageEl.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('button')) return;
+      dragPoint = { x: event.clientX, y: event.clientY };
+      stageEl.setPointerCapture(event.pointerId);
+    });
+    stageEl.addEventListener('pointermove', (event) => {
+      if (!dragPoint) return;
+      viewTransform.x += event.clientX - dragPoint.x;
+      viewTransform.y += event.clientY - dragPoint.y;
+      dragPoint = { x: event.clientX, y: event.clientY };
+      renderDetail(currentDetail);
+    });
+    stageEl.addEventListener('pointerup', () => { dragPoint = null; });
+    stageEl.addEventListener('pointercancel', () => { dragPoint = null; });
 
     async function fetchJson(path) {
       const response = await fetch(apiPath(path), { headers: { Accept: 'application/json' } });
@@ -395,34 +760,60 @@
 
     function renderRuns(data) {
       cursor = data.cursor;
-      runCountEl.textContent = data.runs.length;
-      runsEl.replaceChildren(...data.runs.map((run, index) => {
+      runCountEl.textContent = `${data.runs.length} trace${data.runs.length === 1 ? '' : 's'}`;
+      if (selectedTraceId === null && data.runs.length) selectedTraceId = data.runs[0].trace_id;
+      const current = data.runs.find((run) => run.trace_id === selectedTraceId) || data.runs[0];
+      if (!current) {
+        runsEl.replaceChildren();
+        return;
+      }
+      const selected = runButton(current, true);
+      selected.addEventListener('click', () => {
+        runMenuOpen = !runMenuOpen;
+        renderRuns(data);
+      });
+      const menu = document.createElement('div');
+      menu.className = 'run-menu';
+      menu.hidden = !runMenuOpen;
+      menu.append(...data.runs.map((run) => {
+        const button = runButton(run, run.trace_id === selectedTraceId);
+        button.addEventListener('click', () => {
+          runMenuOpen = false;
+          selectRun(run.trace_id);
+        });
+        return button;
+      }));
+      runsEl.replaceChildren(selected, menu);
+      if (data.findings.length) {
+        statusEl.textContent = `${data.source.state} · ${data.findings.length} finding(s)`;
+        statusEl.className = 'source-status warning';
+      } else {
+        const connection = data.source.connected ? 'connected' : 'disconnected';
+        statusEl.textContent = `${data.source.kind} ${connection} · ${data.source.state}`;
+        statusEl.className = 'source-status muted';
+      }
+    }
+
+    function runButton(run, active) {
         const button = document.createElement('button');
         const traceId = run.trace_id;
-        if (selectedTraceId === null && index === 0) selectedTraceId = traceId;
         button.type = 'button';
-        button.setAttribute('aria-current', traceId === selectedTraceId ? 'true' : 'false');
+        button.setAttribute('aria-current', active ? 'true' : 'false');
         const name = document.createElement('strong');
         name.textContent = traceId;
         const summary = document.createElement('span');
         summary.className = 'muted';
         summary.textContent = `${run.state} · ${run.event_count} events, ${run.actor_count} actors`;
         button.append(name, document.createElement('br'), summary);
-        button.addEventListener('click', () => selectRun(traceId));
         return button;
-      }));
-      if (data.findings.length) {
-        statusEl.textContent = `${data.source.state} · ${data.findings.length} finding(s)`;
-        statusEl.className = 'warning';
-      } else {
-        const connection = data.source.connected ? 'connected' : 'disconnected';
-        statusEl.textContent = `${data.source.kind} ${connection} · ${data.source.state}`;
-        statusEl.className = 'muted';
-      }
     }
 
     async function selectRun(traceId) {
       selectedTraceId = traceId;
+      selectedAgentId = null;
+      selectedEventId = null;
+      focusedAgentId = null;
+      viewTransform = { scale: 1, x: 0, y: 0 };
       const runs = await fetchJson('/api/v1/runs');
       renderRuns(runs);
       const detail = await fetchJson(`/api/v1/runs/${encodeURIComponent(traceId)}`);
@@ -441,14 +832,17 @@
       const visibleWarnings = detail.warnings.filter((warning) => !warning.event_id || visibleEvents.some((event) => event.event_id === warning.event_id));
       const visibleFindings = detail.findings.filter((finding) => !finding.event_id || visibleEvents.some((event) => event.event_id === finding.event_id));
       warningCountEl.textContent = visibleWarnings.length ? `${visibleWarnings.length} warning(s)` : '';
-      if (!selectedAgentId && detail.actors.length) selectedAgentId = detail.actors[0].id;
+      const usage = usageFor(filteredEvents);
+      const requestCount = filteredEvents.filter(isRequestStart).length;
+      const elapsed = Math.max(playbackTime || 0, 0);
+      const throughput = elapsed > 0 ? requestCount / elapsed : 0;
       metricsEl.replaceChildren(
-        metric('State', run.state),
-        metric('Events', `${filteredEvents.length}/${run.event_count}`),
-        metric('Actors', `${visibleAgents.length}/${run.actor_count}`),
-        metric('Warnings', `${visibleWarnings.length}/${run.warning_count}`),
-        metric('Source', detail.source.state),
-        metric('Playback', liveFollow ? 'live' : `${playbackTime.toFixed(1)}s`)
+        metric('Agents', `${visibleAgents.length}/${run.actor_count}`),
+        metric('Requests', requestCount),
+        metric('Tokens', usage?.total_tokens?.available ? compactNumber(usage.total_tokens.value) : '—'),
+        metric('Est. cost', usage?.cost_usd?.available ? `$${Number(usage.cost_usd.value).toFixed(2)}` : '—'),
+        metric('Throughput', `${throughput.toFixed(1)}/s`),
+        metric('Elapsed', `${clock(elapsed)}/${clock(durationOf(detail))}`)
       );
       findingsEl.replaceChildren(...visibleFindings.map((finding) => {
         const node = document.createElement('div');
@@ -525,11 +919,31 @@
 
     function renderGraph(detail) {
       const visibleAgents = visibleAgentsFor(detail);
-      const positions = new Map(visibleAgents.map((agent, index) => [agent.id, {
-        x: 90 + (index % 5) * 210,
-        y: 90 + Math.floor(index / 5) * 150
-      }]));
+      const positions = graphPositions(visibleAgents);
       renderCanvas(detail, visibleAgents, positions, linksAtHorizon(detail), limited(detail, visibleAgents));
+    }
+
+    function graphPositions(agents) {
+      const positions = new Map();
+      const stageWidth = Math.max(stageEl.clientWidth, 360);
+      const stageHeight = Math.max(stageEl.clientHeight, 360);
+      const centerX = stageWidth / 2 - 66;
+      const centerY = stageHeight / 2 - 26;
+      const maxRadius = Math.min(195, stageWidth * 0.34, stageHeight * 0.38);
+      agents.forEach((agent, index) => {
+        if (index === 0) {
+          positions.set(agent.id, { x: centerX, y: centerY });
+          return;
+        }
+        const progress = Math.sqrt(index / Math.max(agents.length - 1, 1));
+        const radius = 42 + progress * maxRadius;
+        const angle = index * 2.3999632297 - Math.PI / 2;
+        positions.set(agent.id, {
+          x: centerX + Math.cos(angle) * radius,
+          y: centerY + Math.sin(angle) * radius,
+        });
+      });
+      return positions;
     }
 
     function renderTree(detail) {
@@ -621,10 +1035,10 @@
         const target = positions.get(link.target_actor_id);
         if (!source || !target) return;
         const line = document.createElementNS(svgNamespace, 'line');
-        line.setAttribute('x1', source.x + 80);
-        line.setAttribute('y1', source.y + 42);
-        line.setAttribute('x2', target.x + 80);
-        line.setAttribute('y2', target.y + 42);
+        line.setAttribute('x1', source.x + 21);
+        line.setAttribute('y1', source.y + 22);
+        line.setAttribute('x2', target.x + 21);
+        line.setAttribute('y2', target.y + 22);
         line.setAttribute('stroke', link.type === 'message' ? '#ffc46b' : '#8bd3ff');
         line.setAttribute('stroke-width', link.type === 'spawn' ? '3' : '2');
         line.setAttribute('stroke-dasharray', link.type === 'message' ? '6 6' : '0');
@@ -670,7 +1084,9 @@
     function agentCard(detail, agent, position) {
       const card = document.createElement('button');
       card.type = 'button';
-      card.className = 'agent-card';
+      const hasStall = detail.warnings.some((warning) => warning.actor_id === agent.id && warning.code === 'STALL' && warning.active !== false);
+      const visualStatus = hasStall ? 'stalled' : semanticStatus(agent.status);
+      card.className = `agent-card status-${visualStatus}${String(agent.role).toLowerCase().includes('orchestrat') ? ' role-orchestrator' : ''}`;
       card.style.left = `${position.x}px`;
       card.style.top = `${position.y}px`;
       card.setAttribute('aria-current', agent.id === selectedAgentId ? 'true' : 'false');
@@ -686,6 +1102,7 @@
       );
       card.addEventListener('click', () => {
         selectedAgentId = agent.id;
+        selectedEventId = null;
         renderDetail(detail);
       });
       return card;
@@ -714,12 +1131,12 @@
       if (action === 'reset') {
         viewTransform = { scale: 1, x: 0, y: 0 };
         focusedAgentId = null;
-        visibleLimit = 80;
+        visibleLimit = initialVisibleLimit();
       }
       if (action === 'focus' && currentDetail?.actors.length) {
         selectedAgentId = selectedAgentId || currentDetail.actors[0].id;
         focusedAgentId = selectedAgentId;
-        visibleLimit = 80;
+        visibleLimit = initialVisibleLimit();
         viewTransform = { scale: 1.15, x: 40, y: 20 };
       }
       renderDetail(currentDetail);
@@ -756,29 +1173,76 @@
       if (agent) {
         const relatedEvents = detail.events.filter((eventItem) => eventItem.actor.id === agent.id);
         const warningDetails = detail.warnings.filter((warning) => warning.actor_id === agent.id);
+        const header = document.createElement('div');
+        header.className = 'inspector-header';
+        const avatar = label('div', 'inspector-avatar', agent.id.slice(0, 2).toUpperCase());
+        const title = document.createElement('div');
+        title.className = 'inspector-title';
+        title.append(label('h2', '', 'Agent inspector'), label('strong', '', agent.id), label('span', '', `${text(agent.role)} · ${text(agent.model)}`));
+        header.append(avatar, title, label('span', 'status-pill', agent.status));
+        const usage = document.createElement('div');
+        usage.className = 'usage-grid';
+        usage.append(
+          usageCard('INPUT TOK', agent.usage.input_tokens),
+          usageCard('OUTPUT TOK', agent.usage.output_tokens),
+          usageCard('COST', agent.usage.cost_usd, '$')
+        );
+        const relationships = inspectorBlock('ORCHESTRATION');
+        const parentRow = label('div', 'relationship-row', `parent · ${text(agent.parent_id)}`);
+        relationships.append(parentRow);
+        if (agent.parent_id) parentRow.addEventListener('click', () => selectAgent(detail, agent.parent_id));
+        (agent.child_ids || []).forEach((childId) => {
+          const child = label('button', 'relationship-row', `child · ${childId}`);
+          child.type = 'button';
+          child.addEventListener('click', () => selectAgent(detail, childId));
+          relationships.append(child);
+        });
+        const warnings = inspectorBlock('⚠ WARNINGS');
+        if (!warningDetails.length) warnings.append(label('div', 'muted', 'No warnings for this agent.'));
+        warningDetails.forEach((warning) => warnings.append(label('div', 'drawer-item', `${warning.code} · ${warning.summary}`)));
+        const timeline = inspectorBlock(`EVENT TIMELINE · ${relatedEvents.length}`);
+        timeline.dataset.field = 'related_events';
+        relatedEvents.forEach((eventItem) => {
+          const row = label('button', 'inspector-event', `${eventItem.kind} · ${text(eventItem.operation.name)} · ${eventItem.operation.status}`);
+          row.type = 'button';
+          row.addEventListener('click', () => {
+            selectedEventId = eventItem.event_id;
+            renderDetail(detail);
+          });
+          timeline.append(row);
+        });
         inspectorEl.replaceChildren(
-          label('h2', '', 'Agent inspector'),
-          definitionList({
-            id: agent.id,
-            role: text(agent.role),
-            model: text(agent.model),
-            status: agent.status,
-            parent: text(agent.parent_id),
-            operation: text(agent.operation),
-            last_activity: text(agent.last_activity),
-            related_events: relatedEvents.map((eventItem) => eventItem.event_id).join(', '),
-            warnings: warningDetails.map((warning) => warning.code).join(', ') || 'none',
-            usage: JSON.stringify(agent.usage),
-            cost_usd: agent.usage.cost_usd.available ? agent.usage.cost_usd.value : 'unavailable',
-          })
+          header,
+          inspectorBlock('USAGE', usage),
+          relationships,
+          warnings,
+          timeline
         );
         return;
       }
-      inspectorEl.textContent = 'Select an agent or event to inspect details.';
+      const usage = detail.usage || detail.run.usage;
+      inspectorEl.replaceChildren(
+        label('h2', '', 'RUN OVERVIEW'),
+        label('p', 'muted', `${detail.run.trace_id} — a causal view of this agent run. Select any agent in the stage to inspect its usage, relationships, events, and warnings.`),
+        definitionList({
+          trace: detail.run.trace_id,
+          state: detail.run.state,
+          agents: detail.run.actor_count,
+          events: detail.run.event_count,
+          duration: `${detail.run.duration_seconds || 0}s`,
+          tokens: usage?.total_tokens?.available ? usage.total_tokens.value : 'unavailable',
+          estimated_cost: usage?.cost_usd?.available ? `$${usage.cost_usd.value}` : 'unavailable',
+          warnings: detail.run.warning_count,
+          source: detail.source.state,
+        })
+      );
     }
 
     function renderWarningsDrawer(detail, warnings, findings) {
       warningsDrawerEl.hidden = !warningsOpen;
+      warningsBackdropEl.hidden = !warningsOpen;
+      [document.querySelector('header.topbar'), metricsEl, document.querySelector('.stage-shell'), document.querySelector('.inspector-shell')]
+        .forEach((element) => { element.inert = warningsOpen; });
       if (!warningsOpen) return;
       const items = [
         ...warnings.map((warning) => ({
@@ -786,6 +1250,7 @@
           code: warning.code,
           message: warning.summary,
           event_id: warning.event_id,
+          actor_id: warning.actor_id,
           active: warning.active !== false,
           trigger_time: eventTime(detail, warning.event_id),
           detected_at: warning.detected_at || 'unavailable',
@@ -796,21 +1261,41 @@
           code: finding.code,
           message: finding.message,
           event_id: finding.event_id,
+          actor_id: null,
           active: false,
           trigger_time: eventTime(detail, finding.event_id),
           detected_at: finding.detected_at || 'unavailable',
           resolved_at: 'unavailable',
         })),
       ];
+      const head = document.createElement('div');
+      head.className = 'drawer-head';
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.setAttribute('aria-label', 'Close warnings');
+      close.textContent = '✕';
+      close.addEventListener('click', () => {
+        warningsOpen = false;
+        renderDetail(detail);
+      });
+      head.append(label('h2', '', 'Warnings and findings'), close);
       warningsDrawerEl.replaceChildren(
-        label('h2', '', 'Warnings and findings'),
+        head,
         ...items.map((item) => {
-          const node = document.createElement('div');
+          const node = document.createElement('button');
+          node.type = 'button';
           node.className = 'drawer-item';
           node.textContent = `${item.kind}:${item.code} ${item.active ? 'active' : 'resolved'} event ${text(item.event_id)} trigger ${text(item.trigger_time)} detected ${text(item.detected_at)} resolved ${text(item.resolved_at)} ${item.message}`;
+          node.addEventListener('click', () => {
+            selectedEventId = item.event_id || null;
+            selectedAgentId = item.actor_id || selectedAgentId;
+            warningsOpen = false;
+            renderDetail(detail);
+          });
           return node;
         })
       );
+      close.focus();
     }
 
     function eventTime(detail, eventId) {
@@ -823,6 +1308,28 @@
         list.append(label('dt', '', key), label('dd', '', text(value)));
       });
       return list;
+    }
+
+    function inspectorBlock(title, content) {
+      const block = document.createElement('div');
+      block.className = 'inspector-block';
+      block.append(label('div', 'inspector-label', title));
+      if (content) block.append(content);
+      return block;
+    }
+
+    function usageCard(title, usage, prefix = '') {
+      const card = document.createElement('div');
+      card.className = 'usage-card';
+      const value = usage?.available ? `${prefix}${compactNumber(usage.value)}` : '—';
+      card.append(label('span', '', title), label('strong', '', value));
+      return card;
+    }
+
+    function selectAgent(detail, actorId) {
+      selectedAgentId = actorId;
+      selectedEventId = null;
+      renderDetail(detail);
     }
 
     function payloadButton(traceId, eventId) {
@@ -863,12 +1370,31 @@
       playbackTime = Math.min(Math.max(playbackTime, 0), duration);
       scrubberEl.max = String(duration);
       scrubberEl.value = String(playbackTime);
-      playbackToggleEl.textContent = playing ? 'Pause' : 'Play';
+      playbackToggleEl.textContent = playing ? '■' : '▶';
+      playbackToggleEl.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+      playbackClockEl.textContent = `${clock(playbackTime)} / ${clock(duration)}`;
+      playbackModeEl.textContent = liveFollow ? 'streaming' : playing ? `${playbackSpeed}× replay` : 'paused history';
       jumpLiveEl.hidden = liveFollow;
     }
 
     function durationOf(detail) {
       return Math.max(0, detail?.duration_seconds || detail?.run?.duration_seconds || 0);
+    }
+
+    function clock(seconds) {
+      const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+      return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
+    }
+
+    function compactNumber(value) {
+      const number = Number(value) || 0;
+      if (number >= 1000000) return `${(number / 1000000).toFixed(1)}m`;
+      if (number >= 1000) return `${(number / 1000).toFixed(1)}k`;
+      return String(number);
+    }
+
+    function initialVisibleLimit() {
+      return window.innerWidth <= 720 ? 8 : 12;
     }
 
     function eventsAtHorizon(detail) {
@@ -888,13 +1414,38 @@
       return [...lastEvent.keys()].map((actorId) => {
         const agent = byId.get(actorId) || { id: actorId, child_ids: [] };
         const event = lastEvent.get(actorId);
+        const actorEvents = visibleEvents.filter((visibleEvent) => visibleEvent.actor.id === actorId);
         return {
           ...agent,
-          status: event.operation.status,
+          status: actorStatus(actorEvents, agent.status),
           operation: event.operation.name || agent.operation,
-          usage: usageFor(visibleEvents.filter((visibleEvent) => visibleEvent.actor.id === actorId)),
+          usage: usageFor(actorEvents),
         };
       });
+    }
+
+    function actorStatus(events, fallback) {
+      const lifecycle = [...events].reverse().find((event) => event.kind.startsWith('agent.') || event.kind.startsWith('trace.'));
+      if (lifecycle) {
+        if (lifecycle.kind.endsWith('.failed')) return 'failed';
+        if (lifecycle.kind.endsWith('.completed')) return 'done';
+      }
+      if (events.some((event) => event.operation.status === 'waiting')) return 'waiting';
+      const normalized = semanticStatus(fallback);
+      return ['done', 'failed'].includes(normalized) && playbackTime >= durationOf(currentDetail) ? normalized : 'running';
+    }
+
+    function semanticStatus(status) {
+      const value = String(status || '').toLowerCase();
+      if (['completed', 'complete', 'done', 'success', 'succeeded'].includes(value)) return 'done';
+      if (['failed', 'error', 'errored'].includes(value)) return 'failed';
+      if (value === 'waiting') return 'waiting';
+      return 'running';
+    }
+
+    function isRequestStart(event) {
+      return event.kind === 'model.request' || event.kind === 'model.request.started'
+        || event.kind === 'tool.call.started';
     }
 
     function filteredAgentsAtHorizon(detail) {
@@ -979,7 +1530,7 @@
         connectEvents();
       } catch (error) {
         statusEl.textContent = `Failed to load: ${error.message}`;
-        statusEl.className = 'warning';
+        statusEl.className = 'source-status warning';
       }
     }
 
