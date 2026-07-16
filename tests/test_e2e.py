@@ -54,16 +54,16 @@ class ServeEndToEndTests(unittest.TestCase):
                 browser = playwright.chromium.launch(channel="chrome", headless=True)
                 page = browser.new_page(viewport={"width": 1440, "height": 900})
                 page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
-                expect(page.locator("#runs > button")).to_have_count(1)
+                expect(page.locator("#run-picker-btn")).to_have_count(1)
                 self.assertEqual(round(page.locator("header.topbar").bounding_box()["height"]), 52)
-                page.locator("#runs > button").click()
+                page.locator("#run-picker-btn").click()
                 expect(page.locator(".run-menu")).to_be_visible()
-                expect(page.locator(".run-menu button")).to_have_count(2)
-                page.locator(".run-menu button").filter(has_text="trace-2").click()
-                expect(page.locator("#runs > button")).to_contain_text("trace-2")
+                expect(page.locator(".run-menu button.run-row")).to_have_count(2)
+                page.locator(".run-menu button.run-row").filter(has_text="trace-2").click()
+                expect(page.locator("#run-picker-btn")).to_contain_text("trace-2")
                 page.set_viewport_size({"width": 390, "height": 844})
-                expect(page.locator("#actor-filter")).to_be_visible()
-                expect(page.locator("#kind-filter")).to_be_visible()
+                expect(page.locator("#run-picker-btn")).to_be_visible()
+                expect(page.locator(".top-search")).to_be_hidden()
                 page.locator("#scrubber").evaluate(
                     "element => { element.value = '0'; element.dispatchEvent(new Event('input', { bubbles: true })); }"
                 )
@@ -98,23 +98,27 @@ class ServeEndToEndTests(unittest.TestCase):
                         browser = browser_type.launch(headless=True, **options)
                         page = browser.new_page()
                         page.goto(base_url, wait_until="domcontentloaded")
-                        expect(page.get_by_text("Agent Tail", exact=True)).to_be_visible()
-                        expect(page.locator(".agent-card")).to_have_count(1)
+                        expect(page.locator(".brand-name")).to_contain_text("AGENT")
+                        expect(page.locator(".node-wrap")).to_have_count(1)
                         for view in ("Tree", "Swimlane", "Sequence", "Graph"):
                             page.get_by_role("button", name=view, exact=True).click()
-                            expect(page.locator("#stage")).to_be_visible()
-                        page.locator(".agent-card").first.click()
-                        expect(page.get_by_text("Agent inspector", exact=True)).to_be_visible()
+                            expect(page.locator(".stage-content")).to_be_visible()
+                        page.locator(".node-wrap").first.click()
+                        expect(page.locator("#inspector")).to_contain_text("Focus subtree")
                         page.get_by_role("button", name="Warnings", exact=True).click()
                         expect(page.locator("#warnings-drawer")).to_be_visible()
                         page.get_by_role("button", name="Close warnings").click()
-                        page.locator("#actor-filter").fill("reviewer")
-                        expect(page.locator(".agent-card")).to_have_count(1)
+                        page.get_by_role("button", name="Swimlane", exact=True).click()
+                        page.locator("#search").fill("reviewer")
+                        expect(page.locator(".lane-row")).to_have_count(1)
+                        page.locator("#search").fill("")
                         page.locator("#scrubber").evaluate(
                             "element => { element.value = '0'; element.dispatchEvent(new Event('input', { bubbles: true })); }"
                         )
                         expect(page.get_by_role("button", name="Jump to live")).to_be_visible()
                         page.get_by_role("button", name="Jump to live").click()
+                        requests_metric = page.locator(".metric").filter(has_text="REQUESTS")
+                        requests_before = int(requests_metric.locator(".value").inner_text())
                         live_event_id = f"{browser_name}-live"
                         with source.open("a", encoding="utf-8") as handle:
                             handle.write(json.dumps(event_data(
@@ -122,8 +126,7 @@ class ServeEndToEndTests(unittest.TestCase):
                                 span_id=f"span-{browser_name}",
                                 sequence=index,
                             )) + "\n")
-                        page.get_by_role("button", name="Timeline", exact=True).click()
-                        expect(page.get_by_text(live_event_id, exact=True)).to_be_visible()
+                        expect(requests_metric).to_contain_text(str(requests_before + 1))
                         browser.close()
 
             final = _wait_for_event(base_url, "webkit-live")
@@ -137,6 +140,12 @@ class ServeEndToEndTests(unittest.TestCase):
             source = Path(directory, "run.jsonl")
             source.write_text(json.dumps(event_data(
                 payload={"token": "Bearer hidden-secret", "text": "visible"},
+                operation={
+                    "status": "running",
+                    "name": "read_file",
+                    "duration_ms": '<img id="injected" src=x onerror=alert(1)>',
+                },
+                usage={"input_tokens": 12},
             )) + "\n", encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -163,19 +172,20 @@ class ServeEndToEndTests(unittest.TestCase):
                 context = browser.new_context()
                 page = context.new_page()
                 page.goto(base_url, wait_until="domcontentloaded")
-                expect(page.get_by_text("Agent Tail", exact=True)).to_be_visible()
-                expect(page.locator(".agent-card")).to_have_count(1)
+                expect(page.locator(".brand-name")).to_contain_text("AGENT")
+                expect(page.locator(".node-wrap")).to_have_count(1)
                 self.assertNotIn("hidden-secret", page.content())
 
                 for view in ("Tree", "Swimlane", "Sequence", "Graph"):
                     page.get_by_role("button", name=view, exact=True).click()
-                    expect(page.locator("#stage")).to_be_visible()
+                    expect(page.locator(".stage-content")).to_be_visible()
 
-                page.locator(".agent-card").first.click()
-                expect(page.get_by_text("Agent inspector", exact=True)).to_be_visible()
-                page.get_by_role("button", name="Timeline", exact=True).click()
-                page.locator(".event").first.click()
-                expect(page.get_by_text("Event inspector", exact=True)).to_be_visible()
+                page.locator(".node-wrap").first.click()
+                expect(page.locator("#inspector")).to_contain_text("EVENT TIMELINE")
+                page.locator(".event-row").first.click()
+                expect(page.locator("#inspector")).to_contain_text("Event Inspector")
+                expect(page.locator("#inspector")).to_contain_text("read_file")
+                expect(page.locator("#injected")).to_have_count(0)
                 page.get_by_role("button", name="Load retained payload").click()
                 expect(page.locator("#inspector pre")).to_contain_text("visible")
                 self.assertNotIn("hidden-secret", page.locator("#inspector").inner_text())
@@ -183,9 +193,11 @@ class ServeEndToEndTests(unittest.TestCase):
                 page.get_by_role("button", name="Warnings", exact=True).click()
                 expect(page.locator("#warnings-drawer")).to_be_visible()
                 page.get_by_role("button", name="Close warnings").click()
+                page.get_by_role("button", name="Swimlane", exact=True).click()
                 page.locator("#search").fill("evt-1")
-                expect(page.locator(".event")).to_have_count(1)
+                expect(page.locator(".lane-row")).to_have_count(1)
                 page.locator("#search").fill("")
+                expect(page.locator(".lane-row")).to_have_count(1)
 
                 with source.open("a", encoding="utf-8") as handle:
                     handle.write(json.dumps(event_data(
@@ -197,9 +209,10 @@ class ServeEndToEndTests(unittest.TestCase):
                         kind="message.sent",
                         attributes={"to": "reviewer-1"},
                     )) + "\n")
-                expect(page.locator(".event")).to_have_count(2)
+                expect(page.locator(".lane-row")).to_have_count(2)
                 page.get_by_role("button", name="Sequence", exact=True).click()
-                expect(page.locator(".sequence-row")).to_contain_text("worker-1")
+                expect(page.locator("#sequence")).to_contain_text("worker-1")
+                expect(page.locator("#sequence")).to_contain_text("delegate")
 
                 page.locator("#scrubber").evaluate("element => { element.value = '0'; element.dispatchEvent(new Event('input', { bubbles: true })); }")
                 expect(page.get_by_role("button", name="Jump to live")).to_be_visible()
@@ -214,8 +227,8 @@ class ServeEndToEndTests(unittest.TestCase):
                 context.set_offline(False)
                 page.wait_for_timeout(1500)
                 page.get_by_role("button", name="Jump to live").click()
-                page.get_by_role("button", name="Timeline", exact=True).click()
-                expect(page.get_by_text("buffered", exact=True)).to_be_visible()
+                page.get_by_role("button", name="Graph", exact=True).click()
+                expect(page.locator(".node-wrap")).to_have_count(3)
 
                 with source.open("a", encoding="utf-8") as handle:
                     handle.write(json.dumps(event_data(
@@ -225,7 +238,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         kind="trace.completed",
                         operation={"status": "completed"},
                     )) + "\n")
-                expect(page.get_by_text("completed", exact=True).first).to_be_visible()
+                expect(page.locator("#run-picker-btn")).to_contain_text("completed")
                 browser.close()
 
             final = json.loads(urlopen(base_url + "/api/v1/runs/trace-1", timeout=3).read())
@@ -255,7 +268,7 @@ class ServeEndToEndTests(unittest.TestCase):
             source = Path(directory, "large.jsonl")
             lines = []
             for sequence in range(500):
-                actor_id = f"agent-{sequence % 100:03d}"
+                actor_id = f"agent-{sequence % 300:03d}"
                 lines.append(json.dumps(event_data(
                     event_id=f"evt-{sequence}",
                     span_id=f"span-{sequence}",
@@ -280,14 +293,14 @@ class ServeEndToEndTests(unittest.TestCase):
                 page = browser.new_page()
                 started = time.perf_counter()
                 page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
-                expect(page.locator(".agent-card")).to_have_count(12, timeout=10_000)
+                expect(page.locator(".node-wrap")).to_have_count(160, timeout=10_000)
                 first_useful_paint = time.perf_counter() - started
-                page.get_by_role("button", name="Show more").click()
-                expect(page.locator(".agent-card")).to_have_count(92)
-                page.get_by_role("button", name="Show more").click()
-                expect(page.locator(".agent-card")).to_have_count(100)
+                page.locator('[data-action="show-more"]').click()
+                expect(page.locator(".node-wrap")).to_have_count(200)
+                page.locator('[data-action="show-more"]').click()
+                expect(page.locator(".node-wrap")).to_have_count(240)
                 page.get_by_role("button", name="Tree", exact=True).click()
-                expect(page.locator(".agent-card")).to_have_count(100)
+                expect(page.locator(".node-wrap")).to_have_count(240)
                 browser.close()
 
         self.assertLess(first_useful_paint, 10.0)

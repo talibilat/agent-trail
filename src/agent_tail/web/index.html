@@ -7,663 +7,452 @@
   <style>
     :root {
       color-scheme: dark;
-      --bg: #090b12;
-      --panel: #111827;
-      --panel-strong: #172033;
-      --line: #283246;
-      --text: #edf2ff;
-      --muted: #98a6bf;
-      --accent: #8bd3ff;
-      --warn: #ffc46b;
+      --bg: #0a0e17;
+      --panel: #111725;
+      --panel2: #0d1320;
+      --stage: #080b12;
+      --grid: #141c2e;
+      --line: #1e2940;
+      --text: #e6edf7;
+      --dim: #8896ad;
+      --faint: #5a6883;
+      --run: #33c9ff;
+      --ok: #37e39b;
+      --warn: #ffb454;
+      --err: #ff5d6c;
+      --idle: #5a6883;
+      --accent: #7aa2ff;
+      --accent2: #a7c0ff;
+      --orch: #b18cff;
     }
-
+    body.theme-light {
+      color-scheme: light;
+      --bg: #eef1f7;
+      --panel: #ffffff;
+      --panel2: #f3f5fa;
+      --stage: #f7f9fd;
+      --grid: #e2e8f2;
+      --line: #dbe2ee;
+      --text: #0f1626;
+      --dim: #5a6478;
+      --faint: #93a0b5;
+      --run: #0a8bd6;
+      --ok: #159a63;
+      --warn: #c77d17;
+      --err: #dc3b4c;
+      --idle: #9aa6ba;
+      --accent: #2f6bde;
+      --accent2: #1c50b8;
+      --orch: #7d4be0;
+    }
     * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; overflow: hidden; }
     body {
-      margin: 0;
-      min-height: 100vh;
-      background: radial-gradient(circle at 15% 0%, #1d2a44 0, transparent 35%), var(--bg);
+      background: var(--bg);
       color: var(--text);
-      font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    body.light-mode { filter: invert(.88) hue-rotate(180deg); }
-    body.light-mode img, body.light-mode svg { filter: invert(1) hue-rotate(180deg); }
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      padding: 1rem 1.25rem;
-      border-bottom: 1px solid var(--line);
-      background: rgba(9, 11, 18, 0.82);
-      position: sticky;
-      top: 0;
-      backdrop-filter: blur(12px);
-    }
-    h1, h2 { margin: 0; }
-    h1 { font-size: 1rem; letter-spacing: 0.12em; text-transform: uppercase; }
-    h2 { font-size: 0.9rem; color: var(--muted); font-weight: 600; }
-    main {
-      display: grid;
-      grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
-      gap: 1rem;
-      padding: 1rem;
-    }
-    .panel {
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: color-mix(in srgb, var(--panel) 88%, transparent);
-      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
-      overflow: hidden;
-    }
-    .panel-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.75rem;
-      padding: 0.85rem 1rem;
-      border-bottom: 1px solid var(--line);
-      background: var(--panel-strong);
-    }
-    .runs { display: grid; gap: 0.5rem; padding: 0.75rem; }
-    button {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: #0d1322;
-      color: var(--text);
-      cursor: pointer;
-      padding: 0.75rem;
-      text-align: left;
-    }
-    button[aria-current="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-    .metric-row {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.75rem;
-      padding: 1rem;
-    }
-    .metric {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 0.85rem;
-      background: #0d1322;
-    }
-    .metric strong { display: block; font-size: 1.45rem; }
-    .metric span, .muted { color: var(--muted); }
-    .view-tabs, .view-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      padding: 0 1rem 1rem;
-    }
-    .view-tabs button, .view-toolbar button {
-      width: auto;
-      padding: 0.5rem 0.7rem;
-    }
-    .view-stage {
-      min-height: 420px;
-      margin: 0 1rem 1rem;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: linear-gradient(135deg, rgba(139, 211, 255, 0.08), rgba(13, 19, 34, 0.92));
-      overflow: hidden;
-      position: relative;
-    }
-    .view-canvas {
-      position: relative;
-      width: 1200px;
-      min-height: 700px;
-      transform-origin: 0 0;
-    }
-    .edge-layer {
-      inset: 0;
-      overflow: visible;
-      position: absolute;
-      width: 1200px;
-      height: 700px;
-    }
-    .agent-card {
-      position: absolute;
-      width: 160px;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: rgba(13, 19, 34, 0.96);
-      padding: 0.75rem;
-      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
-    }
-    .agent-card[aria-current="true"] {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 1px var(--accent) inset, 0 12px 34px rgba(139, 211, 255, 0.18);
-    }
-    .agent-card .agent-id { display: block; font-weight: 700; }
-    .agent-card .agent-meta { color: var(--muted); font-size: 0.78rem; }
-    .selection {
-      padding: 0 1rem 1rem;
-      color: var(--muted);
-    }
-    .dense-note {
-      position: absolute;
-      right: 1rem;
-      top: 1rem;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 0.35rem 0.6rem;
-      background: rgba(9, 11, 18, 0.82);
-      color: var(--warn);
-    }
-    .playback {
-      display: grid;
-      grid-template-columns: auto 1fr auto auto;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0 1rem 1rem;
-    }
-    .playback button, .playback select { width: auto; padding: 0.5rem 0.7rem; }
-    .playback input { width: 100%; accent-color: var(--accent); }
-    .filters {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.5rem;
-      padding: 0 1rem 1rem;
-    }
-    .filters input {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #0d1322;
-      color: var(--text);
-      padding: 0.55rem;
-    }
-    .inspector, .warnings-drawer {
-      margin: 0 1rem 1rem;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: rgba(13, 19, 34, 0.92);
-      padding: 1rem;
-    }
-    .inspector dl { display: grid; grid-template-columns: 140px 1fr; gap: 0.35rem 0.75rem; margin: 0; }
-    .inspector dt { color: var(--muted); }
-    .inspector dd { margin: 0; word-break: break-word; }
-    .warnings-drawer[hidden] { display: none; }
-    .drawer-item { border-top: 1px solid var(--line); padding: 0.6rem 0; }
-    .swimlane, .sequence-view { display: grid; gap: 0.75rem; padding: 1rem; }
-    .lane, .sequence-row {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: rgba(13, 19, 34, 0.88);
-      padding: 0.75rem;
-    }
-    .lane-track {
-      position: relative;
-      height: 26px;
-      margin-top: 0.5rem;
-      border-radius: 999px;
-      background: #080d18;
-      overflow: hidden;
-    }
-    .lane-event {
-      position: absolute;
-      top: 5px;
-      width: 16px;
-      height: 16px;
-      border-radius: 999px;
-      background: var(--accent);
-      border: 2px solid #0d1322;
-    }
-    .sequence-row strong { color: var(--accent); }
-    .timeline { display: grid; gap: 0.65rem; padding: 1rem; }
-    .findings { display: grid; gap: 0.5rem; padding: 0 1rem 1rem; }
-    .finding {
-      border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
-      border-radius: 12px;
-      padding: 0.65rem;
-      background: rgba(255, 196, 107, 0.08);
-      color: var(--warn);
-    }
-    .event {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 0.75rem;
-      background: #0b111e;
-    }
-    .event-top {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      gap: 0.5rem;
-      margin-bottom: 0.35rem;
-    }
-    code { color: var(--accent); }
-    .warning { color: var(--warn); }
-    pre {
-      white-space: pre-wrap;
-      word-break: break-word;
-      margin: 0.5rem 0 0;
-      color: var(--muted);
-      font-size: 0.78rem;
-    }
-
-    /* Flight recorder composition from the supplied orchestration design. */
-    html, body { height: 100%; overflow: hidden; }
-    body {
-      min-height: 100%;
-      background: #080b12;
-      font-family: "IBM Plex Sans", "SF Pro Text", system-ui, sans-serif;
+      font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
     }
     button, input, select { font: inherit; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent2); }
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
+    ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    @keyframes at-pulse { 0% { box-shadow: 0 0 0 0 var(--glow); } 70% { box-shadow: 0 0 0 10px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+    @keyframes at-dash { to { stroke-dashoffset: -16; } }
+    @keyframes at-blink { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+    input[type=range] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 3px; background: var(--line); outline: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--run); cursor: pointer; box-shadow: 0 0 8px var(--run); }
+    input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: none; border-radius: 50%; background: var(--run); cursor: pointer; }
+
+    .at-root { display: flex; flex-direction: column; width: 100vw; height: 100vh; }
+
+    /* ===== TOP BAR ===== */
     header.topbar {
       position: relative;
       z-index: 30;
       height: 52px;
       padding: 0 16px;
-      border-bottom: 1px solid #1e2940;
-      background: #111725;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
       display: flex;
-      flex-direction: row;
       align-items: center;
       gap: 14px;
-      backdrop-filter: none;
+      flex: none;
     }
     .brand { display: flex; align-items: center; gap: 9px; flex: none; }
     .brand-mark {
-      width: 22px;
-      height: 22px;
-      border-radius: 5px;
-      display: grid;
-      place-items: center;
-      background: linear-gradient(135deg, #b18cff, #33c9ff);
-      color: #080b12;
-      font: 700 10px "IBM Plex Mono", ui-monospace, monospace;
+      width: 22px; height: 22px; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, var(--orch), var(--run));
+      color: #0a0e17; font: 600 12px "IBM Plex Mono", monospace;
     }
-    .brand-name { font-size: 14px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; }
-    .brand-badge {
-      border: 1px solid #1e2940;
-      border-radius: 4px;
-      padding: 2px 6px;
-      color: #5a6883;
-      font: 500 9px "IBM Plex Mono", ui-monospace, monospace;
-      letter-spacing: .5px;
+    .brand-name { font: 700 14px "IBM Plex Sans", sans-serif; letter-spacing: .3px; color: var(--text); }
+    .brand-badge { font: 500 10px "IBM Plex Mono", monospace; color: var(--faint); border: 1px solid var(--line); padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+    .top-divider { width: 1px; height: 24px; background: var(--line); flex: none; }
+
+    .run-picker { position: relative; }
+    .run-picker-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--panel2); border: 1px solid var(--line); border-radius: 7px;
+      padding: 6px 10px; cursor: pointer; color: var(--text); max-width: 320px;
     }
-    .top-divider { width: 1px; height: 24px; background: #1e2940; }
-    .run-picker { position: relative; width: min(310px, 28vw); }
-    .run-picker-label { color: #5a6883; font: 600 8px "IBM Plex Mono", monospace; letter-spacing: 1px; }
-    .runs { position: relative; display: block; padding: 0; }
-    .runs button {
-      display: block;
-      width: 100%;
-      padding: 5px 10px;
-      border-color: #1e2940;
-      border-radius: 7px;
-      background: #0d1320;
-      line-height: 1.2;
+    .run-picker-btn .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+    .run-picker-btn .title { font: 600 12px "IBM Plex Sans", sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .run-picker-btn .meta { font: 400 10px "IBM Plex Mono", monospace; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .run-picker-btn .chevron { color: var(--dim); font-size: 10px; flex: none; }
+    .run-menu {
+      position: absolute; top: 42px; left: 0; width: 300px; max-height: min(420px, calc(100vh - 70px));
+      overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
+      padding: 6px; box-shadow: 0 18px 40px rgba(0,0,0,.5); z-index: 40;
     }
-    .runs button strong { font-size: 11px; }
-    .runs button .muted { font: 400 9px "IBM Plex Mono", monospace; }
-    .run-menu { position: absolute; top: 40px; left: 0; z-index: 60; width: 300px; max-height: min(420px,calc(100vh - 70px)); overflow-y: auto; padding: 6px; border: 1px solid #1e2940; border-radius: 9px; background: #111725; box-shadow: 0 18px 40px rgba(0,0,0,.5); }
     .run-menu[hidden] { display: none; }
-    .run-menu button { margin-bottom: 4px; }
-    .run-count { color: #5a6883; font: 500 9px "IBM Plex Mono", monospace; }
+    .run-menu-label { font: 600 9px "IBM Plex Mono", monospace; color: var(--faint); letter-spacing: 1px; padding: 6px 8px 4px; }
+    .run-row {
+      display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 8px;
+      border: none; border-radius: 7px; background: transparent; cursor: pointer; margin-bottom: 2px; text-align: left;
+    }
+    .run-row[aria-current="true"] { background: var(--panel2); }
+    .run-row .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+    .run-row .body { flex: 1; min-width: 0; }
+    .run-row .title { font: 600 12px "IBM Plex Sans", sans-serif; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .run-row .meta { font: 400 10px "IBM Plex Mono", monospace; color: var(--dim); }
+    .run-row .badge { font: 600 8px "IBM Plex Mono", monospace; padding: 2px 5px; border-radius: 4px; flex: none; border: 1px solid; }
+
     .top-spacer { flex: 1; }
     .top-search {
-      width: 220px;
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      padding: 6px 10px;
-      border: 1px solid #1e2940;
-      border-radius: 7px;
-      background: #0d1320;
+      width: 220px; display: flex; align-items: center; gap: 7px;
+      padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel2);
     }
-    .top-search span { color: #5a6883; }
-    .top-search input {
-      min-width: 0;
-      width: 100%;
-      border: 0;
-      outline: 0;
-      background: transparent;
-      color: #e6edf7;
-      font: 400 11px "IBM Plex Mono", monospace;
+    .top-search span { color: var(--faint); font-size: 12px; }
+    .top-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font: 400 12px "IBM Plex Mono", monospace; }
+    .warning-button {
+      display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 7px;
+      padding: 6px 11px; cursor: pointer; background: var(--panel2); color: var(--text);
     }
-    .warning-button, .theme-button {
-      width: auto;
-      padding: 7px 10px;
-      border-color: #1e2940;
-      border-radius: 7px;
-      background: #0d1320;
-      font-size: 11px;
-      white-space: nowrap;
+    .warning-button.has-warnings { background: rgba(255,180,84,.1); border-color: var(--warn); }
+    .warning-button .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex: none; }
+    .warning-button .count { font: 600 12px "IBM Plex Sans", sans-serif; }
+    .warning-button .label { font: 500 11px "IBM Plex Sans", sans-serif; opacity: .8; }
+    .theme-button {
+      width: 34px; height: 34px; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line);
+      cursor: pointer; color: var(--dim); font-size: 14px; flex: none;
     }
-    .warning-button { color: #ffb454; }
-    .warning-button::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: #ffb454; }
-    .theme-button { width: 34px; color: #8896ad; text-align: center; }
-    .source-status { color: #ffb454; font: 600 10px "IBM Plex Mono", monospace; white-space: nowrap; }
-    .metric-row {
-      height: 74px;
-      padding: 0;
-      display: flex;
-      gap: 0;
-      overflow-x: auto;
-      border-bottom: 1px solid #1e2940;
-      background: #0d1320;
-    }
+
+    /* ===== METRICS STRIP ===== */
+    .metric-row { display: flex; gap: 0; height: 74px; border-bottom: 1px solid var(--line); background: var(--panel2); flex: none; overflow-x: auto; }
     .metric {
-      min-width: 155px;
-      flex: 1 0 155px;
-      border: 0;
-      border-right: 1px solid #1e2940;
-      border-radius: 0;
-      padding: 13px 16px 10px;
-      background: transparent;
+      flex: 1; min-width: 150px; padding: 12px 16px; border-right: 1px solid var(--line);
+      display: flex; flex-direction: column; justify-content: center;
     }
-    .metric strong { color: #33c9ff; font: 600 20px "IBM Plex Mono", monospace; line-height: 1.1; }
-    .metric:nth-child(2) strong { color: #37e39b; }
-    .metric:nth-child(3) strong { color: #b18cff; }
-    .metric:nth-child(4) strong { color: #ffb454; }
-    .metric span { display: block; margin-top: 4px; color: #5a6883; font: 500 9px "IBM Plex Mono", monospace; letter-spacing: .8px; text-transform: uppercase; }
-    main.workspace {
-      height: calc(100vh - 126px);
-      min-height: 0;
-      padding: 0;
-      display: flex;
-      gap: 0;
-    }
-    .stage-shell {
-      min-width: 0;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background: #080b12;
-      overflow: hidden;
-    }
-    .stage-head {
-      height: 48px;
-      flex: none;
-      padding: 8px 14px;
-      border-bottom: 1px solid #1e2940;
-      background: #111725;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .view-tabs { display: flex; gap: 4px; padding: 0; flex-wrap: nowrap; }
+    .metric .label { font: 500 9.5px "IBM Plex Mono", monospace; color: var(--faint); letter-spacing: .8px; }
+    .metric .value-row { display: flex; align-items: baseline; gap: 6px; margin-top: 5px; }
+    .metric .value { font: 600 22px "IBM Plex Mono", monospace; line-height: 1; }
+    .metric .unit { font: 500 11px "IBM Plex Sans", sans-serif; color: var(--dim); }
+    .metric .sub { font: 400 10px "IBM Plex Mono", monospace; color: var(--faint); margin-top: 3px; }
+
+    /* ===== BODY ===== */
+    main.workspace { flex: 1; display: flex; min-height: 0; }
+
+    .stage-shell { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+    .stage-head { display: flex; align-items: center; gap: 4px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); flex: none; }
+    .view-tabs { display: flex; align-items: center; gap: 4px; }
     .view-tabs button {
-      width: auto;
-      padding: 6px 10px;
-      border: 1px solid transparent;
-      border-radius: 7px;
-      background: transparent;
-      color: #8896ad;
-      font-size: 11px;
+      display: flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 8px; cursor: pointer;
+      font: 600 12px "IBM Plex Sans", sans-serif; border: 1px solid transparent; background: transparent; color: var(--dim);
     }
-    .view-tabs button[aria-current="true"] { border-color: #7aa2ff; background: rgba(122,162,255,.12); color: #a7c0ff; box-shadow: none; }
+    .view-tabs button[aria-current="true"] { border-color: var(--accent); background: rgba(122,162,255,.12); color: var(--accent); }
+    .view-tabs button .icon { font-size: 13px; }
     .stage-head-spacer { flex: 1; }
-    .filters { display: flex; gap: 5px; padding: 0; width: min(360px, 35vw); }
-    .filters input {
-      min-width: 0;
-      height: 30px;
-      padding: 5px 8px;
-      border-color: #1e2940;
-      border-radius: 6px;
-      background: #0d1320;
-      font: 400 9px "IBM Plex Mono", monospace;
+    .focus-banner {
+      display: flex; align-items: center; gap: 6px; background: rgba(122,162,255,.12); border: 1px solid var(--accent);
+      color: var(--accent); border-radius: 7px; padding: 6px 11px; cursor: pointer; font: 600 11px "IBM Plex Sans", sans-serif;
     }
-    .view-toolbar { display: flex; gap: 4px; padding: 0; flex-wrap: nowrap; }
-    .view-toolbar button { width: auto; padding: 6px 8px; border-radius: 6px; border-color: #1e2940; background: #0d1320; color: #8896ad; font-size: 10px; }
-    .view-toolbar button[data-action^="pan-"] { display: none; }
+    .zoom-label { font: 400 10px "IBM Plex Mono", monospace; color: var(--faint); margin-left: 8px; }
+    .reset-btn { background: var(--panel2); border: 1px solid var(--line); color: var(--dim); border-radius: 7px; padding: 6px 10px; cursor: pointer; font: 500 11px "IBM Plex Sans", sans-serif; margin-left: 8px; }
+
     .stage-content { position: relative; min-height: 0; flex: 1; overflow: hidden; }
     .view-stage {
-      position: absolute;
-      inset: 0;
-      min-height: 0;
-      margin: 0;
-      border: 0;
-      border-radius: 0;
-      overflow: hidden;
-      background-color: #080b12;
-      background-image: radial-gradient(circle at 1px 1px, #141c2e 1px, transparent 0);
+      position: absolute; inset: 0; overflow: hidden; background-color: var(--stage);
+      background-image: radial-gradient(circle at 1px 1px, var(--grid) 1px, transparent 0);
       background-size: 26px 26px;
     }
-    .view-canvas { min-height: 100%; }
-    .agent-card {
-      width: 132px;
-      min-height: 50px;
-      padding: 6px 8px 6px 44px;
-      border-color: transparent;
-      border-radius: 8px;
-      background: rgba(13,19,32,.72);
-      box-shadow: none;
-      overflow: visible;
-    }
-    .agent-card::before {
-      content: "";
-      position: absolute;
-      left: 7px;
-      top: 8px;
-      width: 28px;
-      height: 28px;
-      border: 2px solid #33c9ff;
-      border-radius: 50%;
-      background: #111725;
-      box-shadow: 0 0 0 4px rgba(51,201,255,.08), 0 0 14px rgba(51,201,255,.18);
-    }
-    .agent-card.status-waiting::before { border-color: #ffb454; box-shadow: 0 0 0 4px rgba(255,180,84,.08), 0 0 14px rgba(255,180,84,.18); }
-    .agent-card.status-done::before { border-color: #37e39b; box-shadow: 0 0 0 4px rgba(55,227,155,.08), 0 0 14px rgba(55,227,155,.18); }
-    .agent-card.status-failed::before { border-color: #ff5d6c; box-shadow: 0 0 0 4px rgba(255,93,108,.08), 0 0 14px rgba(255,93,108,.18); }
-    .agent-card.status-stalled::before { border-color: #ffb454; animation: node-pulse 1.6s ease infinite; }
-    .agent-card.role-orchestrator::before { border-color: #b18cff; box-shadow: 0 0 0 4px rgba(177,140,255,.1), 0 0 14px rgba(177,140,255,.22); }
-    @keyframes node-pulse { 50% { box-shadow: 0 0 0 8px rgba(255,180,84,0); } }
-    .agent-card[aria-current="true"] { border-color: #7aa2ff; background: rgba(122,162,255,.12); box-shadow: none; }
-    .agent-card .agent-id { font: 600 10px "IBM Plex Sans", sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .agent-card .agent-meta { display: block; font: 400 8px "IBM Plex Mono", monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .selection, .findings { display: none; }
-    .timeline { position: absolute; inset: 0; margin: 0; padding: 14px; overflow: auto; background: #080b12; }
-    .timeline[hidden], .view-stage[hidden] { display: none !important; }
-    .event { border-color: #1e2940; border-radius: 8px; background: #0d1320; }
-    .swimlane, .sequence-view { position: absolute; inset: 0; overflow: auto; padding: 18px; background: #080b12; }
-    .lane, .sequence-row { border-color: #1e2940; border-radius: 8px; background: #0d1320; }
-    .transport {
-      height: 60px;
-      flex: none;
-      padding: 0 16px;
-      border-top: 1px solid #1e2940;
-      background: #111725;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .transport-clock { width: 112px; text-align: center; }
-    .transport-clock strong { display: block; color: #e6edf7; font: 600 12px "IBM Plex Mono", monospace; }
-    .transport-clock span { display: block; margin-top: 2px; color: #5a6883; font: 400 8px "IBM Plex Mono", monospace; text-transform: uppercase; }
-    .playback { display: contents; }
-    .playback button, .playback select { width: auto; padding: 6px 9px; border-color: #1e2940; border-radius: 7px; background: #0d1320; font-size: 10px; }
-    #playback-toggle { width: 38px; height: 38px; padding: 0; border-radius: 9px; background: #33c9ff; color: #080b12; text-align: center; font-weight: 700; }
-    #scrubber { flex: 1; accent-color: #33c9ff; }
-    #speed { color: #e6edf7; }
-    #jump-live { color: #8896ad; }
-    .inspector-shell {
-      width: 376px;
-      flex: none;
-      overflow: auto;
-      border-left: 1px solid #1e2940;
-      background: #111725;
-    }
-    .inspector {
-      min-height: 100%;
-      margin: 0;
-      padding: 16px;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-    }
-    .inspector h2 { padding-bottom: 12px; border-bottom: 1px solid #1e2940; color: #e6edf7; font-size: 14px; }
-    .inspector-header { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid #1e2940; }
-    .inspector-avatar { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border: 2px solid #33c9ff; border-radius: 50%; color: #33c9ff; font: 700 11px "IBM Plex Mono", monospace; }
-    .inspector-title { flex: 1; min-width: 0; }
-    .inspector-title strong { display: block; font-size: 14px; }
-    .inspector-title span { color: #8896ad; font: 400 9px "IBM Plex Mono", monospace; }
-    .status-pill { padding: 3px 7px; border: 1px solid #37e39b; border-radius: 999px; color: #37e39b; font: 600 9px "IBM Plex Mono", monospace; }
-    .inspector-block { padding: 14px 0; border-bottom: 1px solid #1e2940; }
+    .view-stage[hidden] { display: none !important; }
+    .view-canvas { position: absolute; left: 0; top: 0; }
+    .edge-layer { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
+    .edge-layer path { fill: none; }
+    .unresolved-node { border: 1px dashed var(--warn); border-radius: 8px; background: var(--panel); color: var(--warn); padding: 5px 8px; font: 500 9px "IBM Plex Mono", monospace; transform: translate(-50%, -50%); }
+
+    .node-wrap { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; transition: opacity .25s; background: none; border: none; padding: 0; }
+    .node-dot { position: relative; display: flex; align-items: center; justify-content: center; background: var(--panel); }
+    .node-ring { position: absolute; inset: -2px; }
+    .node-glyph { font: 600 11px "IBM Plex Mono", monospace; }
+    .node-label { text-align: center; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+    .node-label .id { font: 600 11px "IBM Plex Sans", sans-serif; color: var(--text); white-space: nowrap; }
+    .node-label .role { font: 400 9px "IBM Plex Mono", monospace; color: var(--dim); white-space: nowrap; }
+    .node-warn { position: absolute; top: -6px; right: -6px; font: 600 8px "IBM Plex Mono", monospace; color: #0a0e17; background: var(--warn); padding: 2px 5px; border-radius: 5px; box-shadow: 0 0 8px var(--warn); }
+
+    .dense-note { position: absolute; right: 14px; top: 14px; z-index: 8; font: 500 9px "IBM Plex Mono", monospace; color: var(--faint); border: 1px solid var(--line); padding: 4px 8px; border-radius: 999px; background: var(--panel); cursor: pointer; }
+
+    .swimlane, .sequence-view { position: absolute; inset: 0; overflow: auto; }
+    .swimlane-inner { position: relative; min-width: 920px; padding: 0 0 20px; }
+    .time-axis { position: sticky; top: 0; height: 26px; display: flex; background: var(--panel); border-bottom: 1px solid var(--line); z-index: 5; margin-left: 150px; }
+    .time-tick { flex: none; font: 400 9px "IBM Plex Mono", monospace; color: var(--faint); padding: 8px 0 0 4px; border-left: 1px solid var(--line); }
+    .lane-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); cursor: pointer; background: transparent; width: 100%; text-align: left; border-left: none; border-right: none; border-top: none; }
+    .lane-row[aria-current="true"] { background: rgba(122,162,255,.06); }
+    .lane-head { width: 150px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-right: 1px solid var(--line); background: var(--panel); }
+    .lane-head .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+    .lane-head .id { font: 600 11px "IBM Plex Sans", sans-serif; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lane-head .role { font: 400 9px "IBM Plex Mono", monospace; color: var(--dim); }
+    .lane-track { position: relative; flex: 1; height: 38px; }
+    .lane-span { position: absolute; top: 11px; height: 16px; border-radius: 3px; opacity: .85; }
+    .playhead { position: absolute; top: 26px; bottom: 0; width: 2px; background: var(--run); box-shadow: 0 0 8px var(--run); z-index: 6; pointer-events: none; }
+
+    .sequence-inner { position: relative; padding: 34px 20px 30px; min-height: 100%; }
+    .seq-col-head { position: absolute; top: 6px; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; white-space: nowrap; }
+    .seq-col-head .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+    .seq-col-head .id { font: 600 10px "IBM Plex Sans", sans-serif; color: var(--text); }
+    .seq-line { position: absolute; top: 34px; bottom: 20px; width: 1px; background: var(--line); }
+    .seq-arrow-label { position: absolute; font: 400 9px "IBM Plex Mono", monospace; color: var(--dim); background: var(--stage); padding: 1px 4px; }
+    .seq-empty { padding: 20px; color: var(--faint); font: 400 11px "IBM Plex Mono", monospace; }
+
+    .legend { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; z-index: 8; }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-item .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    .legend-item span.label { font: 500 10px "IBM Plex Sans", sans-serif; color: var(--dim); }
+
+    /* ===== TRANSPORT ===== */
+    .transport { height: 60px; flex: none; padding: 0 16px; border-top: 1px solid var(--line); background: var(--panel); display: flex; align-items: center; gap: 14px; }
+    #playback-toggle { width: 38px; height: 38px; border-radius: 9px; border: 1px solid var(--line); background: var(--run); color: #0a0e17; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; flex: none; }
+    .transport-clock { display: flex; flex-direction: column; gap: 2px; align-items: center; width: 104px; flex: none; }
+    .transport-clock strong { font: 600 13px "IBM Plex Mono", monospace; color: var(--text); }
+    .transport-clock span { font: 400 9px "IBM Plex Mono", monospace; color: var(--faint); }
+    #scrubber { flex: 1; }
+    .speed-group { display: flex; gap: 6px; align-items: center; flex: none; }
+    .speed-group button { background: var(--panel2); color: var(--dim); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; cursor: pointer; font: 600 10px "IBM Plex Mono", monospace; }
+    .speed-group button[aria-current="true"] { background: var(--accent); color: #0a0e17; }
+    #jump-live { display: flex; align-items: center; background: var(--panel2); border: 1px solid var(--line); color: var(--dim); border-radius: 7px; padding: 7px 11px; cursor: pointer; font: 600 11px "IBM Plex Mono", monospace; flex: none; }
+    #jump-live.live { background: rgba(55,227,155,.12); border-color: var(--ok); color: var(--ok); }
+    #jump-live .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--idle); display: inline-block; margin-right: 5px; }
+    #jump-live.live .dot { background: var(--ok); }
+
+    /* ===== INSPECTOR ===== */
+    .inspector-shell { width: 376px; flex: none; border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; overflow-x: hidden; }
+    .inspector-header { padding: 16px 16px 14px; border-bottom: 1px solid var(--line); }
+    .inspector-header .row { display: flex; align-items: center; gap: 10px; }
+    .inspector-avatar { flex: none; display: flex; align-items: center; justify-content: center; font: 600 14px "IBM Plex Mono", monospace; }
+    .inspector-title-block { flex: 1; min-width: 0; }
+    .inspector-title-block strong { display: block; font: 600 15px "IBM Plex Sans", sans-serif; color: var(--text); }
+    .inspector-title-block span { font: 400 11px "IBM Plex Mono", monospace; color: var(--dim); }
+    .status-pill { font: 600 10px "IBM Plex Mono", monospace; text-transform: uppercase; padding: 3px 8px; border-radius: 5px; border: 1px solid; }
+    .inspector-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .inspector-actions .focus-btn { flex: 1; background: rgba(122,162,255,.12); border: 1px solid var(--accent); color: var(--accent); border-radius: 7px; padding: 7px; cursor: pointer; font: 600 11px "IBM Plex Sans", sans-serif; }
+    .inspector-actions .close-btn { background: var(--panel2); border: 1px solid var(--line); color: var(--dim); border-radius: 7px; padding: 7px 11px; cursor: pointer; font: 600 11px "IBM Plex Sans", sans-serif; }
+    .inspector-block { padding: 14px 16px; border-bottom: 1px solid var(--line); }
     .inspector-block:last-child { border-bottom: 0; }
-    .inspector-label { margin-bottom: 9px; color: #5a6883; font: 600 9px "IBM Plex Mono", monospace; letter-spacing: 1px; }
-    .usage-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
-    .usage-card { padding: 8px; border: 1px solid #1e2940; border-radius: 8px; background: #0d1320; }
-    .usage-card span { display: block; color: #8896ad; font: 400 8px "IBM Plex Mono", monospace; }
-    .usage-card strong { display: block; margin-top: 3px; color: #33c9ff; font: 600 14px "IBM Plex Mono", monospace; }
-    .relationship-row, .inspector-event { display: flex; align-items: center; gap: 8px; margin-top: 7px; color: #8896ad; font: 400 10px "IBM Plex Mono", monospace; }
-    .relationship-row button, .inspector-event { width: auto; padding: 4px 7px; border-color: #1e2940; border-radius: 6px; background: #0d1320; color: #e6edf7; }
-    .inspector dl { grid-template-columns: 106px 1fr; gap: 8px 10px; font: 400 10px "IBM Plex Mono", monospace; }
-    .inspector dt { color: #5a6883; }
-    .inspector dd { color: #e6edf7; }
-    .warnings-drawer {
-      position: fixed;
-      z-index: 80;
-      top: 0;
-      right: 0;
-      bottom: 0;
-      width: 420px;
-      margin: 0;
-      overflow: auto;
-      border: 0;
-      border-left: 1px solid #1e2940;
-      border-radius: 0;
-      background: #111725;
-      box-shadow: -20px 0 50px rgba(0,0,0,.5);
-    }
+    .inspector-label { font: 600 9.5px "IBM Plex Mono", monospace; color: var(--faint); letter-spacing: 1px; margin-bottom: 10px; }
+    .usage-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .usage-card { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 9px; }
+    .usage-card .k { font: 400 9px "IBM Plex Mono", monospace; color: var(--dim); }
+    .usage-card .v { font: 600 16px "IBM Plex Mono", monospace; margin-top: 3px; }
+    .spark-label { font: 400 9px "IBM Plex Mono", monospace; color: var(--faint); margin: 12px 0 6px; }
+    .spark-row { display: flex; align-items: flex-end; gap: 3px; height: 44px; }
+    .spark-bar { flex: 1; border-radius: 2px; }
+    .orch-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .orch-row.children { align-items: flex-start; }
+    .orch-row .tag { font: 400 10px "IBM Plex Mono", monospace; color: var(--dim); width: 64px; flex: none; }
+    .orch-row.children .tag { padding-top: 4px; }
+    .chip-btn { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; cursor: pointer; font: 500 11px "IBM Plex Mono", monospace; display: inline-flex; align-items: center; gap: 5px; }
+    .chip-btn.parent { color: var(--accent); }
+    .chip-btn.child { color: var(--text); }
+    .chip-btn .dot { width: 6px; height: 6px; border-radius: 50%; }
+    .children-wrap { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+    .root-label { font: 500 11px "IBM Plex Mono", monospace; color: var(--orch); }
+    .leaf-label { font: 400 11px "IBM Plex Mono", monospace; color: var(--faint); padding-top: 4px; }
+    .warn-title { font: 600 9.5px "IBM Plex Mono", monospace; color: var(--warn); letter-spacing: 1px; margin-bottom: 10px; }
+    .agent-warn-card { border-radius: 8px; padding: 9px 11px; margin-bottom: 7px; border: 1px solid rgba(255,180,84,.35); background: rgba(255,180,84,.08); }
+    .agent-warn-card .head { display: flex; gap: 7px; align-items: center; margin-bottom: 4px; }
+    .agent-warn-card .code { font: 600 10px "IBM Plex Mono", monospace; color: var(--warn); background: rgba(255,180,84,.18); padding: 2px 6px; border-radius: 4px; }
+    .agent-warn-card .heuristic { font: 400 10px "IBM Plex Mono", monospace; color: var(--faint); }
+    .agent-warn-card .summary { font: 400 11.5px/1.5 "IBM Plex Sans", sans-serif; color: var(--text); }
+    .timeline-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .timeline-count { font: 400 10px "IBM Plex Mono", monospace; color: var(--dim); }
+    .event-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: none; border-radius: 7px; padding: 7px 8px; cursor: pointer; }
+    .event-rail { width: 3px; align-self: stretch; border-radius: 3px; flex: none; }
+    .event-main { flex: 1; min-width: 0; }
+    .event-main .head { display: flex; align-items: center; gap: 7px; }
+    .event-kind-chip { font: 600 8.5px "IBM Plex Mono", monospace; color: var(--dim); background: var(--panel2); padding: 2px 5px; border-radius: 4px; white-space: nowrap; flex: none; }
+    .event-name { font: 600 11px "IBM Plex Sans", sans-serif; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .event-meta { font: 400 9.5px "IBM Plex Mono", monospace; color: var(--faint); margin-top: 2px; }
+    .event-status-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+
+    .event-detail-head { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+    .back-btn { background: var(--panel2); border: 1px solid var(--line); color: var(--dim); border-radius: 6px; padding: 5px 9px; cursor: pointer; font: 600 11px "IBM Plex Sans", sans-serif; flex: none; }
+    .event-detail-head .titles { flex: 1; min-width: 0; }
+    .event-detail-head .titles strong { display: block; font: 600 13px "IBM Plex Sans", sans-serif; color: var(--text); }
+    .event-detail-head .titles span { font: 400 10px "IBM Plex Mono", monospace; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+    .kind-chip { font: 600 9px "IBM Plex Mono", monospace; color: var(--run); background: rgba(51,201,255,.12); padding: 3px 7px; border-radius: 5px; white-space: nowrap; flex: none; }
+    .field-grid { display: grid; grid-template-columns: auto 1fr; gap: 7px 12px; }
+    .field-grid .k { font: 400 10.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .field-grid .v { font: 500 10.5px "IBM Plex Mono", monospace; word-break: break-all; }
+    .usage-inline-row { display: flex; gap: 16px; }
+    .usage-inline-row .k { font: 400 9px "IBM Plex Mono", monospace; color: var(--dim); }
+    .usage-inline-row .v { font: 600 15px "IBM Plex Mono", monospace; }
+    .io-title { font: 600 9.5px "IBM Plex Mono", monospace; letter-spacing: 1px; margin-bottom: 8px; }
+    .io-title.in { color: var(--run); }
+    .io-title.out { color: var(--ok); }
+    .io-pre { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 400 11px/1.55 "IBM Plex Mono", monospace; color: var(--text); white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow: auto; margin: 0; }
+    .io-truncated { font: 400 10px "IBM Plex Mono", monospace; color: var(--faint); margin-top: 6px; }
+    .io-load-btn { margin-top: 6px; background: transparent; border: 1px solid var(--line); color: var(--accent); border-radius: 6px; padding: 4px 8px; cursor: pointer; font: 500 10px "IBM Plex Mono", monospace; }
+
+    .overview-desc { font: 400 12.5px/1.7 "IBM Plex Sans", sans-serif; color: var(--dim); }
+    .overview-desc .em { color: var(--text); }
+    .overview-rows { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+    .overview-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; }
+    .overview-row .k { font: 500 11px "IBM Plex Sans", sans-serif; color: var(--dim); }
+    .overview-row .v { font: 600 12px "IBM Plex Mono", monospace; }
+    .section-label { font: 600 9.5px "IBM Plex Mono", monospace; color: var(--faint); letter-spacing: 1px; }
+    .req-breakdown { margin-bottom: 11px; }
+    .req-breakdown .top { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .req-breakdown .name { font: 500 11px "IBM Plex Sans", sans-serif; color: var(--text); }
+    .req-breakdown .count { font: 500 11px "IBM Plex Mono", monospace; color: var(--dim); }
+    .req-bar-track { height: 7px; background: var(--panel2); border-radius: 4px; overflow: hidden; }
+    .req-bar-fill { height: 100%; border-radius: 4px; }
+    .tool-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+    .tool-row .name { font: 500 11px "IBM Plex Mono", monospace; color: var(--text); }
+    .tool-row .count { font: 500 11px "IBM Plex Mono", monospace; color: var(--dim); }
+
+    .empty-note { font: 400 12.5px "IBM Plex Sans", sans-serif; color: var(--faint); padding: 22px 18px; }
+
+    /* ===== WARNINGS DRAWER ===== */
     .warnings-backdrop { position: fixed; z-index: 79; inset: 0; background: rgba(0,0,0,.5); }
     .warnings-backdrop[hidden] { display: none; }
-    .drawer-item { display: block; width: 100%; margin-bottom: 8px; padding: 10px; border: 1px solid #1e2940; border-radius: 8px; background: #0d1320; font-size: 11px; color: #8896ad; text-align: left; }
-    .drawer-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; margin: -1rem -1rem 1rem; padding: 14px 16px; border-bottom: 1px solid #1e2940; background: #111725; }
-    .drawer-head h2 { flex: 1; margin: 0; color: #e6edf7; font-size: 14px; }
-    .drawer-head button { width: auto; padding: 5px 10px; border-color: #1e2940; background: #0d1320; color: #8896ad; }
+    .warnings-drawer { position: fixed; z-index: 80; top: 0; right: 0; bottom: 0; width: 420px; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; box-shadow: -20px 0 50px rgba(0,0,0,.5); }
+    .warnings-drawer[hidden] { display: none; }
+    .drawer-head { padding: 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--panel); }
+    .drawer-head .title-row { display: flex; align-items: center; gap: 9px; }
+    .drawer-head .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+    .drawer-head .title { font: 700 14px "IBM Plex Sans", sans-serif; color: var(--text); }
+    .drawer-head .subtitle { font: 400 11px "IBM Plex Mono", monospace; color: var(--faint); }
+    .drawer-head button { background: var(--panel2); border: 1px solid var(--line); color: var(--dim); border-radius: 6px; padding: 5px 10px; cursor: pointer; font: 600 12px "IBM Plex Sans", sans-serif; }
+    .drawer-body { padding: 14px 16px; }
+    .warn-card { display: block; width: 100%; text-align: left; background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: 12px; margin-bottom: 9px; cursor: pointer; }
+    .warn-card .head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .warn-card .code { font: 600 10px "IBM Plex Mono", monospace; padding: 2px 7px; border-radius: 4px; }
+    .warn-card .actor { font: 600 12px "IBM Plex Mono", monospace; color: var(--text); }
+    .warn-card .spacer { flex: 1; }
+    .warn-card .time { font: 400 10px "IBM Plex Mono", monospace; color: var(--faint); }
+    .warn-card .summary { font: 400 12px/1.5 "IBM Plex Sans", sans-serif; color: var(--dim); text-align: left; }
+    .empty-drawer { color: var(--faint); font: 400 12px "IBM Plex Sans", sans-serif; }
+
     @media (max-width: 980px) {
-      .brand-badge, .top-divider, .run-count, .theme-button { display: none; }
-      .run-picker { width: 220px; }
+      .brand-badge, .top-divider { display: none; }
       .top-search { width: 180px; }
       .inspector-shell { width: 300px; }
-      .stage-head { flex-wrap: wrap; height: auto; }
-      .filters { order: 3; width: 100%; }
     }
     @media (max-width: 720px) {
       html, body { overflow: auto; }
       header.topbar { height: auto; min-height: 52px; flex-wrap: wrap; padding: 8px; }
-      .run-picker { order: 3; width: 100%; }
       .top-search { display: none; }
-      .metric-row { height: 68px; }
       main.workspace { height: auto; min-height: calc(100vh - 120px); display: block; }
       .stage-shell { min-height: 620px; }
-      .stage-head { height: auto; flex-wrap: wrap; }
-      .view-tabs { overflow-x: auto; width: 100%; }
-      .filters { display: flex; }
-      .view-toolbar { display: flex; }
-      .view-toolbar button { display: none; }
-      .view-toolbar button[data-action="show-more"], .view-toolbar button[data-action="reset"], .view-toolbar button[data-action="focus"] { display: block; }
-      .inspector-shell { display: block; width: 100%; min-height: 320px; max-height: none; overflow: visible; border-left: 0; border-top: 1px solid #1e2940; background: #111725; }
-      .inspector { min-height: 320px; }
+      .stage-head { flex-wrap: wrap; height: auto; }
+      .inspector-shell { display: block; width: 100%; min-height: 320px; max-height: none; overflow: visible; border-left: 0; border-top: 1px solid var(--line); }
       .transport { min-height: 60px; height: auto; padding: 8px; flex-wrap: wrap; }
-      .transport-clock { width: 100px; }
-      #scrubber { min-width: 110px; }
-      #jump-live { margin-left: auto; }
-      .warnings-drawer { width: min(420px,100vw); }
+      .warnings-drawer { width: min(420px, 100vw); }
     }
   </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark">AT</span>
-      <span class="brand-name">Agent Tail</span>
-      <span class="brand-badge">FLIGHT&nbsp;RECORDER</span>
-    </div>
-    <span class="top-divider"></span>
-    <div class="run-picker">
-      <span class="run-picker-label">CURRENT TRACE</span>
-      <div id="runs" class="runs"></div>
-    </div>
-    <span id="run-count" class="run-count">0 traces</span>
-    <div class="top-spacer"></div>
-    <label class="top-search"><span>⌕</span><input id="search" type="search" placeholder="filter agents, kinds, traces…"></label>
-    <button type="button" class="warning-button" data-action="warnings" aria-label="Warnings"><span id="warning-count">0 warnings</span></button>
-    <button type="button" class="theme-button" aria-label="Theme">☼</button>
-    <div id="status" class="source-status">Loading runs...</div>
-  </header>
-  <div id="metrics" class="metric-row"></div>
-  <main class="workspace">
-    <section class="stage-shell" aria-label="Orchestration visualization">
-      <div class="stage-head">
-        <div class="view-tabs" aria-label="Run views">
-          <button type="button" data-view="graph" aria-label="Graph">◉ Graph</button>
-          <button type="button" data-view="tree" aria-label="Tree">├ Tree</button>
-          <button type="button" data-view="swimlane" aria-label="Swimlane">▦ Swimlane</button>
-          <button type="button" data-view="sequence" aria-label="Sequence">⇄ Sequence</button>
-          <button type="button" data-view="timeline" aria-label="Timeline">≡ Timeline</button>
-        </div>
-        <div class="stage-head-spacer"></div>
-        <div class="filters" aria-label="Filters">
-          <input id="actor-filter" type="search" placeholder="agent">
-          <input id="kind-filter" type="search" placeholder="kind">
-        </div>
-        <div class="view-toolbar" aria-label="View controls">
-          <button type="button" data-action="zoom-in">Zoom in</button>
-          <button type="button" data-action="zoom-out">Zoom out</button>
-          <button type="button" data-action="pan-left">Pan left</button>
-          <button type="button" data-action="pan-right">Pan right</button>
-          <button type="button" data-action="pan-up">Pan up</button>
-          <button type="button" data-action="pan-down">Pan down</button>
-          <button type="button" data-action="focus">◎ Focus</button>
-          <button type="button" data-action="show-more" aria-label="Show more">More</button>
-          <button type="button" data-action="reset">Reset</button>
-        </div>
+  <div class="at-root">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">AT</span>
+        <span class="brand-name">AGENT&nbsp;TAIL</span>
+        <span class="brand-badge">FLIGHT&nbsp;RECORDER</span>
       </div>
-      <div class="stage-content">
-        <div id="selection" class="selection"></div>
-        <div id="stage" class="view-stage"></div>
-        <div id="findings" class="findings"></div>
-        <div id="timeline" class="timeline"></div>
+      <span class="top-divider"></span>
+      <div class="run-picker">
+        <button type="button" id="run-picker-btn" class="run-picker-btn"></button>
+        <div id="run-menu" class="run-menu" hidden></div>
       </div>
-      <div class="transport">
-        <div class="playback" aria-label="Playback controls">
-          <button type="button" id="playback-toggle">▶</button>
+      <div class="top-spacer"></div>
+      <label class="top-search"><span>&#8981;</span><input id="search" type="search" placeholder="filter agents, kinds, traces&hellip;"></label>
+      <button type="button" id="warning-button" class="warning-button" aria-label="Warnings">
+        <span class="dot"></span>
+        <span id="warning-count" class="count">0</span>
+        <span class="label">warnings</span>
+      </button>
+      <button type="button" id="theme-button" class="theme-button" aria-label="Theme">&#9728;</button>
+    </header>
+
+    <div id="metrics" class="metric-row"></div>
+
+    <main class="workspace">
+      <section class="stage-shell" aria-label="Orchestration visualization">
+        <div class="stage-head">
+          <div class="view-tabs" id="view-tabs" aria-label="Run views">
+            <button type="button" data-view="graph" aria-label="Graph"><span class="icon">⬡</span><span>Graph</span></button>
+            <button type="button" data-view="tree" aria-label="Tree"><span class="icon">⊢</span><span>Tree</span></button>
+            <button type="button" data-view="swimlane" aria-label="Swimlane"><span class="icon">▤</span><span>Swimlane</span></button>
+            <button type="button" data-view="sequence" aria-label="Sequence"><span class="icon">⇄</span><span>Sequence</span></button>
+          </div>
+          <div class="stage-head-spacer"></div>
+          <button type="button" id="focus-banner" class="focus-banner" data-action="clear-focus" hidden></button>
+          <span id="zoom-label" class="zoom-label">100%</span>
+          <button type="button" id="reset-btn" class="reset-btn" data-action="reset">reset</button>
+        </div>
+        <div class="stage-content">
+          <div id="stage" class="view-stage"></div>
+          <div id="swimlane" class="swimlane" hidden></div>
+          <div id="sequence" class="sequence-view" hidden></div>
+          <div id="legend" class="legend"></div>
+        </div>
+        <div class="transport">
+          <button type="button" id="playback-toggle">&#9654;</button>
           <div class="transport-clock"><strong id="playback-clock">00:00 / 00:00</strong><span id="playback-mode">streaming</span></div>
-          <input id="scrubber" type="range" min="0" max="0" step="0.1" value="0">
-          <select id="speed" aria-label="Playback speed">
-            <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option>
-          </select>
-          <button type="button" id="jump-live" aria-label="Jump to live">● LIVE</button>
+          <input id="scrubber" type="range" min="0" max="1000" step="1" value="0">
+          <div class="speed-group" id="speed"></div>
+          <button type="button" id="jump-live" aria-label="Jump to live"><span class="dot"></span>LIVE</button>
         </div>
-      </div>
-    </section>
-    <aside class="inspector-shell">
-      <section id="inspector" class="inspector" aria-label="Inspector"></section>
-    </aside>
+      </section>
+      <aside class="inspector-shell">
+        <section id="inspector" aria-label="Inspector"></section>
+      </aside>
+    </main>
     <div id="warnings-backdrop" class="warnings-backdrop" hidden></div>
     <section id="warnings-drawer" class="warnings-drawer" hidden role="dialog" aria-modal="true" aria-label="Warnings drawer"></section>
-  </main>
+  </div>
   <script>
-    const runsEl = document.querySelector('#runs');
-    const timelineEl = document.querySelector('#timeline');
+    const runPickerBtnEl = document.querySelector('#run-picker-btn');
+    const runMenuEl = document.querySelector('#run-menu');
     const metricsEl = document.querySelector('#metrics');
-    const findingsEl = document.querySelector('#findings');
+    const viewTabsEl = document.querySelector('#view-tabs');
+    const focusBannerEl = document.querySelector('#focus-banner');
+    const zoomLabelEl = document.querySelector('#zoom-label');
+    const resetBtnEl = document.querySelector('#reset-btn');
     const stageEl = document.querySelector('#stage');
-    const selectionEl = document.querySelector('#selection');
-    const statusEl = document.querySelector('#status');
-    const runCountEl = document.querySelector('#run-count');
+    const swimlaneEl = document.querySelector('#swimlane');
+    const sequenceEl = document.querySelector('#sequence');
+    const legendEl = document.querySelector('#legend');
+    const warningButtonEl = document.querySelector('#warning-button');
     const warningCountEl = document.querySelector('#warning-count');
     const playbackToggleEl = document.querySelector('#playback-toggle');
     const playbackClockEl = document.querySelector('#playback-clock');
     const playbackModeEl = document.querySelector('#playback-mode');
     const scrubberEl = document.querySelector('#scrubber');
-    const speedEl = document.querySelector('#speed');
+    const speedGroupEl = document.querySelector('#speed');
     const jumpLiveEl = document.querySelector('#jump-live');
     const searchEl = document.querySelector('#search');
-    const actorFilterEl = document.querySelector('#actor-filter');
-    const kindFilterEl = document.querySelector('#kind-filter');
     const inspectorEl = document.querySelector('#inspector');
     const warningsDrawerEl = document.querySelector('#warnings-drawer');
     const warningsBackdropEl = document.querySelector('#warnings-backdrop');
-    const themeButtonEl = document.querySelector('.theme-button');
-    const viewButtons = [...document.querySelectorAll('[data-view]')];
-    const actionButtons = [...document.querySelectorAll('[data-action]')];
+    const themeButtonEl = document.querySelector('#theme-button');
     const svgNamespace = `http${'://'}www.w3.org/2000/svg`;
+
+    const STATUS_COLOR = { idle: '--idle', running: '--run', waiting: '--warn', done: '--ok', error: '--err', stalled: '--warn' };
+    const SPEEDS = [[0.5, '0.5×'], [1, '1×'], [3, '3×']];
+
     let selectedTraceId = null;
     let selectedView = 'graph';
     let selectedAgentId = null;
@@ -683,26 +472,33 @@
     let events = null;
     let runMenuOpen = false;
     let dragPoint = null;
+    let fitDone = { view: null, trace: null };
     const accessToken = new URLSearchParams(window.location.search).get('token');
 
-    viewButtons.forEach((button) => button.addEventListener('click', () => {
-      selectedView = button.dataset.view;
-      renderDetail(currentDetail);
-    }));
+    [...viewTabsEl.querySelectorAll('button[data-view]')].forEach((button) => {
+      button.addEventListener('click', () => { selectedView = button.dataset.view; renderDetail(currentDetail); });
+    });
+    speedGroupEl.innerHTML = '';
+    SPEEDS.forEach(([value, label]) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.addEventListener('click', () => {
+        playbackSpeed = value;
+        if (playing) startPlaybackTimer();
+        renderDetail(currentDetail);
+      });
+      button.dataset.speed = String(value);
+      speedGroupEl.append(button);
+    });
 
-    actionButtons.forEach((button) => button.addEventListener('click', () => {
-      handleViewAction(button.dataset.action);
-    }));
     playbackToggleEl.addEventListener('click', () => setPlaying(!playing));
     scrubberEl.addEventListener('input', () => {
-      playbackTime = Number(scrubberEl.value);
+      const duration = durationOf(currentDetail);
+      playbackTime = (Number(scrubberEl.value) / 1000) * duration;
       liveFollow = false;
       setPlaying(false);
       renderDetail(currentDetail);
-    });
-    speedEl.addEventListener('change', () => {
-      playbackSpeed = Number(speedEl.value);
-      if (playing) startPlaybackTimer();
     });
     jumpLiveEl.addEventListener('click', () => {
       liveFollow = true;
@@ -710,39 +506,34 @@
       setPlaying(false);
       renderDetail(currentDetail);
     });
-    [searchEl, actorFilterEl, kindFilterEl].forEach((input) => {
-      input.addEventListener('input', () => renderDetail(currentDetail));
-    });
-    warningsBackdropEl.addEventListener('click', () => {
-      warningsOpen = false;
-      renderDetail(currentDetail);
-    });
+    searchEl.addEventListener('input', () => renderDetail(currentDetail));
+    warningButtonEl.addEventListener('click', () => { warningsOpen = !warningsOpen; renderDetail(currentDetail); });
+    warningsBackdropEl.addEventListener('click', () => { warningsOpen = false; renderDetail(currentDetail); });
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && warningsOpen) {
-        warningsOpen = false;
-        renderDetail(currentDetail);
-      }
+      if (event.key === 'Escape' && warningsOpen) { warningsOpen = false; renderDetail(currentDetail); }
     });
     themeButtonEl.addEventListener('click', () => {
-      document.body.classList.toggle('light-mode');
-      themeButtonEl.textContent = document.body.classList.contains('light-mode') ? '◐' : '☼';
+      document.body.classList.toggle('theme-light');
+      themeButtonEl.innerHTML = document.body.classList.contains('theme-light') ? '&#9790;' : '&#9728;';
     });
+    focusBannerEl.addEventListener('click', () => { focusedAgentId = null; renderDetail(currentDetail); });
+    resetBtnEl.addEventListener('click', () => { fitView(); renderDetail(currentDetail); });
     stageEl.addEventListener('wheel', (event) => {
       if (!['graph', 'tree'].includes(selectedView)) return;
       event.preventDefault();
-      viewTransform.scale = Math.min(2.5, Math.max(0.45, viewTransform.scale - event.deltaY * 0.001));
+      const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+      viewTransform.scale = Math.max(0.4, Math.min(2.4, viewTransform.scale * factor));
       renderDetail(currentDetail);
     }, { passive: false });
     stageEl.addEventListener('pointerdown', (event) => {
       if (event.target.closest('button')) return;
-      dragPoint = { x: event.clientX, y: event.clientY };
+      dragPoint = { x: event.clientX, y: event.clientY, px: viewTransform.x, py: viewTransform.y };
       stageEl.setPointerCapture(event.pointerId);
     });
     stageEl.addEventListener('pointermove', (event) => {
       if (!dragPoint) return;
-      viewTransform.x += event.clientX - dragPoint.x;
-      viewTransform.y += event.clientY - dragPoint.y;
-      dragPoint = { x: event.clientX, y: event.clientY };
+      viewTransform.x = dragPoint.px + (event.clientX - dragPoint.x);
+      viewTransform.y = dragPoint.py + (event.clientY - dragPoint.y);
       renderDetail(currentDetail);
     });
     stageEl.addEventListener('pointerup', () => { dragPoint = null; });
@@ -755,57 +546,62 @@
     }
 
     function text(value) {
-      return value === null || value === undefined ? '-' : String(value);
+      return value === null || value === undefined ? '—' : String(value);
+    }
+
+    function cssVar(name) {
+      return `var(${name})`;
+    }
+
+    function runBadge(run) {
+      if (run.state === 'live') return { label: 'LIVE', color: '--ok' };
+      if (run.state === 'failed') return { label: 'FAILED', color: '--err' };
+      return { label: 'ENDED', color: '--idle' };
     }
 
     function renderRuns(data) {
       cursor = data.cursor;
-      runCountEl.textContent = `${data.runs.length} trace${data.runs.length === 1 ? '' : 's'}`;
       if (selectedTraceId === null && data.runs.length) selectedTraceId = data.runs[0].trace_id;
       const current = data.runs.find((run) => run.trace_id === selectedTraceId) || data.runs[0];
       if (!current) {
-        runsEl.replaceChildren();
+        runPickerBtnEl.innerHTML = '';
+        runMenuEl.replaceChildren();
         return;
       }
-      const selected = runButton(current, true);
-      selected.addEventListener('click', () => {
-        runMenuOpen = !runMenuOpen;
-        renderRuns(data);
-      });
-      const menu = document.createElement('div');
-      menu.className = 'run-menu';
-      menu.hidden = !runMenuOpen;
-      menu.append(...data.runs.map((run) => {
-        const button = runButton(run, run.trace_id === selectedTraceId);
-        button.addEventListener('click', () => {
-          runMenuOpen = false;
-          selectRun(run.trace_id);
-        });
-        return button;
-      }));
-      runsEl.replaceChildren(selected, menu);
-      if (data.findings.length) {
-        statusEl.textContent = `${data.source.state} · ${data.findings.length} finding(s)`;
-        statusEl.className = 'source-status warning';
-      } else {
-        const connection = data.source.connected ? 'connected' : 'disconnected';
-        statusEl.textContent = `${data.source.kind} ${connection} · ${data.source.state}`;
-        statusEl.className = 'source-status muted';
-      }
+      const badge = runBadge(current);
+      runPickerBtnEl.innerHTML = `
+        <span class="dot" style="background:${cssVar(badge.color)}"></span>
+        <span class="title">${escapeHtml(current.trace_id)}</span>
+        <span class="meta">${escapeHtml(current.state)}</span>
+        <span class="chevron">▾</span>`;
+      runPickerBtnEl.onclick = () => { runMenuOpen = !runMenuOpen; renderRuns(data); };
+      runMenuEl.hidden = !runMenuOpen;
+      const label = document.createElement('div');
+      label.className = 'run-menu-label';
+      label.textContent = 'TRACES ON THIS MACHINE';
+      runMenuEl.replaceChildren(label, ...data.runs.map((run) => runRow(run, run.trace_id === selectedTraceId)));
     }
 
-    function runButton(run, active) {
-        const button = document.createElement('button');
-        const traceId = run.trace_id;
-        button.type = 'button';
-        button.setAttribute('aria-current', active ? 'true' : 'false');
-        const name = document.createElement('strong');
-        name.textContent = traceId;
-        const summary = document.createElement('span');
-        summary.className = 'muted';
-        summary.textContent = `${run.state} · ${run.event_count} events, ${run.actor_count} actors`;
-        button.append(name, document.createElement('br'), summary);
-        return button;
+    function runRow(run, active) {
+      const badge = runBadge(run);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'run-row';
+      button.setAttribute('aria-current', active ? 'true' : 'false');
+      const duration = run.duration_seconds != null ? `${Math.round(run.duration_seconds)}s` : '—';
+      button.innerHTML = `
+        <span class="dot" style="background:${cssVar(badge.color)}"></span>
+        <div class="body">
+          <div class="title">${escapeHtml(run.trace_id)}</div>
+          <div class="meta">${duration} · ${run.actor_count} agents · ${run.event_count} events</div>
+        </div>
+        <span class="badge" style="color:${cssVar(badge.color)};border-color:${cssVar(badge.color)}">${badge.label}</span>`;
+      button.addEventListener('click', () => { runMenuOpen = false; selectRun(run.trace_id); });
+      return button;
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
     }
 
     async function selectRun(traceId) {
@@ -824,539 +620,1067 @@
       if (!detail) return;
       currentDetail = detail;
       cursor = Math.max(cursor, detail.cursor);
-      const run = detail.run;
       syncPlayback(detail);
+
+      const run = detail.run;
       const visibleEvents = eventsAtHorizon(detail);
-      const filteredEvents = filterEvents(visibleEvents);
-      const visibleAgents = filteredAgentsAtHorizon(detail);
-      const visibleWarnings = detail.warnings.filter((warning) => !warning.event_id || visibleEvents.some((event) => event.event_id === warning.event_id));
-      const visibleFindings = detail.findings.filter((finding) => !finding.event_id || visibleEvents.some((event) => event.event_id === finding.event_id));
-      warningCountEl.textContent = visibleWarnings.length ? `${visibleWarnings.length} warning(s)` : '';
-      const usage = usageFor(filteredEvents);
-      const requestCount = filteredEvents.filter(isRequestStart).length;
+      const horizonAgents = agentsAtHorizon(detail, visibleEvents);
+      const warnings = warningsAtHorizon(detail, visibleEvents);
+      const problems = warnings.length + findingsAtHorizon(detail, visibleEvents).length;
+      warningCountEl.textContent = String(problems);
+      warningButtonEl.classList.toggle('has-warnings', problems > 0);
+
+      const modelReq = visibleEvents.filter((event) => event.kind === 'model.request.started' || event.kind === 'model.request').length;
+      const toolReq = visibleEvents.filter((event) => event.kind.startsWith('tool.call.started') || event.kind === 'tool.call.failed').length;
+      const msgReq = visibleEvents.filter((event) => event.kind.startsWith('message.')).length;
+      const requests = modelReq + toolReq;
+      const usage = usageFor(visibleEvents);
       const elapsed = Math.max(playbackTime || 0, 0);
-      const throughput = elapsed > 0 ? requestCount / elapsed : 0;
+      const duration = Math.max(durationOf(detail), 0.0001);
+      const throughput = elapsed > 0 ? requests / elapsed : 0;
+      const spawned = horizonAgents.length;
+
       metricsEl.replaceChildren(
-        metric('Agents', `${visibleAgents.length}/${run.actor_count}`),
-        metric('Requests', requestCount),
-        metric('Tokens', usage?.total_tokens?.available ? compactNumber(usage.total_tokens.value) : '—'),
-        metric('Est. cost', usage?.cost_usd?.available ? `$${Number(usage.cost_usd.value).toFixed(2)}` : '—'),
-        metric('Throughput', `${throughput.toFixed(1)}/s`),
-        metric('Elapsed', `${clock(elapsed)}/${clock(durationOf(detail))}`)
+        metric('AGENTS', spawned, `/ ${run.actor_count}`, `${horizonAgents.filter((a) => ['running', 'waiting', 'stalled'].includes(a.status)).length} active · ${horizonAgents.filter((a) => a.status === 'done').length} done`, '--orch'),
+        metric('REQUESTS', requests, 'calls', `${modelReq} model · ${toolReq} tool`, '--run'),
+        metric('TOKENS', usageValue(usage.total_tokens), 'tok', `${usageValue(usage.input_tokens)} in · ${usageValue(usage.output_tokens)} out`, '--ok'),
+        metric('EST. COST', costValue(usage.cost_usd, 2), 'usd', 'ruleset v1 redaction on', '--warn'),
+        metric('THROUGHPUT', throughput.toFixed(1), 'req/s', `msgs ${msgReq}`, '--run'),
+        metric('ELAPSED', clock(elapsed), '', `of ${clock(duration)}`, '--text'),
+        metric('WARNINGS', problems, '', 'loop/retry/stall', problems ? '--warn' : '--dim')
       );
-      findingsEl.replaceChildren(...visibleFindings.map((finding) => {
-        const node = document.createElement('div');
-        node.className = 'finding';
-        const code = document.createElement('strong');
-        code.textContent = `${finding.kind}:${finding.code}`;
-        const message = document.createElement('div');
-        message.textContent = finding.message;
-        node.append(code, message);
-        return node;
-      }));
-      renderInspector(detail);
-      renderWarningsDrawer(detail, visibleWarnings, visibleFindings);
-      renderVisualView(detail);
-      timelineEl.replaceChildren(...filteredEvents.map((event) => {
-        const node = document.createElement('article');
-        node.className = 'event';
-        const top = document.createElement('div');
-        top.className = 'event-top';
-        const kind = document.createElement('strong');
-        kind.textContent = event.kind;
-        const eventId = document.createElement('code');
-        eventId.textContent = event.event_id;
-        top.append(kind, eventId);
 
-        const meta = document.createElement('div');
-        meta.className = 'muted';
-        meta.append(
-          `${event.timestamp} · actor `,
-          code(text(event.actor.id)),
-          ' · span ',
-          code(event.span_id)
-        );
-
-        const operation = document.createElement('div');
-        operation.textContent = `${text(event.operation.name)} · ${text(event.operation.status)}${event.uncertain ? ' · uncertain order' : ''}`;
-        node.append(top, meta, operation);
-        if (event.payload) {
-          const payload = document.createElement('pre');
-          payload.textContent = JSON.stringify(event.payload.preview, null, 2);
-          node.append(payload);
-        }
-        node.addEventListener('click', () => {
-          selectedEventId = event.event_id;
-          selectedAgentId = event.actor.id;
-          renderDetail(detail);
-        });
-        return node;
-      }));
-      if (!detail.events.length) {
-        timelineEl.textContent = 'No events accepted for this run.';
-      }
+      renderInspector(detail, horizonAgents, warnings);
+      renderWarningsDrawer(detail, warnings, findingsAtHorizon(detail, visibleEvents));
+      renderVisualView(detail, horizonAgents);
     }
 
-    function renderVisualView(detail) {
-      viewButtons.forEach((button) => {
+    function metric(label, value, unit, sub, colorVar) {
+      const node = document.createElement('div');
+      node.className = 'metric';
+      node.innerHTML = `
+        <div class="label">${label}</div>
+        <div class="value-row"><div class="value" style="color:${cssVar(colorVar)}">${value}</div><div class="unit">${unit}</div></div>
+        <div class="sub">${sub}</div>`;
+      return node;
+    }
+
+    function statusColorVar(status) {
+      return cssVar(STATUS_COLOR[status] || '--idle');
+    }
+
+    function warningsAtHorizon(detail, visibleEvents) {
+      const visibleIds = new Set(visibleEvents.map((event) => event.event_id));
+      return detail.warnings.filter((warning) => !warning.event_id || visibleIds.has(warning.event_id));
+    }
+
+    function findingsAtHorizon(detail, visibleEvents) {
+      const visibleIds = new Set(visibleEvents.map((event) => event.event_id));
+      return detail.findings.filter((finding) => !finding.event_id || visibleIds.has(finding.event_id));
+    }
+
+    function renderVisualView(detail, horizonAgents) {
+      [...viewTabsEl.querySelectorAll('button')].forEach((button) => {
         button.setAttribute('aria-current', button.dataset.view === selectedView ? 'true' : 'false');
       });
-      timelineEl.hidden = selectedView !== 'timeline';
-      stageEl.hidden = selectedView === 'timeline';
-      if (selectedView === 'timeline') {
-        stageEl.replaceChildren();
-      } else if (selectedView === 'graph') {
-        renderGraph(detail);
+      stageEl.hidden = selectedView === 'swimlane' || selectedView === 'sequence';
+      swimlaneEl.hidden = selectedView !== 'swimlane';
+      sequenceEl.hidden = selectedView !== 'sequence';
+      legendEl.hidden = selectedView === 'swimlane' || selectedView === 'sequence';
+
+      focusBannerEl.hidden = !focusedAgentId;
+      if (focusedAgentId) focusBannerEl.innerHTML = `◎ focus: ${escapeHtml(focusedAgentId)} ✕`;
+
+      if (fitDone.view !== selectedView || fitDone.trace !== detail.run.trace_id) {
+        fitDone = { view: selectedView, trace: detail.run.trace_id };
+        setTimeout(() => { fitView(); renderDetail(currentDetail); }, 30);
+      }
+
+      if (selectedView === 'graph' || selectedView === 'tree') {
+        renderNodeLink(detail, horizonAgents);
       } else if (selectedView === 'swimlane') {
-        renderSwimlane(detail);
-      } else if (selectedView === 'sequence') {
-        renderSequence(detail);
+        renderSwimlane(detail, horizonAgents);
       } else {
-        renderTree(detail);
+        renderSequence(detail, horizonAgents);
       }
-      renderSelection(detail);
+      renderLegend();
     }
 
-    function renderGraph(detail) {
-      const visibleAgents = visibleAgentsFor(detail);
-      const positions = graphPositions(visibleAgents);
-      renderCanvas(detail, visibleAgents, positions, linksAtHorizon(detail), limited(detail, visibleAgents));
-    }
-
-    function graphPositions(agents) {
-      const positions = new Map();
-      const stageWidth = Math.max(stageEl.clientWidth, 360);
-      const stageHeight = Math.max(stageEl.clientHeight, 360);
-      const centerX = stageWidth / 2 - 66;
-      const centerY = stageHeight / 2 - 26;
-      const maxRadius = Math.min(195, stageWidth * 0.34, stageHeight * 0.38);
-      agents.forEach((agent, index) => {
-        if (index === 0) {
-          positions.set(agent.id, { x: centerX, y: centerY });
-          return;
-        }
-        const progress = Math.sqrt(index / Math.max(agents.length - 1, 1));
-        const radius = 42 + progress * maxRadius;
-        const angle = index * 2.3999632297 - Math.PI / 2;
-        positions.set(agent.id, {
-          x: centerX + Math.cos(angle) * radius,
-          y: centerY + Math.sin(angle) * radius,
-        });
-      });
-      return positions;
-    }
-
-    function renderTree(detail) {
-      const visibleAgents = visibleAgentsFor(detail);
-      const byId = new Map(visibleAgents.map((agent) => [agent.id, agent]));
-      const roots = visibleAgents.filter((agent) => !agent.parent_id || !byId.has(agent.parent_id));
-      const levels = [];
-      const visited = new Set();
-      const queue = roots.map((agent) => ({ agent, depth: 0 }));
-      while (queue.length) {
-        const { agent, depth } = queue.shift();
-        if (visited.has(agent.id)) continue;
-        visited.add(agent.id);
-        if (!levels[depth]) levels[depth] = [];
-        levels[depth].push(agent);
-        agent.child_ids.forEach((childId) => {
-          if (byId.has(childId)) queue.push({ agent: byId.get(childId), depth: depth + 1 });
-        });
-      }
-      const positions = new Map();
-      levels.forEach((agents, depth) => agents.forEach((agent, index) => {
-        positions.set(agent.id, { x: 90 + index * 220, y: 80 + depth * 170 });
+    function renderLegend() {
+      const items = [
+        ['--run', 'running'],
+        ['--warn', 'waiting/stalled'],
+        ['--ok', 'done'],
+        ['--err', 'error'],
+        ['--orch', 'orchestrator'],
+      ];
+      legendEl.replaceChildren(...items.map(([color, label]) => {
+        const node = document.createElement('div');
+        node.className = 'legend-item';
+        node.innerHTML = `<span class="dot" style="background:${cssVar(color)}"></span><span class="label">${label}</span>`;
+        return node;
       }));
-      visibleAgents.forEach((agent, index) => {
-        if (!positions.has(agent.id)) positions.set(agent.id, { x: 90 + index * 220, y: 80 + levels.length * 170 });
+    }
+
+    /* ---------- FOREST / LAYOUT ---------- */
+    function buildForest(actors) {
+      const byId = new Map(actors.map((agent) => [agent.id, agent]));
+      const childrenMap = new Map();
+      actors.forEach((agent) => childrenMap.set(agent.id, (agent.child_ids || []).filter((id) => byId.has(id))));
+      const hasParent = new Set();
+      actors.forEach((agent) => { if (agent.parent_id && byId.has(agent.parent_id)) hasParent.add(agent.id); });
+      const roots = actors.filter((agent) => !hasParent.has(agent.id)).map((agent) => agent.id);
+      const depth = new Map();
+      const assignDepth = (id, d) => { depth.set(id, d); (childrenMap.get(id) || []).forEach((c) => assignDepth(c, d + 1)); };
+      roots.forEach((r) => assignDepth(r, 0));
+      return { byId, childrenMap, roots, depth };
+    }
+
+    function leafCount(id, childrenMap, leaves) {
+      const kids = childrenMap.get(id) || [];
+      if (!kids.length) { leaves[id] = 1; return 1; }
+      let sum = 0;
+      kids.forEach((c) => { sum += leafCount(c, childrenMap, leaves); });
+      leaves[id] = sum;
+      return sum;
+    }
+
+    function radialLayout(forest) {
+      const { childrenMap, roots } = forest;
+      const leaves = {};
+      roots.forEach((r) => leafCount(r, childrenMap, leaves));
+      const totalLeaves = roots.reduce((sum, r) => sum + (leaves[r] || 1), 0) || 1;
+      const cx = 560, cy = 380, step = 132;
+      const positions = {};
+      const place = (id, a0, a1, depth) => {
+        const mid = (a0 + a1) / 2;
+        const r = depth * step;
+        positions[id] = { x: cx + r * Math.cos(mid), y: cy + r * Math.sin(mid) };
+        const kids = childrenMap.get(id) || [];
+        if (kids.length) {
+          let a = a0;
+          kids.forEach((child) => {
+            const frac = (leaves[child] || 1) / (leaves[id] || 1);
+            const next = a + (a1 - a0) * frac;
+            place(child, a, next, depth + 1);
+            a = next;
+          });
+        }
+      };
+      let a0 = -Math.PI / 2;
+      const sweep = Math.PI * 2;
+      roots.forEach((root) => {
+        const frac = (leaves[root] || 1) / totalLeaves;
+        const a1 = a0 + sweep * frac;
+        place(root, a0, a1, roots.length > 1 ? 0.7 : 0);
+        a0 = a1;
       });
-      renderCanvas(
-        detail,
-        visibleAgents,
-        positions,
-        linksAtHorizon(detail).filter((link) => link.type === 'spawn'),
-        limited(detail, visibleAgents)
-      );
+      return { positions, world: { w: 1120, h: 760 } };
     }
 
-    function renderSwimlane(detail) {
-      const duration = Math.max(durationOf(detail), 1);
-      const visibleEvents = filterEvents(eventsAtHorizon(detail));
-      const rows = detail.actors.map((agent) => {
-        const horizonAgent = agentsAtHorizon(detail).find((candidate) => candidate.id === agent.id);
-        const row = document.createElement('div');
-        row.className = 'lane';
-        row.append(label('strong', '', `${agent.id} · ${horizonAgent ? horizonAgent.status : 'not started'}`));
-        const track = document.createElement('div');
-        track.className = 'lane-track';
-        visibleEvents.filter((event) => event.actor.id === agent.id).forEach((event) => {
-          const dot = document.createElement('span');
-          dot.className = 'lane-event';
-          dot.title = `${event.kind} ${event.offset_seconds.toFixed(1)}s`;
-          dot.style.left = `${Math.min(96, Math.max(0, event.offset_seconds / duration * 100))}%`;
-          track.append(dot);
-        });
-        const statuses = visibleEvents
-          .filter((event) => event.actor.id === agent.id)
-          .map((event) => `${event.offset_seconds.toFixed(1)}s ${event.operation.status}`)
-          .join(' · ');
-        row.append(track, label('div', 'agent-meta', statuses || 'no visible activity'));
-        return row;
+    function treeLayout(forest) {
+      const { childrenMap, roots } = forest;
+      const positions = {};
+      let leafIdx = 0;
+      const rowH = 118, colW = 120;
+      const walk = (id, depth) => {
+        const kids = childrenMap.get(id) || [];
+        let x;
+        if (!kids.length) { x = leafIdx++; }
+        else {
+          const xs = kids.map((c) => walk(c, depth + 1));
+          x = (xs[0] + xs[xs.length - 1]) / 2;
+        }
+        positions[id] = { gx: x, y: 60 + depth * rowH };
+        return x;
+      };
+      roots.forEach((r) => walk(r, 0));
+      const total = Math.max(leafIdx, 1);
+      const width = Math.max(total * colW, 720);
+      Object.values(positions).forEach((p) => { p.x = 60 + (p.gx + 0.5) * (width / total); });
+      const maxDepth = Math.max(0, ...[...forest.depth.values()]);
+      return { positions, world: { w: width + 120, h: 60 + (maxDepth + 1) * rowH + 80 } };
+    }
+
+    /* ---------- HORIZON DATA ---------- */
+    function durationOf(detail) {
+      return Math.max(0, detail?.duration_seconds || detail?.run?.duration_seconds || 0);
+    }
+
+    function eventsAtHorizon(detail) {
+      return detail.events.filter((event) => event.offset_seconds <= playbackTime + 0.0001);
+    }
+
+    function statusColor(status) {
+      return STATUS_COLOR[status] ? cssVar(STATUS_COLOR[status]) : cssVar('--idle');
+    }
+
+    function actorStatus(events, hasStall) {
+      if (!events.length) return 'idle';
+      if (hasStall) return 'stalled';
+      const lifecycle = [...events].reverse().find((event) => event.kind.startsWith('agent.') || event.kind.startsWith('trace.'));
+      if (lifecycle) {
+        if (lifecycle.kind.endsWith('.failed')) return 'error';
+        if (lifecycle.kind.endsWith('.completed')) return 'done';
+      }
+      const last = events[events.length - 1];
+      if (last.operation && last.operation.status === 'failed') return 'error';
+      const startCount = events.filter((event) => event.kind.endsWith('.started')).length;
+      const doneCount = events.filter((event) => event.kind.endsWith('.completed') || event.kind.endsWith('.failed')).length;
+      if (startCount > doneCount) return last.operation && last.operation.status === 'waiting' ? 'waiting' : 'running';
+      return 'running';
+    }
+
+    function usageFor(events) {
+      const fields = ['input_tokens', 'output_tokens', 'total_tokens', 'cost_usd'];
+      const result = Object.fromEntries(fields.map((field) => [field, { available: false, value: 0 }]));
+      events.forEach((event) => fields.forEach((field) => {
+        const usage = event.usage[field];
+        if (usage && usage.available) {
+          result[field].available = true;
+          result[field].value += usage.value || 0;
+        }
+      }));
+      return result;
+    }
+
+    function usageValue(field) {
+      return field && field.available ? compactNumber(field.value || 0) : 'n/a';
+    }
+
+    function costValue(field, precision) {
+      return field && field.available ? `$${Number(field.value || 0).toFixed(precision)}` : 'n/a';
+    }
+
+    function agentsAtHorizon(detail, visibleEvents) {
+      const warnings = warningsAtHorizon(detail, visibleEvents);
+      const byId = new Map(detail.actors.map((agent) => [agent.id, agent]));
+      const eventsByActor = new Map();
+      visibleEvents.forEach((event) => {
+        const list = eventsByActor.get(event.actor.id) || [];
+        list.push(event);
+        eventsByActor.set(event.actor.id, list);
       });
-      stageEl.replaceChildren(container('swimlane', rows));
+      return [...eventsByActor.keys()].map((actorId) => {
+        const agent = byId.get(actorId) || { id: actorId, role: null, model: null, parent_id: null, child_ids: [] };
+        const actorEvents = eventsByActor.get(actorId);
+        const hasStall = warnings.some((warning) => warning.actor_id === actorId && warning.code === 'STALL' && warning.active !== false);
+        const status = actorStatus(actorEvents, hasStall);
+        return {
+          ...agent,
+          status,
+          usage: usageFor(actorEvents),
+          events: actorEvents,
+          firstOffset: actorEvents[0].offset_seconds,
+        };
+      });
     }
 
-    function renderSequence(detail) {
-      const visibleIds = new Set(filterEvents(eventsAtHorizon(detail)).map((event) => event.event_id));
-      const rows = linksAtHorizon(detail)
-        .filter((link) => link.type === 'message' && visibleIds.has(link.event_id))
-        .map((link) => {
-          const row = document.createElement('div');
-          row.className = 'sequence-row';
-          row.append(
-            label('strong', '', link.source_actor_id),
-            ` → ${text(link.target_actor_id || link.unresolved_target)} `,
-            label('span', 'muted', link.unresolved_target ? 'unresolved target' : 'message.sent')
-          );
-          return row;
-        });
-      if (!rows.length) rows.push(label('div', 'sequence-row muted', 'No message.sent handoffs at this playback time.'));
-      stageEl.replaceChildren(container('sequence-view', rows));
+    function matchesQuery(agent, traceId, query) {
+      if (!query) return true;
+      const eventContent = (agent.events || []).map((event) => [
+        event.event_id,
+        event.kind,
+        event.span_id,
+        event.emitter_id,
+        event.operation && event.operation.name,
+        event.attributes,
+        event.payload,
+      ].map((value) => typeof value === 'string' ? value : JSON.stringify(value || '')).join(' ')).join(' ');
+      const haystack = `${agent.id} ${agent.role || ''} ${agent.model || ''} ${traceId} ${eventContent}`.toLowerCase();
+      return haystack.includes(query);
     }
 
-    function renderCanvas(detail, agents, positions, links, dense) {
+    function descendantSet(actors, rootId) {
+      const byId = new Map(actors.map((a) => [a.id, a]));
+      const out = new Set([rootId]);
+      const walk = (id) => {
+        const agent = byId.get(id);
+        if (!agent) return;
+        (agent.child_ids || []).forEach((child) => { if (!out.has(child)) { out.add(child); walk(child); } });
+      };
+      walk(rootId);
+      return out;
+    }
+
+    /* ---------- NODE-LINK (graph / tree) ---------- */
+    function renderNodeLink(detail, horizonAgents) {
+      const forest = buildForest(detail.actors);
+      const layout = selectedView === 'graph' ? radialLayout(forest) : treeLayout(forest);
+      const positions = layout.positions;
+      const world = layout.world;
+      const query = searchEl.value.trim().toLowerCase();
+      const focusSet = focusedAgentId ? descendantSet(detail.actors, focusedAgentId) : null;
+      const horizonById = new Map(horizonAgents.map((a) => [a.id, a]));
+      const visibleEventIds = new Set(eventsAtHorizon(detail).map((event) => event.event_id));
+
+      let visible = detail.actors.filter((agent) => horizonById.has(agent.id) && positions[agent.id]);
+      const dense = visible.length > visibleLimit;
+      if (dense) {
+        const selectedFirst = visible.filter((a) => a.id === selectedAgentId);
+        const rest = visible.filter((a) => a.id !== selectedAgentId).slice(0, Math.max(0, visibleLimit - selectedFirst.length));
+        visible = [...selectedFirst, ...rest];
+      }
+
       const canvas = document.createElement('div');
       canvas.className = 'view-canvas';
+      canvas.style.width = `${world.w}px`;
+      canvas.style.height = `${world.h}px`;
       canvas.style.transform = `translate(${viewTransform.x}px, ${viewTransform.y}px) scale(${viewTransform.scale})`;
+      canvas.style.transformOrigin = '0 0';
+
       const svg = document.createElementNS(svgNamespace, 'svg');
       svg.classList.add('edge-layer');
+      svg.setAttribute('width', String(world.w));
+      svg.setAttribute('height', String(world.h));
+      const visibleIds = new Set(visible.map((a) => a.id));
+      const links = selectedView === 'graph'
+        ? detail.links.filter((link) => link.target_actor_id && visibleEventIds.has(link.event_id))
+        : visible.filter((agent) => agent.parent_id).map((agent) => ({ type: 'spawn', source_actor_id: agent.parent_id, target_actor_id: agent.id }));
       links.forEach((link) => {
-        const source = positions.get(link.source_actor_id);
-        const target = positions.get(link.target_actor_id);
-        if (!source || !target) return;
-        const line = document.createElementNS(svgNamespace, 'line');
-        line.setAttribute('x1', source.x + 21);
-        line.setAttribute('y1', source.y + 22);
-        line.setAttribute('x2', target.x + 21);
-        line.setAttribute('y2', target.y + 22);
-        line.setAttribute('stroke', link.type === 'message' ? '#ffc46b' : '#8bd3ff');
-        line.setAttribute('stroke-width', link.type === 'spawn' ? '3' : '2');
-        line.setAttribute('stroke-dasharray', link.type === 'message' ? '6 6' : '0');
-        svg.append(line);
+        const sourceId = link.source_actor_id;
+        const targetId = link.target_actor_id;
+        if (!visibleIds.has(sourceId) || !visibleIds.has(targetId)) return;
+        const p = positions[targetId], pp = positions[sourceId];
+        if (!p || !pp) return;
+        const childAgent = horizonById.get(targetId);
+        const parentAgent = horizonById.get(sourceId);
+        const active = childAgent && ['running', 'waiting'].includes(childAgent.status);
+        const dim = (focusSet && (!focusSet.has(targetId) || !focusSet.has(sourceId))) || !matchesQuery(childAgent, detail.run.trace_id, query) || !matchesQuery(parentAgent || childAgent, detail.run.trace_id, query);
+        const path = document.createElementNS(svgNamespace, 'path');
+        let d;
+        if (selectedView === 'tree') {
+          const my = (p.y + pp.y) / 2;
+          d = `M ${pp.x} ${pp.y + 22} C ${pp.x} ${my}, ${p.x} ${my}, ${p.x} ${p.y - 22}`;
+        } else {
+          d = `M ${pp.x} ${pp.y} L ${p.x} ${p.y}`;
+        }
+        path.setAttribute('d', d);
+        path.setAttribute('stroke', link.type === 'message' ? cssVar('--accent') : (active ? statusColor('running') : cssVar('--line')));
+        path.setAttribute('stroke-width', active ? '2' : '1.4');
+        path.setAttribute('stroke-dasharray', link.type === 'message' ? '3 4' : (active ? '6 6' : '0'));
+        path.dataset.linkType = link.type;
+        path.style.opacity = dim ? '0.15' : active ? '0.95' : '0.5';
+        if (active) path.style.animation = 'at-dash .6s linear infinite';
+        svg.append(path);
       });
-      canvas.append(svg, ...agents.map((agent) => agentCard(detail, agent, positions.get(agent.id))));
-      if (dense) {
-        const note = document.createElement('div');
-        note.className = 'dense-note';
-        note.textContent = `Showing ${agents.length} of ${focusPool(detail).length} agents`;
-        canvas.append(note);
+      canvas.append(svg);
+
+      visible.forEach((agent) => {
+        const p = positions[agent.id];
+        const horizonAgent = horizonById.get(agent.id);
+        const status = horizonAgent ? horizonAgent.status : 'idle';
+        const color = statusColor(status);
+        const isOrch = forest.depth.get(agent.id) === 0;
+        const size = isOrch ? 58 : 44;
+        const active = ['running', 'waiting'].includes(status);
+        const selected = agent.id === selectedAgentId;
+        const dim = (focusSet && !focusSet.has(agent.id)) || !matchesQuery(horizonAgent, detail.run.trace_id, query);
+        const warn = findWarningForActor(detail, horizonAgent ? horizonAgent.events : [], agent.id);
+
+        const wrap = document.createElement('button');
+        wrap.type = 'button';
+        wrap.className = 'node-wrap';
+        wrap.style.left = `${p.x}px`;
+        wrap.style.top = `${p.y}px`;
+        wrap.style.opacity = dim ? '0.22' : '1';
+        wrap.style.zIndex = selected ? '5' : '2';
+
+        const dot = document.createElement('div');
+        dot.className = 'node-dot';
+        dot.style.width = `${size}px`;
+        dot.style.height = `${size}px`;
+        dot.style.borderRadius = isOrch ? '14px' : '50%';
+        dot.style.background = isOrch ? `linear-gradient(135deg, ${cssVar('--orch')}, ${cssVar('--run')})` : cssVar('--panel');
+        dot.style.border = `2px solid ${selected ? cssVar('--accent') : color}`;
+        dot.style.boxShadow = (selected ? `0 0 0 4px rgba(122,162,255,.25), ` : '') + (active ? `0 0 16px ${color}` : '0 2px 8px rgba(0,0,0,.4)');
+
+        const ring = document.createElement('span');
+        ring.className = 'node-ring';
+        ring.style.borderRadius = isOrch ? '14px' : '50%';
+        ring.style.border = `2px solid ${color}`;
+        ring.style.opacity = active ? '0.9' : '0';
+        ring.style.animation = active ? 'at-pulse 1.8s ease-out infinite' : 'none';
+        ring.style.setProperty('--glow', color);
+
+        const glyph = document.createElement('span');
+        glyph.className = 'node-glyph';
+        glyph.style.color = isOrch ? '#0a0e17' : color;
+        glyph.textContent = isOrch ? '★' : agent.id.split('-').pop().slice(0, 2).toUpperCase();
+
+        dot.append(ring, glyph);
+
+        const labelWrap = document.createElement('div');
+        labelWrap.className = 'node-label';
+        labelWrap.innerHTML = `<div class="id">${escapeHtml(agent.id)}</div><div class="role">${escapeHtml(text(agent.role))}</div>`;
+
+        wrap.append(dot, labelWrap);
+        if (warn) {
+          const badge = document.createElement('span');
+          badge.className = 'node-warn';
+          badge.textContent = warn.code;
+          wrap.append(badge);
+        }
+        wrap.addEventListener('click', (event) => {
+          event.stopPropagation();
+          selectedAgentId = agent.id;
+          selectedEventId = null;
+          renderDetail(detail);
+        });
+        canvas.append(wrap);
+      });
+
+      if (selectedView === 'graph') {
+        detail.links.filter((link) => link.unresolved_target && visibleEventIds.has(link.event_id) && visibleIds.has(link.source_actor_id)).forEach((link, index) => {
+          const source = positions[link.source_actor_id];
+          if (!source) return;
+          const endpoint = document.createElement('div');
+          endpoint.className = 'node-wrap unresolved-node';
+          endpoint.style.left = `${source.x + 90}px`;
+          endpoint.style.top = `${source.y + 46 + index * 26}px`;
+          endpoint.textContent = `unresolved: ${link.unresolved_target}`;
+          canvas.append(endpoint);
+        });
       }
-      stageEl.replaceChildren(canvas);
+
+      const parent = document.createElement('div');
+      parent.append(canvas);
+      if (dense) {
+        const note = document.createElement('button');
+        note.type = 'button';
+        note.className = 'dense-note';
+        note.dataset.action = 'show-more';
+        note.textContent = `showing ${visible.length} of ${detail.actors.filter((a) => horizonById.has(a.id)).length} agents`;
+        note.addEventListener('click', () => { visibleLimit += 40; renderDetail(currentDetail); });
+        parent.append(note);
+      }
+      stageEl.replaceChildren(parent);
     }
 
-    function visibleAgentsFor(detail) {
-      return focusPool(detail).slice(0, visibleLimit);
+    function findWarningForActor(detail, actorEvents, actorId) {
+      const visibleIds = new Set(actorEvents.map((e) => e.event_id));
+      return detail.warnings.find((warning) => warning.actor_id === actorId && (!warning.event_id || visibleIds.has(warning.event_id)) && warning.active !== false);
     }
 
-    function limited(detail, agents) {
-      return agents.length < focusPool(detail).length;
+    /* ---------- SWIMLANE ---------- */
+    function pairSpans(actorEvents, horizon) {
+      const spans = [];
+      const openModel = new Map();
+      const openTool = new Map();
+      actorEvents.forEach((event) => {
+        if (event.kind === 'model.request.started' || event.kind === 'model.request') { openModel.set(event.span_id, event); return; }
+        if (event.kind.startsWith('tool.call.started')) { openTool.set(event.span_id, event); return; }
+        if (event.kind === 'model.response.completed' || event.kind === 'model.response.failed') {
+          const start = openModel.get(event.span_id);
+          openModel.delete(event.span_id);
+          const startAt = start ? start.offset_seconds : event.offset_seconds - 1.5;
+          spans.push({ start: startAt, end: event.offset_seconds, kind: 'model', failed: event.kind.endsWith('.failed') });
+          return;
+        }
+        if (event.kind === 'tool.call.completed' || event.kind === 'tool.call.failed') {
+          const start = openTool.get(event.span_id);
+          openTool.delete(event.span_id);
+          const startAt = start ? start.offset_seconds : event.offset_seconds - 0.6;
+          spans.push({ start: startAt, end: event.offset_seconds, kind: 'tool', failed: event.kind.endsWith('.failed') });
+        }
+      });
+      openModel.forEach((start) => spans.push({ start: start.offset_seconds, end: Math.max(start.offset_seconds, horizon), kind: 'model', failed: false }));
+      openTool.forEach((start) => spans.push({ start: start.offset_seconds, end: Math.max(start.offset_seconds, horizon), kind: 'tool', failed: false }));
+      return spans;
     }
 
-    function focusPool(detail) {
-      const pool = filteredAgentsAtHorizon(detail);
-      if (!focusedAgentId) return pool;
-      const byId = new Map(pool.map((agent) => [agent.id, agent]));
-      const included = new Set([focusedAgentId]);
-      const visitChildren = (agentId) => {
-        const agent = byId.get(agentId);
-        if (!agent) return;
-        agent.child_ids.forEach((childId) => {
-          if (!included.has(childId)) {
-            included.add(childId);
-            visitChildren(childId);
+    function renderSwimlane(detail, horizonAgents) {
+      const duration = Math.max(durationOf(detail), 1);
+      const query = searchEl.value.trim().toLowerCase();
+      const focusSet = focusedAgentId ? descendantSet(detail.actors, focusedAgentId) : null;
+      const laneAgents = horizonAgents
+        .filter((agent) => matchesQuery(agent, detail.run.trace_id, query) && (!focusSet || focusSet.has(agent.id)))
+        .sort((a, b) => a.firstOffset - b.firstOffset);
+
+      const inner = document.createElement('div');
+      inner.className = 'swimlane-inner';
+      inner.style.minWidth = '920px';
+
+      const axis = document.createElement('div');
+      axis.className = 'time-axis';
+      for (let i = 0; i <= 6; i++) {
+        const tick = document.createElement('div');
+        tick.className = 'time-tick';
+        tick.style.width = `${760 / 6}px`;
+        tick.textContent = clock((duration * i) / 6);
+        axis.append(tick);
+      }
+      inner.append(axis);
+
+      const scale = (seconds) => (seconds / duration) * 760;
+      laneAgents.forEach((agent) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'lane-row';
+        row.setAttribute('aria-current', agent.id === selectedAgentId ? 'true' : 'false');
+        const head = document.createElement('div');
+        head.className = 'lane-head';
+        head.innerHTML = `<span class="dot" style="background:${statusColor(agent.status)}"></span>
+          <div style="min-width:0">
+            <div class="id">${escapeHtml(agent.id)}</div>
+            <div class="role">${escapeHtml(text(agent.role))}</div>
+          </div>`;
+        const track = document.createElement('div');
+        track.className = 'lane-track';
+        pairSpans(agent.events, playbackTime || 0).forEach((span) => {
+          const el = document.createElement('div');
+          el.className = 'lane-span';
+          el.title = `${span.kind} · ${(span.end - span.start).toFixed(1)}s`;
+          el.style.left = `${scale(span.start)}px`;
+          el.style.width = `${Math.max(4, scale(span.end - span.start))}px`;
+          el.style.background = span.kind === 'model' ? cssVar('--run') : (span.failed ? cssVar('--err') : cssVar('--ok'));
+          track.append(el);
+        });
+        row.append(head, track);
+        row.addEventListener('click', () => { selectedAgentId = agent.id; selectedEventId = null; renderDetail(detail); });
+        inner.append(row);
+      });
+
+      const playhead = document.createElement('div');
+      playhead.className = 'playhead';
+      playhead.style.left = `${150 + scale(playbackTime || 0)}px`;
+      inner.append(playhead);
+
+      swimlaneEl.replaceChildren(inner);
+    }
+
+    /* ---------- SEQUENCE ---------- */
+    function renderSequence(detail, horizonAgents) {
+      const query = searchEl.value.trim().toLowerCase();
+      const focusSet = focusedAgentId ? descendantSet(detail.actors, focusedAgentId) : null;
+      const visibleEvents = eventsAtHorizon(detail);
+      const matchingIds = new Set(horizonAgents.filter((agent) => matchesQuery(agent, detail.run.trace_id, query)).map((agent) => agent.id));
+      if (query) {
+        visibleEvents.filter((event) => event.kind === 'message.sent' && matchingIds.has(event.actor.id)).forEach((event) => {
+          matchingIds.add(event.actor.id);
+          if (event.attributes && typeof event.attributes.to === 'string') matchingIds.add(event.attributes.to);
+        });
+      }
+      const seqAgents = horizonAgents
+        .filter((agent) => matchingIds.has(agent.id) && (!focusSet || focusSet.has(agent.id)))
+        .sort((a, b) => a.firstOffset - b.firstOffset);
+      const colX = {};
+      seqAgents.forEach((agent, i) => { colX[agent.id] = i * 150 + 70; });
+      const duration = Math.max(durationOf(detail), 0.0001);
+
+      const messages = visibleEvents.filter((event) => event.kind === 'message.sent' && event.attributes && typeof event.attributes.to === 'string' && colX[event.actor.id] != null && colX[event.attributes.to] != null);
+      const rowHeight = Math.max(400, messages.length * 36);
+
+      const inner = document.createElement('div');
+      inner.className = 'sequence-inner';
+      inner.style.minHeight = `${rowHeight + 64}px`;
+
+      seqAgents.forEach((agent) => {
+        const head = document.createElement('div');
+        head.className = 'seq-col-head';
+        head.style.left = `${colX[agent.id]}px`;
+        head.innerHTML = `<span class="dot" style="background:${statusColor(agent.status)}"></span><span class="id">${escapeHtml(agent.id)}</span>`;
+        inner.append(head);
+      });
+      seqAgents.forEach((agent) => {
+        const line = document.createElement('div');
+        line.className = 'seq-line';
+        line.style.left = `${20 + colX[agent.id]}px`;
+        inner.append(line);
+      });
+
+      const svg = document.createElementNS(svgNamespace, 'svg');
+      svg.style.position = 'absolute';
+      svg.style.top = '34px';
+      svg.style.left = '20px';
+      svg.style.overflow = 'visible';
+      svg.style.pointerEvents = 'none';
+      svg.setAttribute('width', '1');
+      svg.setAttribute('height', '1');
+      messages.forEach((event) => {
+        const y = 20 + (event.offset_seconds / duration) * rowHeight;
+        const x1 = colX[event.actor.id], x2raw = colX[event.attributes.to];
+        const dir = x2raw > x1 ? 1 : -1;
+        const x2 = x2raw - dir * 6;
+        const line = document.createElementNS(svgNamespace, 'line');
+        line.setAttribute('x1', String(x1));
+        line.setAttribute('y1', String(y));
+        line.setAttribute('x2', String(x2));
+        line.setAttribute('y2', String(y));
+        line.setAttribute('stroke', cssVar('--accent'));
+        line.setAttribute('stroke-width', '1.5');
+        svg.append(line);
+        const polygon = document.createElementNS(svgNamespace, 'polygon');
+        polygon.setAttribute('points', `${x2},${y} ${x2 - dir * 6},${y - 4} ${x2 - dir * 6},${y + 4}`);
+        polygon.setAttribute('fill', cssVar('--accent'));
+        svg.append(polygon);
+        const label = document.createElement('div');
+        label.className = 'seq-arrow-label';
+        label.style.left = `${20 + Math.min(x1, x2raw) + 8}px`;
+        label.style.top = `${34 + y - 16}px`;
+        label.textContent = `delegate → ${event.attributes.to}`;
+        inner.append(label);
+      });
+      inner.append(svg);
+
+      if (!messages.length) {
+        const empty = document.createElement('div');
+        empty.className = 'seq-empty';
+        empty.style.position = 'absolute';
+        empty.style.top = '40px';
+        empty.style.left = '20px';
+        empty.textContent = 'No message.sent hand-offs at this playback time.';
+        inner.append(empty);
+      }
+
+      sequenceEl.replaceChildren(inner);
+    }
+
+    /* ---------- FIT VIEW ---------- */
+    function fitView() {
+      if (!['graph', 'tree'].includes(selectedView) || !currentDetail) { viewTransform = { scale: 1, x: 0, y: 0 }; return; }
+      const forest = buildForest(currentDetail.actors);
+      const layout = selectedView === 'graph' ? radialLayout(forest) : treeLayout(forest);
+      const pts = Object.values(layout.positions);
+      if (!pts.length) return;
+      const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+      const minX = Math.min(...xs) - 80, maxX = Math.max(...xs) + 80;
+      const minY = Math.min(...ys) - 70, maxY = Math.max(...ys) + 80;
+      const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
+      const rect = stageEl.getBoundingClientRect();
+      if (!rect.width) return;
+      const z = Math.max(0.42, Math.min(1.5, Math.min(rect.width / bw, rect.height / bh) * 0.92));
+      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+      viewTransform = { scale: z, x: rect.width / 2 - cx * z, y: rect.height / 2 - cy * z };
+      zoomLabelEl.textContent = `${Math.round(z * 100)}%`;
+    }
+
+    /* ---------- INSPECTOR ---------- */
+    function renderInspector(detail, horizonAgents, warnings) {
+      zoomLabelEl.textContent = `${Math.round(viewTransform.scale * 100)}%`;
+      const horizonById = new Map(horizonAgents.map((a) => [a.id, a]));
+      const event = selectedEventId ? detail.events.find((e) => e.event_id === selectedEventId) : null;
+      const agent = !event && selectedAgentId ? (horizonById.get(selectedAgentId) || detail.actors.find((a) => a.id === selectedAgentId)) : null;
+
+      if (event) { renderEventDetail(detail, event); return; }
+      if (agent) { renderAgentDetail(detail, agent, horizonById, warnings); return; }
+      renderOverview(detail, horizonAgents);
+    }
+
+    function renderAgentDetail(detail, agent, horizonById, warnings) {
+      const status = agent.status || 'idle';
+      const color = statusColor(status);
+      const isOrch = !agent.parent_id;
+      const glyph = isOrch ? '★' : agent.id.split('-').pop().slice(0, 2).toUpperCase();
+      const usage = agent.usage || usageFor(agent.events || []);
+      const agentWarnings = warnings.filter((w) => w.actor_id === agent.id);
+      const events = (agent.events || []).slice().reverse();
+
+      const wrap = document.createElement('div');
+
+      const header = document.createElement('div');
+      header.className = 'inspector-header';
+      header.innerHTML = `
+        <div class="row">
+          <div class="inspector-avatar" style="width:40px;height:40px;border-radius:${isOrch ? '11px' : '50%'};background:${isOrch ? `linear-gradient(135deg, ${cssVar('--orch')}, ${cssVar('--run')})` : cssVar('--panel2')};border:2px solid ${color};color:${isOrch ? '#0a0e17' : color}">${escapeHtml(glyph)}</div>
+          <div class="inspector-title-block">
+            <strong>${escapeHtml(agent.id)}</strong>
+            <span>${escapeHtml(text(agent.role))} · ${escapeHtml(text(agent.model))}</span>
+          </div>
+          <span class="status-pill" style="color:${color};background:color-mix(in srgb, ${color} 15%, transparent);border-color:${color}">${escapeHtml(status)}</span>
+        </div>
+        <div class="inspector-actions">
+          <button type="button" class="focus-btn" data-action="focus">◎ Focus subtree</button>
+          <button type="button" class="close-btn">✕</button>
+        </div>`;
+      header.querySelector('.focus-btn').addEventListener('click', () => { focusedAgentId = agent.id; renderDetail(detail); });
+      header.querySelector('.close-btn').addEventListener('click', () => { selectedAgentId = null; selectedEventId = null; renderDetail(detail); });
+
+      const usageBlock = document.createElement('div');
+      usageBlock.className = 'inspector-block';
+      const spark = buildSparkline(agent.events || []);
+      usageBlock.innerHTML = `
+        <div class="inspector-label">USAGE</div>
+        <div class="usage-grid">
+          <div class="usage-card"><div class="k">INPUT TOK</div><div class="v" style="color:${cssVar('--run')}">${usageValue(usage.input_tokens)}</div></div>
+          <div class="usage-card"><div class="k">OUTPUT TOK</div><div class="v" style="color:${cssVar('--ok')}">${usageValue(usage.output_tokens)}</div></div>
+          <div class="usage-card"><div class="k">COST</div><div class="v" style="color:${cssVar('--warn')}">${costValue(usage.cost_usd, 3)}</div></div>
+        </div>
+        <div class="spark-label">TOKENS OVER TIME</div>
+        <div class="spark-row"></div>`;
+      const sparkRow = usageBlock.querySelector('.spark-row');
+      const maxSpark = Math.max(1, ...spark);
+      spark.forEach((value) => {
+        const bar = document.createElement('div');
+        bar.className = 'spark-bar';
+        bar.title = `${compactNumber(value)} tok`;
+        bar.style.height = `${Math.max(3, (value / maxSpark) * 44)}px`;
+        bar.style.background = value ? cssVar('--run') : cssVar('--line');
+        bar.style.opacity = value ? '0.85' : '0.4';
+        sparkRow.append(bar);
+      });
+
+      const orchBlock = document.createElement('div');
+      orchBlock.className = 'inspector-block';
+      const parentRow = document.createElement('div');
+      parentRow.className = 'orch-row';
+      if (agent.parent_id) {
+        parentRow.innerHTML = `<span class="tag">parent</span>`;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'chip-btn parent';
+        btn.textContent = `↑ ${agent.parent_id}`;
+        btn.addEventListener('click', () => { selectedAgentId = agent.parent_id; selectedEventId = null; renderDetail(detail); });
+        parentRow.append(btn);
+      } else {
+        parentRow.innerHTML = `<span class="tag">parent</span><span class="root-label">root orchestrator</span>`;
+      }
+      const childrenRow = document.createElement('div');
+      childrenRow.className = 'orch-row children';
+      const childrenWrap = document.createElement('div');
+      childrenWrap.className = 'children-wrap';
+      const children = (agent.child_ids || []).filter((id) => horizonById.has(id));
+      if (children.length) {
+        children.forEach((childId) => {
+          const childAgent = horizonById.get(childId);
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'chip-btn child';
+          btn.innerHTML = `<span class="dot" style="background:${statusColor(childAgent ? childAgent.status : 'idle')}"></span>${escapeHtml(childId)}`;
+          btn.addEventListener('click', () => { selectedAgentId = childId; selectedEventId = null; renderDetail(detail); });
+          childrenWrap.append(btn);
+        });
+      } else {
+        childrenWrap.innerHTML = `<span class="leaf-label">— leaf agent —</span>`;
+      }
+      childrenRow.innerHTML = `<span class="tag">children</span>`;
+      childrenRow.append(childrenWrap);
+      orchBlock.innerHTML = `<div class="inspector-label">ORCHESTRATION</div>`;
+      orchBlock.append(parentRow, childrenRow);
+
+      let warnBlock = null;
+      if (agentWarnings.length) {
+        warnBlock = document.createElement('div');
+        warnBlock.className = 'inspector-block';
+        warnBlock.innerHTML = `<div class="warn-title">⚠ WARNINGS</div>`;
+        agentWarnings.forEach((warning) => {
+          const card = document.createElement('div');
+          card.className = 'agent-warn-card';
+          card.innerHTML = `
+            <div class="head"><span class="code">${escapeHtml(warning.code)}</span><span class="heuristic">heuristic</span></div>
+            <div class="summary">${escapeHtml(warning.summary)}</div>`;
+          warnBlock.append(card);
+        });
+      }
+
+      const timelineBlock = document.createElement('div');
+      timelineBlock.className = 'inspector-block';
+      timelineBlock.innerHTML = `<div class="timeline-head"><div class="inspector-label" style="margin-bottom:0">EVENT TIMELINE</div><div class="timeline-count">${events.length} events</div></div>`;
+      events.forEach((eventItem) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'event-row';
+        const failed = eventItem.operation && eventItem.operation.status === 'failed';
+        const isModel = eventItem.kind.startsWith('model.');
+        const railColor = failed ? cssVar('--err') : (isModel ? cssVar('--run') : cssVar('--ok'));
+        const kindShort = eventItem.kind.replace('.started', '').replace('.completed', '').replace('.failed', '');
+        const outTok = eventItem.usage && eventItem.usage.output_tokens && eventItem.usage.output_tokens.available ? `${compactNumber(eventItem.usage.output_tokens.value)} out tok` : null;
+        const dur = eventItem.operation && eventItem.operation.duration_ms ? `${eventItem.operation.duration_ms}ms` : null;
+        const meta = `${clock(eventItem.offset_seconds)} · ${outTok || dur || eventItem.span_id}`;
+        row.innerHTML = `
+          <div class="event-rail" style="background:${railColor}"></div>
+          <div class="event-main">
+            <div class="head"><span class="event-kind-chip">${escapeHtml(kindShort)}</span><span class="event-name">${escapeHtml(text(eventItem.operation && eventItem.operation.name))}</span></div>
+            <div class="event-meta">${escapeHtml(meta)}</div>
+          </div>
+          <span class="event-status-dot" style="background:${failed ? cssVar('--err') : (eventItem.kind.endsWith('.started') ? cssVar('--run') : cssVar('--ok'))}"></span>`;
+        row.addEventListener('click', () => { selectedEventId = eventItem.event_id; renderDetail(detail); });
+        timelineBlock.append(row);
+      });
+
+      wrap.append(header, usageBlock, orchBlock);
+      if (warnBlock) wrap.append(warnBlock);
+      wrap.append(timelineBlock);
+      inspectorEl.replaceChildren(wrap);
+    }
+
+    function buildSparkline(agentEvents) {
+      const bins = 12;
+      const spark = Array.from({ length: bins }, () => 0);
+      if (!agentEvents.length) return spark;
+      const start = agentEvents[0].offset_seconds;
+      const end = Math.max(start + 1, agentEvents[agentEvents.length - 1].offset_seconds);
+      agentEvents.forEach((event) => {
+        const total = (event.usage.input_tokens.value || 0) + (event.usage.output_tokens.value || 0);
+        if (!total) return;
+        const bin = Math.min(bins - 1, Math.max(0, Math.floor(((event.offset_seconds - start) / (end - start)) * bins)));
+        spark[bin] += total;
+      });
+      return spark;
+    }
+
+    function renderEventDetail(detail, event) {
+      const status = event.operation ? event.operation.status : null;
+      const statusForColor = status === 'failed' ? 'error' : status === 'completed' ? 'done' : 'running';
+      const fields = [
+        ['trace_id', event.trace_id],
+        ['span_id', event.span_id],
+        ['parent_span', event.parent_span_id || '—'],
+        ['emitter', event.emitter_id],
+        ['sequence', event.sequence],
+        ['actor', event.actor.id],
+        ['status', status || '—'],
+        ['operation', event.operation && event.operation.name || '—'],
+        ['uncertain', event.uncertain ? 'yes' : 'no'],
+        ['timestamp', event.timestamp],
+      ];
+      const usage = event.usage || {};
+      const hasUsage = ['input_tokens', 'output_tokens', 'total_tokens', 'cost_usd'].some((field) => usage[field] && usage[field].available);
+      const attributes = event.attributes || {};
+      const payload = event.payload;
+      const isStart = event.kind.endsWith('.started') || event.kind === 'model.request';
+      const isEnd = event.kind.endsWith('.completed') || event.kind.endsWith('.failed');
+      const hasPayloadPreview = !!(payload && payload.preview !== undefined);
+      let input = null;
+      let inputFromPayload = false;
+      if (isStart) {
+        if (attributes.arguments) input = JSON.stringify(attributes.arguments, null, 2);
+        else if (attributes.instruction) input = attributes.instruction;
+        else if (hasPayloadPreview) { input = typeof payload.preview === 'string' ? payload.preview : JSON.stringify(payload.preview, null, 2); inputFromPayload = true; }
+      }
+      let output = null;
+      if (isEnd && hasPayloadPreview) {
+        output = typeof payload.preview === 'string' ? payload.preview : JSON.stringify(payload.preview, null, 2);
+      }
+      const meta = payload && payload.metadata;
+      const payloadBlockIsOutput = isEnd && hasPayloadPreview;
+      const payloadBlockIsInput = !payloadBlockIsOutput && inputFromPayload;
+
+      const wrap = document.createElement('div');
+      const head = document.createElement('div');
+      head.className = 'event-detail-head';
+      head.innerHTML = `
+        <button type="button" class="back-btn">←</button>
+        <div class="titles"><strong>Event Inspector</strong><span>${escapeHtml(event.event_id)}</span></div>
+        <span class="kind-chip">${escapeHtml(event.kind)}</span>`;
+      head.querySelector('.back-btn').addEventListener('click', () => { selectedEventId = null; renderDetail(detail); });
+
+      const fieldsBlock = document.createElement('div');
+      fieldsBlock.className = 'inspector-block';
+      const grid = document.createElement('div');
+      grid.className = 'field-grid';
+      fields.forEach(([k, v]) => {
+        const kEl = document.createElement('div'); kEl.className = 'k'; kEl.textContent = k;
+        const vEl = document.createElement('div'); vEl.className = 'v'; vEl.textContent = text(v);
+        vEl.style.color = k === 'status' ? statusColor(statusForColor) : cssVar('--text');
+        grid.append(kEl, vEl);
+      });
+      fieldsBlock.append(grid);
+
+      wrap.append(head, fieldsBlock);
+
+      if (hasUsage) {
+        const usageBlock = document.createElement('div');
+        usageBlock.className = 'inspector-block';
+        const duration = event.operation && typeof event.operation.duration_ms === 'number' && Number.isFinite(event.operation.duration_ms)
+          ? `${event.operation.duration_ms}ms`
+          : 'n/a';
+        usageBlock.innerHTML = `
+          <div class="inspector-label">USAGE</div>
+          <div class="usage-inline-row">
+            <div><div class="k">input</div><div class="v" style="color:${cssVar('--run')}">${usageValue(usage.input_tokens)}</div></div>
+            <div><div class="k">output</div><div class="v" style="color:${cssVar('--ok')}">${usageValue(usage.output_tokens)}</div></div>
+            <div><div class="k">total</div><div class="v" style="color:${cssVar('--accent')}">${usageValue(usage.total_tokens)}</div></div>
+            <div><div class="k">cost</div><div class="v" style="color:${cssVar('--warn')}">${costValue(usage.cost_usd, 4)}</div></div>
+            <div><div class="k">latency</div><div class="v" style="color:${cssVar('--text')}">${escapeHtml(duration)}</div></div>
+          </div>`;
+        wrap.append(usageBlock);
+      }
+      if (Object.keys(attributes).length) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block';
+        block.innerHTML = `<div class="io-title in">ATTRIBUTES</div><pre class="io-pre"></pre>`;
+        block.querySelector('pre').textContent = JSON.stringify(attributes, null, 2);
+        wrap.append(block);
+      }
+      const attachPayloadFooter = (block) => {
+        if (meta && meta.truncated) {
+          const note = document.createElement('div');
+          note.className = 'io-truncated';
+          note.textContent = `payload truncated on UTF-8 boundary · sha256 ${String(meta.sha256 || '').slice(0, 12)}…`;
+          block.append(note);
+        }
+        const loadBtn = document.createElement('button');
+        loadBtn.type = 'button';
+        loadBtn.className = 'io-load-btn';
+        loadBtn.textContent = 'Load retained payload';
+        loadBtn.addEventListener('click', async () => {
+          loadBtn.disabled = true;
+          loadBtn.textContent = 'Loading…';
+          try {
+            const full = await fetchJson(`/api/v1/runs/${encodeURIComponent(detail.run.trace_id)}/events/${encodeURIComponent(event.event_id)}/payload`);
+            const preview = full.payload && full.payload.preview;
+            block.querySelector('pre').textContent = typeof preview === 'string' ? preview : JSON.stringify(preview, null, 2);
+            loadBtn.remove();
+            block.querySelectorAll('.io-truncated').forEach((el) => el.remove());
+          } catch (error) {
+            loadBtn.disabled = false;
+            loadBtn.textContent = 'Load retained payload (failed, retry)';
           }
         });
+        block.append(loadBtn);
       };
-      visitChildren(focusedAgentId);
-      return pool.filter((agent) => included.has(agent.id));
+      if (input) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block';
+        block.innerHTML = `<div class="io-title in">▸ INPUT</div><pre class="io-pre"></pre>`;
+        block.querySelector('pre').textContent = input;
+        if (payloadBlockIsInput) attachPayloadFooter(block);
+        wrap.append(block);
+      }
+      if (output) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block';
+        block.innerHTML = `<div class="io-title out">◂ OUTPUT</div><pre class="io-pre"></pre>`;
+        block.querySelector('pre').textContent = output;
+        if (payloadBlockIsOutput) attachPayloadFooter(block);
+        wrap.append(block);
+      }
+      if (hasPayloadPreview && !payloadBlockIsInput && !payloadBlockIsOutput) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block';
+        block.innerHTML = `<div class="io-title in">▸ PAYLOAD</div><pre class="io-pre"></pre>`;
+        block.querySelector('pre').textContent = typeof payload.preview === 'string' ? payload.preview : JSON.stringify(payload.preview, null, 2);
+        attachPayloadFooter(block);
+        wrap.append(block);
+      }
+      inspectorEl.replaceChildren(wrap);
     }
 
-    function agentCard(detail, agent, position) {
-      const card = document.createElement('button');
-      card.type = 'button';
-      const hasStall = detail.warnings.some((warning) => warning.actor_id === agent.id && warning.code === 'STALL' && warning.active !== false);
-      const visualStatus = hasStall ? 'stalled' : semanticStatus(agent.status);
-      card.className = `agent-card status-${visualStatus}${String(agent.role).toLowerCase().includes('orchestrat') ? ' role-orchestrator' : ''}`;
-      card.style.left = `${position.x}px`;
-      card.style.top = `${position.y}px`;
-      card.setAttribute('aria-current', agent.id === selectedAgentId ? 'true' : 'false');
-      const visibleIds = new Set(eventsAtHorizon(detail).map((event) => event.event_id));
-      const warningCount = detail.warnings.filter((warning) => (
-        warning.actor_id === agent.id && (!warning.event_id || visibleIds.has(warning.event_id))
-      )).length;
-      const usage = agent.usage.total_tokens.available ? `${agent.usage.total_tokens.value} tokens` : 'usage unavailable';
-      card.append(
-        label('span', 'agent-id', agent.id),
-        label('span', 'agent-meta', `${agent.status} · ${text(agent.role)} · ${text(agent.model)}`),
-        label('span', 'agent-meta', `${usage}${warningCount ? ` · ${warningCount} warning(s)` : ''}`)
-      );
-      card.addEventListener('click', () => {
-        selectedAgentId = agent.id;
-        selectedEventId = null;
-        renderDetail(detail);
+    function renderOverview(detail, horizonAgents) {
+      const run = detail.run;
+      const visibleEvents = eventsAtHorizon(detail);
+      const usage = usageFor(visibleEvents);
+      const modelReq = visibleEvents.filter((e) => e.kind === 'model.request.started' || e.kind === 'model.request').length;
+      const toolReq = visibleEvents.filter((e) => e.kind.startsWith('tool.call.started') || e.kind === 'tool.call.failed').length;
+      const msgReq = visibleEvents.filter((e) => e.kind.startsWith('message.')).length;
+      const reqTotal = Math.max(1, modelReq + toolReq + msgReq);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'empty-note';
+      wrap.innerHTML = `
+        <div class="inspector-label">RUN OVERVIEW</div>
+        <div class="overview-desc">${escapeHtml(run.trace_id)} — a live causal view of a multi-agent run. <span class="em">Click any agent</span> in the stage to inspect its tokens, payloads, timeline and hand-offs.</div>
+        <div class="overview-rows"></div>
+        <div class="section-label" style="margin:20px 0 10px">HOW REQUESTS WERE MADE</div>
+        <div class="req-breakdowns"></div>
+        <div class="section-label" style="margin:18px 0 10px">TOP TOOLS &amp; MODELS</div>
+        <div class="top-tools"></div>`;
+
+      const rows = wrap.querySelector('.overview-rows');
+      [
+        ['Trace', run.trace_id, '--text'],
+        ['Agents spawned', `${horizonAgents.length} / ${run.actor_count}`, '--orch'],
+        ['Total requests', String(modelReq + toolReq), '--run'],
+        ['Tokens (in/out)', `${usageValue(usage.input_tokens)} / ${usageValue(usage.output_tokens)}`, '--ok'],
+        ['Estimated cost', costValue(usage.cost_usd, 2), '--warn'],
+      ].forEach(([k, v, color]) => {
+        const row = document.createElement('div');
+        row.className = 'overview-row';
+        row.innerHTML = `<span class="k">${k}</span><span class="v" style="color:${cssVar(color)}">${escapeHtml(v)}</span>`;
+        rows.append(row);
       });
-      return card;
+
+      const breakdowns = wrap.querySelector('.req-breakdowns');
+      [
+        ['model requests', modelReq, '--run'],
+        ['tool calls', toolReq, '--ok'],
+        ['agent messages', msgReq, '--accent'],
+      ].forEach(([label, count, color]) => {
+        const node = document.createElement('div');
+        node.className = 'req-breakdown';
+        node.innerHTML = `
+          <div class="top"><span class="name">${label}</span><span class="count">${count}</span></div>
+          <div class="req-bar-track"><div class="req-bar-fill" style="width:${(count / reqTotal) * 100}%;background:${cssVar(color)}"></div></div>`;
+        breakdowns.append(node);
+      });
+
+      const toolCount = {};
+      visibleEvents.filter((e) => e.kind.startsWith('tool.call.started') || e.kind === 'tool.call.failed' || e.kind === 'model.request.started').forEach((e) => {
+        const name = (e.operation && e.operation.name) || e.kind;
+        toolCount[name] = (toolCount[name] || 0) + 1;
+      });
+      const topTools = wrap.querySelector('.top-tools');
+      Object.entries(toolCount).sort((a, b) => b[1] - a[1]).slice(0, 6).forEach(([name, count]) => {
+        const row = document.createElement('div');
+        row.className = 'tool-row';
+        row.innerHTML = `<span class="name">${escapeHtml(name)}</span><span class="count">×${count}</span>`;
+        topTools.append(row);
+      });
+      if (!Object.keys(toolCount).length) {
+        const empty = document.createElement('div');
+        empty.className = 'tool-row';
+        empty.innerHTML = `<span class="name" style="color:var(--faint)">no requests yet</span>`;
+        topTools.append(empty);
+      }
+
+      inspectorEl.replaceChildren(wrap);
     }
 
-    function renderSelection(detail) {
-      const agent = agentsAtHorizon(detail).find((candidate) => candidate.id === selectedAgentId);
-      if (!agent) {
-        selectionEl.textContent = 'Select an agent to inspect graph context.';
-        return;
-      }
-      const usage = agent.usage.total_tokens.available ? `${agent.usage.total_tokens.value} tokens` : 'usage unavailable';
-      const focusText = focusedAgentId === agent.id ? ' Focused subtree.' : '';
-      selectionEl.textContent = `Selected ${agent.id}: ${agent.status}, role ${text(agent.role)}, model ${text(agent.model)}, parent ${text(agent.parent_id)}, ${usage}.${focusText}`;
-    }
-
-    function handleViewAction(action) {
-      if (action === 'zoom-in') viewTransform.scale = Math.min(2.5, viewTransform.scale + 0.15);
-      if (action === 'zoom-out') viewTransform.scale = Math.max(0.45, viewTransform.scale - 0.15);
-      if (action === 'pan-left') viewTransform.x -= 60;
-      if (action === 'pan-right') viewTransform.x += 60;
-      if (action === 'pan-up') viewTransform.y -= 60;
-      if (action === 'pan-down') viewTransform.y += 60;
-      if (action === 'show-more') visibleLimit += 80;
-      if (action === 'warnings') warningsOpen = !warningsOpen;
-      if (action === 'reset') {
-        viewTransform = { scale: 1, x: 0, y: 0 };
-        focusedAgentId = null;
-        visibleLimit = initialVisibleLimit();
-      }
-      if (action === 'focus' && currentDetail?.actors.length) {
-        selectedAgentId = selectedAgentId || currentDetail.actors[0].id;
-        focusedAgentId = selectedAgentId;
-        visibleLimit = initialVisibleLimit();
-        viewTransform = { scale: 1.15, x: 40, y: 20 };
-      }
-      renderDetail(currentDetail);
-    }
-
-    function renderInspector(detail) {
-      const event = detail.events.find((candidate) => candidate.event_id === selectedEventId);
-      const agent = filteredAgentsAtHorizon(detail).find((candidate) => candidate.id === selectedAgentId)
-        || agentsAtHorizon(detail).find((candidate) => candidate.id === selectedAgentId);
-      if (event) {
-        const payloadPreview = event.payload ? JSON.stringify(event.payload.preview) : 'none';
-        inspectorEl.replaceChildren(
-          label('h2', '', 'Event inspector'),
-          definitionList({
-            event_id: event.event_id,
-            trace_id: event.trace_id,
-            span_id: event.span_id,
-            parent_span_id: event.parent_span_id,
-            emitter_id: event.emitter_id,
-            sequence: event.sequence,
-            actor: event.actor.id,
-            kind: event.kind,
-            operation_name: text(event.operation.name),
-            status: event.operation.status,
-            timestamp: event.timestamp,
-            usage: JSON.stringify(event.usage),
-            attributes: JSON.stringify(event.attributes || {}),
-            payload_preview: payloadPreview,
-          }),
-          payloadButton(detail.run.trace_id, event.event_id)
-        );
-        return;
-      }
-      if (agent) {
-        const relatedEvents = detail.events.filter((eventItem) => eventItem.actor.id === agent.id);
-        const warningDetails = detail.warnings.filter((warning) => warning.actor_id === agent.id);
-        const header = document.createElement('div');
-        header.className = 'inspector-header';
-        const avatar = label('div', 'inspector-avatar', agent.id.slice(0, 2).toUpperCase());
-        const title = document.createElement('div');
-        title.className = 'inspector-title';
-        title.append(label('h2', '', 'Agent inspector'), label('strong', '', agent.id), label('span', '', `${text(agent.role)} · ${text(agent.model)}`));
-        header.append(avatar, title, label('span', 'status-pill', agent.status));
-        const usage = document.createElement('div');
-        usage.className = 'usage-grid';
-        usage.append(
-          usageCard('INPUT TOK', agent.usage.input_tokens),
-          usageCard('OUTPUT TOK', agent.usage.output_tokens),
-          usageCard('COST', agent.usage.cost_usd, '$')
-        );
-        const relationships = inspectorBlock('ORCHESTRATION');
-        const parentRow = label('div', 'relationship-row', `parent · ${text(agent.parent_id)}`);
-        relationships.append(parentRow);
-        if (agent.parent_id) parentRow.addEventListener('click', () => selectAgent(detail, agent.parent_id));
-        (agent.child_ids || []).forEach((childId) => {
-          const child = label('button', 'relationship-row', `child · ${childId}`);
-          child.type = 'button';
-          child.addEventListener('click', () => selectAgent(detail, childId));
-          relationships.append(child);
-        });
-        const warnings = inspectorBlock('⚠ WARNINGS');
-        if (!warningDetails.length) warnings.append(label('div', 'muted', 'No warnings for this agent.'));
-        warningDetails.forEach((warning) => warnings.append(label('div', 'drawer-item', `${warning.code} · ${warning.summary}`)));
-        const timeline = inspectorBlock(`EVENT TIMELINE · ${relatedEvents.length}`);
-        timeline.dataset.field = 'related_events';
-        relatedEvents.forEach((eventItem) => {
-          const row = label('button', 'inspector-event', `${eventItem.kind} · ${text(eventItem.operation.name)} · ${eventItem.operation.status}`);
-          row.type = 'button';
-          row.addEventListener('click', () => {
-            selectedEventId = eventItem.event_id;
-            renderDetail(detail);
-          });
-          timeline.append(row);
-        });
-        inspectorEl.replaceChildren(
-          header,
-          inspectorBlock('USAGE', usage),
-          relationships,
-          warnings,
-          timeline
-        );
-        return;
-      }
-      const usage = detail.usage || detail.run.usage;
-      inspectorEl.replaceChildren(
-        label('h2', '', 'RUN OVERVIEW'),
-        label('p', 'muted', `${detail.run.trace_id} — a causal view of this agent run. Select any agent in the stage to inspect its usage, relationships, events, and warnings.`),
-        definitionList({
-          trace: detail.run.trace_id,
-          state: detail.run.state,
-          agents: detail.run.actor_count,
-          events: detail.run.event_count,
-          duration: `${detail.run.duration_seconds || 0}s`,
-          tokens: usage?.total_tokens?.available ? usage.total_tokens.value : 'unavailable',
-          estimated_cost: usage?.cost_usd?.available ? `$${usage.cost_usd.value}` : 'unavailable',
-          warnings: detail.run.warning_count,
-          source: detail.source.state,
-        })
-      );
-    }
-
+    /* ---------- WARNINGS DRAWER ---------- */
     function renderWarningsDrawer(detail, warnings, findings) {
       warningsDrawerEl.hidden = !warningsOpen;
       warningsBackdropEl.hidden = !warningsOpen;
-      [document.querySelector('header.topbar'), metricsEl, document.querySelector('.stage-shell'), document.querySelector('.inspector-shell')]
-        .forEach((element) => { element.inert = warningsOpen; });
       if (!warningsOpen) return;
       const items = [
-        ...warnings.map((warning) => ({
-          kind: warning.category || 'runtime',
-          code: warning.code,
-          message: warning.summary,
-          event_id: warning.event_id,
-          actor_id: warning.actor_id,
-          active: warning.active !== false,
-          trigger_time: eventTime(detail, warning.event_id),
-          detected_at: warning.detected_at || 'unavailable',
-          resolved_at: warning.resolved_at || 'unavailable',
-        })),
-        ...findings.map((finding) => ({
-          kind: finding.kind,
-          code: finding.code,
-          message: finding.message,
-          event_id: finding.event_id,
-          actor_id: null,
-          active: false,
-          trigger_time: eventTime(detail, finding.event_id),
-          detected_at: finding.detected_at || 'unavailable',
-          resolved_at: 'unavailable',
-        })),
+        ...warnings.map((w) => ({ code: w.code, actor: w.actor_id, summary: w.summary, time: eventTime(detail, w.event_id), actorId: w.actor_id, eventId: w.event_id, detectedAt: w.detected_at, resolvedAt: w.resolved_at })),
+        ...findings.map((f) => ({ code: f.code, actor: f.kind, summary: f.message, time: eventTime(detail, f.event_id), actorId: null, eventId: f.event_id, detectedAt: f.detected_at, resolvedAt: null })),
       ];
       const head = document.createElement('div');
       head.className = 'drawer-head';
-      const close = document.createElement('button');
-      close.type = 'button';
-      close.setAttribute('aria-label', 'Close warnings');
-      close.textContent = '✕';
-      close.addEventListener('click', () => {
-        warningsOpen = false;
-        renderDetail(detail);
+      head.innerHTML = `
+        <div class="title-row"><span class="dot"></span><span class="title">Findings</span><span class="subtitle">heuristics, not diagnoses</span></div>
+        <button type="button" aria-label="Close warnings">✕</button>`;
+      head.querySelector('button').addEventListener('click', () => { warningsOpen = false; renderDetail(currentDetail); });
+
+      const body = document.createElement('div');
+      body.className = 'drawer-body';
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-drawer';
+        empty.textContent = 'No warnings or findings for this run.';
+        body.append(empty);
+      }
+      items.forEach((item) => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'warn-card';
+        card.title = `detected ${text(item.detectedAt)} · resolved ${text(item.resolvedAt)}`;
+        card.innerHTML = `
+          <div class="head">
+            <span class="code" style="color:${cssVar('--warn')};background:rgba(255,180,84,.16)">${escapeHtml(item.code)}</span>
+            <span class="actor">${escapeHtml(text(item.actor))}</span>
+            <span class="spacer"></span>
+            <span class="time">${item.time !== null ? clock(item.time) : '—'}</span>
+          </div>
+          <div class="summary">${escapeHtml(item.summary)}</div>`;
+        card.addEventListener('click', () => {
+          warningsOpen = false;
+          selectedEventId = item.eventId || null;
+          selectedAgentId = item.actorId || selectedAgentId;
+          renderDetail(currentDetail);
+        });
+        body.append(card);
       });
-      head.append(label('h2', '', 'Warnings and findings'), close);
-      warningsDrawerEl.replaceChildren(
-        head,
-        ...items.map((item) => {
-          const node = document.createElement('button');
-          node.type = 'button';
-          node.className = 'drawer-item';
-          node.textContent = `${item.kind}:${item.code} ${item.active ? 'active' : 'resolved'} event ${text(item.event_id)} trigger ${text(item.trigger_time)} detected ${text(item.detected_at)} resolved ${text(item.resolved_at)} ${item.message}`;
-          node.addEventListener('click', () => {
-            selectedEventId = item.event_id || null;
-            selectedAgentId = item.actor_id || selectedAgentId;
-            warningsOpen = false;
-            renderDetail(detail);
-          });
-          return node;
-        })
-      );
-      close.focus();
+      warningsDrawerEl.replaceChildren(head, body);
     }
 
     function eventTime(detail, eventId) {
-      return detail.events.find((event) => event.event_id === eventId)?.timestamp || 'unavailable';
+      const event = detail.events.find((e) => e.event_id === eventId);
+      return event ? event.offset_seconds : null;
     }
 
-    function definitionList(values) {
-      const list = document.createElement('dl');
-      Object.entries(values).forEach(([key, value]) => {
-        list.append(label('dt', '', key), label('dd', '', text(value)));
-      });
-      return list;
-    }
-
-    function inspectorBlock(title, content) {
-      const block = document.createElement('div');
-      block.className = 'inspector-block';
-      block.append(label('div', 'inspector-label', title));
-      if (content) block.append(content);
-      return block;
-    }
-
-    function usageCard(title, usage, prefix = '') {
-      const card = document.createElement('div');
-      card.className = 'usage-card';
-      const value = usage?.available ? `${prefix}${compactNumber(usage.value)}` : '—';
-      card.append(label('span', '', title), label('strong', '', value));
-      return card;
-    }
-
-    function selectAgent(detail, actorId) {
-      selectedAgentId = actorId;
-      selectedEventId = null;
-      renderDetail(detail);
-    }
-
-    function payloadButton(traceId, eventId) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = 'Load retained payload';
-      button.addEventListener('click', async () => {
-        const payload = await fetchJson(`/api/v1/runs/${encodeURIComponent(traceId)}/events/${encodeURIComponent(eventId)}/payload`);
-        const pre = document.createElement('pre');
-        pre.textContent = JSON.stringify(payload.payload, null, 2);
-        inspectorEl.append(pre);
-      });
-      return button;
-    }
-
-    function filterEvents(events) {
-      const search = searchEl.value.trim().toLowerCase();
-      const actor = actorFilterEl.value.trim().toLowerCase();
-      const kind = kindFilterEl.value.trim().toLowerCase();
-      return events.filter((event) => {
-        const encoded = JSON.stringify(event).toLowerCase();
-        return (!search || encoded.includes(search))
-          && (!actor || event.actor.id.toLowerCase().includes(actor))
-          && (!kind || event.kind.toLowerCase().includes(kind));
-      });
-    }
-
+    /* ---------- PLAYBACK ---------- */
     function syncPlayback(detail) {
       const duration = durationOf(detail);
       const terminal = detail.run.state === 'completed' || detail.run.state === 'failed';
@@ -1368,102 +1692,14 @@
       }
       if (liveFollow) playbackTime = duration;
       playbackTime = Math.min(Math.max(playbackTime, 0), duration);
-      scrubberEl.max = String(duration);
-      scrubberEl.value = String(playbackTime);
-      playbackToggleEl.textContent = playing ? '■' : '▶';
-      playbackToggleEl.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+      scrubberEl.value = String(duration > 0 ? Math.round((playbackTime / duration) * 1000) : 0);
+      playbackToggleEl.textContent = playing ? '❚❚' : '▶';
       playbackClockEl.textContent = `${clock(playbackTime)} / ${clock(duration)}`;
-      playbackModeEl.textContent = liveFollow ? 'streaming' : playing ? `${playbackSpeed}× replay` : 'paused history';
-      jumpLiveEl.hidden = liveFollow;
-    }
-
-    function durationOf(detail) {
-      return Math.max(0, detail?.duration_seconds || detail?.run?.duration_seconds || 0);
-    }
-
-    function clock(seconds) {
-      const safe = Math.max(0, Math.floor(Number(seconds) || 0));
-      return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
-    }
-
-    function compactNumber(value) {
-      const number = Number(value) || 0;
-      if (number >= 1000000) return `${(number / 1000000).toFixed(1)}m`;
-      if (number >= 1000) return `${(number / 1000).toFixed(1)}k`;
-      return String(number);
-    }
-
-    function initialVisibleLimit() {
-      return window.innerWidth <= 720 ? 8 : 12;
-    }
-
-    function eventsAtHorizon(detail) {
-      return detail.events.filter((event) => event.offset_seconds <= playbackTime + 0.0001);
-    }
-
-    function linksAtHorizon(detail) {
-      const visibleIds = new Set(filterEvents(eventsAtHorizon(detail)).map((event) => event.event_id));
-      return detail.links.filter((link) => !link.event_id || visibleIds.has(link.event_id));
-    }
-
-    function agentsAtHorizon(detail) {
-      const byId = new Map(detail.actors.map((agent) => [agent.id, agent]));
-      const lastEvent = new Map();
-      const visibleEvents = eventsAtHorizon(detail);
-      visibleEvents.forEach((event) => lastEvent.set(event.actor.id, event));
-      return [...lastEvent.keys()].map((actorId) => {
-        const agent = byId.get(actorId) || { id: actorId, child_ids: [] };
-        const event = lastEvent.get(actorId);
-        const actorEvents = visibleEvents.filter((visibleEvent) => visibleEvent.actor.id === actorId);
-        return {
-          ...agent,
-          status: actorStatus(actorEvents, agent.status),
-          operation: event.operation.name || agent.operation,
-          usage: usageFor(actorEvents),
-        };
+      playbackModeEl.textContent = liveFollow ? 'streaming' : (playbackTime >= duration ? 'EOF · frozen' : (playing ? `${playbackSpeed}× replay` : 'paused'));
+      jumpLiveEl.classList.toggle('live', playbackTime >= duration);
+      [...speedGroupEl.querySelectorAll('button')].forEach((button) => {
+        button.setAttribute('aria-current', Number(button.dataset.speed) === playbackSpeed ? 'true' : 'false');
       });
-    }
-
-    function actorStatus(events, fallback) {
-      const lifecycle = [...events].reverse().find((event) => event.kind.startsWith('agent.') || event.kind.startsWith('trace.'));
-      if (lifecycle) {
-        if (lifecycle.kind.endsWith('.failed')) return 'failed';
-        if (lifecycle.kind.endsWith('.completed')) return 'done';
-      }
-      if (events.some((event) => event.operation.status === 'waiting')) return 'waiting';
-      const normalized = semanticStatus(fallback);
-      return ['done', 'failed'].includes(normalized) && playbackTime >= durationOf(currentDetail) ? normalized : 'running';
-    }
-
-    function semanticStatus(status) {
-      const value = String(status || '').toLowerCase();
-      if (['completed', 'complete', 'done', 'success', 'succeeded'].includes(value)) return 'done';
-      if (['failed', 'error', 'errored'].includes(value)) return 'failed';
-      if (value === 'waiting') return 'waiting';
-      return 'running';
-    }
-
-    function isRequestStart(event) {
-      return event.kind === 'model.request' || event.kind === 'model.request.started'
-        || event.kind === 'tool.call.started';
-    }
-
-    function filteredAgentsAtHorizon(detail) {
-      const ids = new Set(filterEvents(eventsAtHorizon(detail)).map((event) => event.actor.id));
-      return agentsAtHorizon(detail).filter((agent) => ids.has(agent.id));
-    }
-
-    function usageFor(events) {
-      const fields = ['input_tokens', 'output_tokens', 'total_tokens', 'cost_usd'];
-      const result = Object.fromEntries(fields.map((field) => [field, { available: false, value: null }]));
-      events.forEach((event) => fields.forEach((field) => {
-        const usage = event.usage[field];
-        if (usage.available) {
-          result[field].available = true;
-          result[field].value = (result[field].value || 0) + usage.value;
-        }
-      }));
-      return result;
     }
 
     function setPlaying(next) {
@@ -1478,41 +1714,28 @@
       playbackTimer = null;
       if (!playing) return;
       playbackTimer = window.setInterval(() => {
-        playbackTime = Math.min(durationOf(currentDetail), playbackTime + 0.25 * playbackSpeed);
-        if (playbackTime >= durationOf(currentDetail)) setPlaying(false);
+        const duration = durationOf(currentDetail);
+        playbackTime = Math.min(duration, playbackTime + 0.25 * playbackSpeed);
+        if (playbackTime >= duration) setPlaying(false);
         else renderDetail(currentDetail);
       }, 250);
     }
 
-    function metric(label, value) {
-      const node = document.createElement('div');
-      node.className = 'metric';
-      const number = document.createElement('strong');
-      number.textContent = value;
-      const caption = document.createElement('span');
-      caption.textContent = label;
-      node.append(number, caption);
-      return node;
+    /* ---------- HELPERS ---------- */
+    function clock(seconds) {
+      const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+      return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
     }
 
-    function code(value) {
-      const node = document.createElement('code');
-      node.textContent = value;
-      return node;
+    function compactNumber(value) {
+      const number = Number(value) || 0;
+      if (number >= 1000000) return `${(number / 1000000).toFixed(1)}M`;
+      if (number >= 1000) return `${(number / 1000).toFixed(1)}k`;
+      return String(Math.round(number));
     }
 
-    function label(tag, className, value) {
-      const node = document.createElement(tag);
-      node.className = className;
-      node.textContent = value;
-      return node;
-    }
-
-    function container(className, children) {
-      const node = document.createElement('div');
-      node.className = className;
-      node.replaceChildren(...children);
-      return node;
+    function initialVisibleLimit() {
+      return window.innerWidth <= 720 ? 40 : 160;
     }
 
     function apiPath(path) {
@@ -1525,12 +1748,15 @@
       try {
         const data = await fetchJson('/api/v1/runs');
         renderRuns(data);
-        if (selectedTraceId) await selectRun(selectedTraceId);
-        else statusEl.textContent = 'No accepted runs';
+        if (selectedTraceId) {
+          const detail = await fetchJson(`/api/v1/runs/${encodeURIComponent(selectedTraceId)}`);
+          renderDetail(detail);
+        }
         connectEvents();
       } catch (error) {
-        statusEl.textContent = `Failed to load: ${error.message}`;
-        statusEl.className = 'source-status warning';
+        warningCountEl.textContent = '!';
+        console.error('Failed to load runs', error);
+        setTimeout(init, 1500);
       }
     }
 
