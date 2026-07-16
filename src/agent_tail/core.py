@@ -633,19 +633,6 @@ class TraceIndex:
         uncertain.update(event.event_id for event in remainder)
         return ordered, uncertain, (ancestors, descendants)
 
-    @staticmethod
-    def _reaches(outgoing: Mapping[str, set[str]], start: str, target: str) -> bool:
-        pending = list(outgoing[start])
-        seen = set()
-        while pending:
-            node = pending.pop()
-            if node == target:
-                return True
-            if node not in seen:
-                seen.add(node)
-                pending.extend(outgoing[node])
-        return False
-
     def _loop_warnings(self, events: tuple[Event, ...]) -> list[Warning]:
         warnings = []
         for (_, signature), histories in self._histories(events).items():
