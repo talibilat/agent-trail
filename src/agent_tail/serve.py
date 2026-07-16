@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import json
 from http import HTTPStatus
@@ -479,18 +479,7 @@ def _serve_store(
 ) -> int:
     _validate_remote_access(config)
     if config.remote_access and not config.access_token:
-        config = ServeConfig(
-            host=config.host,
-            port=config.port,
-            open_browser=config.open_browser,
-            full_payloads=config.full_payloads,
-            unsafe_unredacted=config.unsafe_unredacted,
-            remote_access=config.remote_access,
-            access_token=secrets.token_urlsafe(24),
-            loop_threshold=config.loop_threshold,
-            stall_seconds=config.stall_seconds,
-            max_bytes=config.max_bytes,
-        )
+        config = replace(config, access_token=secrets.token_urlsafe(24))
     server = make_server(store, host=config.host, port=config.port)
     server.access_token = config.access_token
     host, port = server.server_address[:2]

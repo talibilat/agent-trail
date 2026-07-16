@@ -467,7 +467,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(serve.call_args.kwargs["config"].host, "127.0.0.1")
         self.assertEqual(serve.call_args.kwargs["config"].port, 0)
 
-    def test_serve_prints_url_and_honors_explicit_browser_open(self):
+    def test_serve_prints_generated_token_url_and_honors_browser_open(self):
         class FakeServer:
             server_address = ("127.0.0.1", 43210)
 
@@ -481,6 +481,7 @@ class ServeTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             mock.patch("agent_tail.serve.make_server", return_value=FakeServer()),
+            mock.patch("agent_tail.serve.secrets.token_urlsafe", return_value="test-token"),
             mock.patch("sys.stdout", stdout),
         ):
             result = serve(
@@ -489,7 +490,6 @@ class ServeTests(unittest.TestCase):
                     port=0,
                     open_browser=True,
                     remote_access=True,
-                    access_token="test-token",
                 ),
                 open_url=opened.append,
             )
