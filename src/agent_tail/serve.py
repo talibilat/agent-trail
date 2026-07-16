@@ -441,7 +441,6 @@ def serve(
     reader = threading.Thread(
         target=_read_stream,
         args=(source, store, config),
-        kwargs={"source_kind": "stdin"},
         daemon=True,
     )
     reader.start()
@@ -603,8 +602,6 @@ def _read_stream(
     source: TextIO,
     store: RunStore,
     config: ServeConfig,
-    *,
-    source_kind: str,
 ) -> None:
     store.set_source_status(connected=True, state="reading")
     try:
@@ -617,8 +614,7 @@ def _read_stream(
     except UnicodeError as error:
         store.add_finding("source", "SOURCE_DECODE_ERROR", str(error))
     finally:
-        state = "disconnected" if source_kind == "stdin" else "caught_up"
-        store.set_source_status(connected=False, state=state)
+        store.set_source_status(connected=False, state="disconnected")
 
 
 def _file_identity(path: Path) -> tuple[int, int]:

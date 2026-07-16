@@ -244,7 +244,6 @@ class ServeTests(unittest.TestCase):
             io.StringIO(json.dumps(event_data()) + "\n"),
             store,
             ServeConfig(),
-            source_kind="stdin",
         )
 
         detail = store.run_detail("trace-1")
