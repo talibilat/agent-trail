@@ -104,14 +104,14 @@ class Event:
             "actor": Mapping,
             "operation": Mapping,
         }
-        for field, expected_type in required_types.items():
-            if field not in data:
-                raise EventError(f"missing required field: {field}")
-            value = data[field]
+        for field_name, expected_type in required_types.items():
+            if field_name not in data:
+                raise EventError(f"missing required field: {field_name}")
+            value = data[field_name]
             if not isinstance(value, expected_type) or (
-                field == "sequence" and isinstance(value, bool)
+                field_name == "sequence" and isinstance(value, bool)
             ):
-                raise EventError(f"{field} has an incorrect type")
+                raise EventError(f"{field_name} has an incorrect type")
 
         schema_version = data["schema_version"]
         if re.fullmatch(r"1\.[0-9]+", schema_version) is None:
