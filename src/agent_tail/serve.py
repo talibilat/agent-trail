@@ -208,7 +208,10 @@ class RunStore:
                 "runs": runs,
                 "source": dict(self._source_status),
                 "findings": list(self._findings),
-                "ingestion_errors": list(self._ingestion_findings()),
+                "ingestion_errors": [
+                    finding for finding in self._findings
+                    if finding.get("kind") == "ingestion"
+                ],
             }
 
     def run_detail(self, trace_id: str) -> dict[str, object] | None:
@@ -376,12 +379,6 @@ class RunStore:
                 code = "INVALID_EVENT"
             self.add_finding("ingestion", code, message, line=error.line)
         self._errors = tuple(errors)
-
-    def _ingestion_findings(self) -> Iterable[dict[str, object]]:
-        return (
-            finding for finding in self._findings
-            if finding.get("kind") == "ingestion"
-        )
 
     def _publish(self, message_type: str, data: dict[str, object]) -> None:
         self._cursor += 1
