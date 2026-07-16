@@ -704,14 +704,14 @@ class TraceIndex:
         return warnings
 
     def _histories(
-        self, events: tuple[Event, ...], *, include_kind: bool = True
+        self, events: tuple[Event, ...]
     ) -> dict[tuple[str, str], list[list[Event]]]:
         groups: dict[tuple[str, str], list[list[Event]]] = {}
         for event in events:
             histories = groups.setdefault(
                 (
                     event.emitter_id,
-                    self._signature(event, include_kind=include_kind),
+                    self._signature(event),
                 ),
                 [[]],
             )
