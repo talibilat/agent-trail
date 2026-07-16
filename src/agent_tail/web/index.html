@@ -665,10 +665,6 @@
       return node;
     }
 
-    function statusColorVar(status) {
-      return cssVar(STATUS_COLOR[status] || '--idle');
-    }
-
     function warningsAtHorizon(detail, visibleEvents) {
       const visibleIds = new Set(visibleEvents.map((event) => event.event_id));
       return detail.warnings.filter((warning) => !warning.event_id || visibleIds.has(warning.event_id));
