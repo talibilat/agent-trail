@@ -900,7 +900,7 @@ def _usage_summary(events: Iterable[Event]) -> dict[str, object]:
     available = {key: False for key in totals}
     for event in events:
         usage = _usage(event)
-        for key in ("input_tokens", "output_tokens", "total_tokens", "cost_usd"):
+        for key in totals:
             value = usage.get(key)
             if _number(value):
                 totals[key] += value
