@@ -531,7 +531,8 @@ def _follow_file(
     store.set_source_status(connected=True, state="reading")
     source = path.open(encoding="utf-8")
     position = 0
-    identity = _file_identity(path)
+    stat = path.stat()
+    identity = (stat.st_dev, stat.st_ino)
     try:
         while not stop.is_set():
             line = source.readline()
@@ -604,11 +605,6 @@ def _read_stream(
         store.add_finding("source", "SOURCE_DECODE_ERROR", str(error))
     finally:
         store.set_source_status(connected=False, state="disconnected")
-
-
-def _file_identity(path: Path) -> tuple[int, int]:
-    stat = path.stat()
-    return stat.st_dev, stat.st_ino
 
 
 def make_server(store: RunStore, *, host: str = "127.0.0.1", port: int = 8765) -> ThreadingHTTPServer:
