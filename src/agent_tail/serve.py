@@ -823,29 +823,6 @@ def _relationships(view) -> dict[str, object]:
                     "target_actor_id": actor_id,
                     "event_id": event.event_id,
                 })
-            elif actor_id not in parents:
-                add_link({
-                    "type": "causal",
-                    "source_actor_id": parent_actor_id,
-                    "target_actor_id": actor_id,
-                    "event_id": event.event_id,
-                })
-            elif parents[actor_id] != parent_actor_id:
-                add_link({
-                    "type": "causal",
-                    "source_actor_id": parent_actor_id,
-                    "target_actor_id": actor_id,
-                    "event_id": event.event_id,
-                })
-                warnings.append({
-                    "category": "projection",
-                    "code": "AMBIGUOUS_PARENT",
-                    "event_id": event.event_id,
-                    "trace_id": event.trace_id,
-                    "actor_id": actor_id,
-                    "summary": "actor has multiple causal parent candidates",
-                    "evidence": f"primary {parents[actor_id]}, later {parent_actor_id}",
-                })
             else:
                 add_link({
                     "type": "causal",
@@ -853,6 +830,16 @@ def _relationships(view) -> dict[str, object]:
                     "target_actor_id": actor_id,
                     "event_id": event.event_id,
                 })
+                if actor_id in parents and parents[actor_id] != parent_actor_id:
+                    warnings.append({
+                        "category": "projection",
+                        "code": "AMBIGUOUS_PARENT",
+                        "event_id": event.event_id,
+                        "trace_id": event.trace_id,
+                        "actor_id": actor_id,
+                        "summary": "actor has multiple causal parent candidates",
+                        "evidence": f"primary {parents[actor_id]}, later {parent_actor_id}",
+                    })
 
         attributes = _attributes(event)
         target = attributes.get("to")

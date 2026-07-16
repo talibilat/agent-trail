@@ -445,6 +445,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(worker["role"], "executor")
         self.assertEqual(worker["model"], "model-a")
         self.assertIn(("spawn", "lead", "worker", None), links)
+        self.assertIn(("causal", "observer", "worker", None), links)
         self.assertIn(("message", "lead", "worker", None), links)
         self.assertIn(("message", "worker", None, "missing-agent"), links)
         self.assertNotIn(("spawn", "fallback", "uncertain-worker", None), links)
