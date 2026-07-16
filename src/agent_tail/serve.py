@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import json
 from http import HTTPStatus
@@ -208,7 +208,10 @@ class RunStore:
                 "runs": runs,
                 "source": dict(self._source_status),
                 "findings": list(self._findings),
-                "ingestion_errors": list(self._ingestion_findings()),
+                "ingestion_errors": [
+                    finding for finding in self._findings
+                    if finding.get("kind") == "ingestion"
+                ],
             }
 
     def run_detail(self, trace_id: str) -> dict[str, object] | None:
@@ -377,12 +380,6 @@ class RunStore:
             self.add_finding("ingestion", code, message, line=error.line)
         self._errors = tuple(errors)
 
-    def _ingestion_findings(self) -> Iterable[dict[str, object]]:
-        return (
-            finding for finding in self._findings
-            if finding.get("kind") == "ingestion"
-        )
-
     def _publish(self, message_type: str, data: dict[str, object]) -> None:
         self._cursor += 1
         self._updates.append({
@@ -441,7 +438,6 @@ def serve(
     reader = threading.Thread(
         target=_read_stream,
         args=(source, store, config),
-        kwargs={"source_kind": "stdin"},
         daemon=True,
     )
     reader.start()
@@ -480,18 +476,7 @@ def _serve_store(
 ) -> int:
     _validate_remote_access(config)
     if config.remote_access and not config.access_token:
-        config = ServeConfig(
-            host=config.host,
-            port=config.port,
-            open_browser=config.open_browser,
-            full_payloads=config.full_payloads,
-            unsafe_unredacted=config.unsafe_unredacted,
-            remote_access=config.remote_access,
-            access_token=secrets.token_urlsafe(24),
-            loop_threshold=config.loop_threshold,
-            stall_seconds=config.stall_seconds,
-            max_bytes=config.max_bytes,
-        )
+        config = replace(config, access_token=secrets.token_urlsafe(24))
     server = make_server(store, host=config.host, port=config.port)
     server.access_token = config.access_token
     host, port = server.server_address[:2]
@@ -543,7 +528,8 @@ def _follow_file(
     store.set_source_status(connected=True, state="reading")
     source = path.open(encoding="utf-8")
     position = 0
-    identity = _file_identity(path)
+    stat = path.stat()
+    identity = (stat.st_dev, stat.st_ino)
     try:
         while not stop.is_set():
             line = source.readline()
@@ -603,8 +589,6 @@ def _read_stream(
     source: TextIO,
     store: RunStore,
     config: ServeConfig,
-    *,
-    source_kind: str,
 ) -> None:
     store.set_source_status(connected=True, state="reading")
     try:
@@ -617,13 +601,7 @@ def _read_stream(
     except UnicodeError as error:
         store.add_finding("source", "SOURCE_DECODE_ERROR", str(error))
     finally:
-        state = "disconnected" if source_kind == "stdin" else "caught_up"
-        store.set_source_status(connected=False, state=state)
-
-
-def _file_identity(path: Path) -> tuple[int, int]:
-    stat = path.stat()
-    return stat.st_dev, stat.st_ino
+        store.set_source_status(connected=False, state="disconnected")
 
 
 def make_server(store: RunStore, *, host: str = "127.0.0.1", port: int = 8765) -> ThreadingHTTPServer:
@@ -823,29 +801,6 @@ def _relationships(view) -> dict[str, object]:
                     "target_actor_id": actor_id,
                     "event_id": event.event_id,
                 })
-            elif actor_id not in parents:
-                add_link({
-                    "type": "causal",
-                    "source_actor_id": parent_actor_id,
-                    "target_actor_id": actor_id,
-                    "event_id": event.event_id,
-                })
-            elif parents[actor_id] != parent_actor_id:
-                add_link({
-                    "type": "causal",
-                    "source_actor_id": parent_actor_id,
-                    "target_actor_id": actor_id,
-                    "event_id": event.event_id,
-                })
-                warnings.append({
-                    "category": "projection",
-                    "code": "AMBIGUOUS_PARENT",
-                    "event_id": event.event_id,
-                    "trace_id": event.trace_id,
-                    "actor_id": actor_id,
-                    "summary": "actor has multiple causal parent candidates",
-                    "evidence": f"primary {parents[actor_id]}, later {parent_actor_id}",
-                })
             else:
                 add_link({
                     "type": "causal",
@@ -853,6 +808,16 @@ def _relationships(view) -> dict[str, object]:
                     "target_actor_id": actor_id,
                     "event_id": event.event_id,
                 })
+                if actor_id in parents and parents[actor_id] != parent_actor_id:
+                    warnings.append({
+                        "category": "projection",
+                        "code": "AMBIGUOUS_PARENT",
+                        "event_id": event.event_id,
+                        "trace_id": event.trace_id,
+                        "actor_id": actor_id,
+                        "summary": "actor has multiple causal parent candidates",
+                        "evidence": f"primary {parents[actor_id]}, later {parent_actor_id}",
+                    })
 
         attributes = _attributes(event)
         target = attributes.get("to")
@@ -913,7 +878,7 @@ def _usage_summary(events: Iterable[Event]) -> dict[str, object]:
     available = {key: False for key in totals}
     for event in events:
         usage = _usage(event)
-        for key in ("input_tokens", "output_tokens", "total_tokens", "cost_usd"):
+        for key in totals:
             value = usage.get(key)
             if _number(value):
                 totals[key] += value

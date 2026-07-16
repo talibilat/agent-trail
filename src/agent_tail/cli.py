@@ -56,9 +56,10 @@ def main(argv: list[str] | None = None) -> int:
     if argv[:1] == ["serve"]:
         return _serve_main(argv[1:])
 
-    arguments = parser().parse_args(argv)
+    argument_parser = parser()
+    arguments = argument_parser.parse_args(argv)
     if arguments.snapshot_stream and arguments.input != "-":
-        parser().error("--snapshot-stream requires standard input")
+        argument_parser.error("--snapshot-stream requires standard input")
 
     source: TextIO
     close_source = False
@@ -131,9 +132,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _serve_main(argv: list[str]) -> int:
-    arguments = serve_parser().parse_args(argv)
+    argument_parser = serve_parser()
+    arguments = argument_parser.parse_args(argv)
     if arguments.port < 0 or arguments.port > 65535:
-        serve_parser().error("--port must be between 0 and 65535")
+        argument_parser.error("--port must be between 0 and 65535")
 
     config = ServeConfig(
         host=arguments.host,

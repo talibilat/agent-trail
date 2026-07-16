@@ -104,14 +104,14 @@ class Event:
             "actor": Mapping,
             "operation": Mapping,
         }
-        for field, expected_type in required_types.items():
-            if field not in data:
-                raise EventError(f"missing required field: {field}")
-            value = data[field]
+        for field_name, expected_type in required_types.items():
+            if field_name not in data:
+                raise EventError(f"missing required field: {field_name}")
+            value = data[field_name]
             if not isinstance(value, expected_type) or (
-                field == "sequence" and isinstance(value, bool)
+                field_name == "sequence" and isinstance(value, bool)
             ):
-                raise EventError(f"{field} has an incorrect type")
+                raise EventError(f"{field_name} has an incorrect type")
 
         schema_version = data["schema_version"]
         if re.fullmatch(r"1\.[0-9]+", schema_version) is None:
@@ -633,19 +633,6 @@ class TraceIndex:
         uncertain.update(event.event_id for event in remainder)
         return ordered, uncertain, (ancestors, descendants)
 
-    @staticmethod
-    def _reaches(outgoing: Mapping[str, set[str]], start: str, target: str) -> bool:
-        pending = list(outgoing[start])
-        seen = set()
-        while pending:
-            node = pending.pop()
-            if node == target:
-                return True
-            if node not in seen:
-                seen.add(node)
-                pending.extend(outgoing[node])
-        return False
-
     def _loop_warnings(self, events: tuple[Event, ...]) -> list[Warning]:
         warnings = []
         for (_, signature), histories in self._histories(events).items():
@@ -717,14 +704,14 @@ class TraceIndex:
         return warnings
 
     def _histories(
-        self, events: tuple[Event, ...], *, include_kind: bool = True
+        self, events: tuple[Event, ...]
     ) -> dict[tuple[str, str], list[list[Event]]]:
         groups: dict[tuple[str, str], list[list[Event]]] = {}
         for event in events:
             histories = groups.setdefault(
                 (
                     event.emitter_id,
-                    self._signature(event, include_kind=include_kind),
+                    self._signature(event),
                 ),
                 [[]],
             )

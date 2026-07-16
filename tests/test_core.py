@@ -4,7 +4,6 @@ import hashlib
 import json
 import threading
 import unittest
-from unittest import mock
 
 from agent_tail.core import (
     Event,
@@ -529,7 +528,7 @@ class IngestionTests(unittest.TestCase):
 
 
 class TraceIndexTests(unittest.TestCase):
-    def test_large_topological_order_does_not_run_reachability_searches(self):
+    def test_large_topological_order_preserves_sequence(self):
         index = TraceIndex(max_bytes=64 * 1024 * 1024)
         for sequence in range(3000):
             index.add(Event.from_dict(event_data(
@@ -537,10 +536,7 @@ class TraceIndexTests(unittest.TestCase):
                 sequence=sequence,
             )))
 
-        with mock.patch.object(
-            index, "_reaches", side_effect=AssertionError("pairwise reachability")
-        ):
-            ordered = index.ordered_events()
+        ordered = index.ordered_events()
 
         self.assertEqual(len(ordered), 3000)
         self.assertEqual(ordered[0].event_id, "evt-0")
