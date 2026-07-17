@@ -424,6 +424,51 @@ class ServeTests(unittest.TestCase):
             },
         ])
 
+    def test_invalid_change_new_count_remains_traceable(self):
+        valid_hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="boolean-new-count-change",
+                kind="change.applied",
+                attributes={"change": {**valid_hunk, "new_count": True}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="negative-new-count-change",
+                span_id="span-2",
+                sequence=2,
+                kind="change.applied",
+                attributes={"change": {**valid_hunk, "new_count": -1}},
+            )) + "\n",
+        ])
+
+        evidence = store.run_detail("trace-1")["evidence_map"]
+
+        self.assertEqual(evidence["changes"], [])
+        self.assertEqual(evidence["invalid_changes"], [
+            {
+                "event_id": "boolean-new-count-change",
+                "actor_id": "reviewer-1",
+                "integrity": [{
+                    "field": "new_count",
+                    "reason": "invalid_change_new_count",
+                }],
+            },
+            {
+                "event_id": "negative-new-count-change",
+                "actor_id": "reviewer-1",
+                "integrity": [{
+                    "field": "new_count",
+                    "reason": "invalid_change_new_count",
+                }],
+            },
+        ])
+
     def test_invalid_change_symbol_reduces_complete_coverage(self):
         targets = [
             event_data(

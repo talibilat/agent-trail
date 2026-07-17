@@ -104,6 +104,7 @@ A change event with a malformed or blank required path cannot identify a Git hun
 A malformed, negative, or impossible zero-valued `old_start` is excluded in the same way with an `invalid_change_old_start` diagnostic; zero remains valid when `old_count` is zero.
 A malformed or negative `old_count` is excluded in the same way with an `invalid_change_old_count` diagnostic; zero remains valid for an empty old range.
 A malformed, negative, or impossible zero-valued `new_start` is excluded in the same way with an `invalid_change_new_start` diagnostic; zero remains valid when `new_count` is zero.
+A malformed or negative `new_count` is excluded in the same way with an `invalid_change_new_count` diagnostic; zero remains valid for an empty new range.
 A supplied malformed or blank symbol is omitted while the valid hunk remains visible, produces an `invalid_change_symbol` integrity diagnostic, and keeps coverage incomplete; an absent symbol remains valid optional metadata.
 Valid locators are exposed in event order under `evidence_map.changes`, together with the change event and actor IDs.
 Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
