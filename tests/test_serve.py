@@ -349,6 +349,87 @@ class ServeTests(unittest.TestCase):
         self.assertNotIn("requirement", link)
         self.assertEqual(link["target_kind"], "requirement.observed")
 
+    def test_change_hunks_include_context_read_locators(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[{
+                    "type": "informed_by",
+                    "event_id": "context-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-1",
+                span_id="span-2",
+                sequence=2,
+                kind="context.read",
+                attributes={"context": {
+                    "path": "docs/session-lifecycle.md",
+                    "line_start": 42,
+                    "line_end": 51,
+                    "symbol": "Session expiration",
+                }},
+            )) + "\n",
+        ])
+
+        evidence = store.run_detail("trace-1")["evidence_map"]
+        expected_link = {
+            "type": "informed_by",
+            "source_event_id": "change-1",
+            "target_event_id": "context-1",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+            "target_kind": "context.read",
+            "target_actor_id": "reviewer-1",
+            "context": {
+                "path": "docs/session-lifecycle.md",
+                "line_start": 42,
+                "line_end": 51,
+                "symbol": "Session expiration",
+            },
+        }
+
+        self.assertEqual(evidence["changes"][0]["links"], [expected_link])
+        self.assertEqual(evidence["links"], [expected_link])
+
+    def test_evidence_omits_malformed_optional_context_read_fields(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                relationships=[{
+                    "type": "informed_by",
+                    "event_id": "context-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-1",
+                span_id="span-2",
+                sequence=2,
+                kind="context.read",
+                attributes={"context": {
+                    "path": "src/auth/config.py",
+                    "line_start": True,
+                    "line_end": -1,
+                    "symbol": 17,
+                }},
+            )) + "\n",
+        ])
+
+        link = store.run_detail("trace-1")["evidence_map"]["links"][0]
+
+        self.assertEqual(link["context"], {"path": "src/auth/config.py"})
+        self.assertEqual(link["target_kind"], "context.read")
+
     def test_change_hunks_include_later_human_corrections(self):
         hunk = {
             "path": "src/auth/session.py",

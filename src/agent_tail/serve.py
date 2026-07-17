@@ -888,6 +888,9 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 requirement = _requirement_detail(target)
                 if requirement is not None:
                     resolved["requirement"] = requirement
+                context = _context_read_detail(target)
+                if context is not None:
+                    resolved["context"] = context
                 correction = _human_correction(source)
                 if relationship.type == "corrects" and correction is not None:
                     resolved["correction"] = correction
@@ -967,6 +970,26 @@ def _requirement_detail(event: Event) -> dict[str, object] | None:
     if not isinstance(text, str) or not text:
         return None
     return {"id": requirement_id, "text": text}
+
+
+def _context_read_detail(event: Event) -> dict[str, object] | None:
+    if event.kind != "context.read":
+        return None
+    context = _attributes(event).get("context")
+    if not isinstance(context, dict):
+        return None
+    path = context.get("path")
+    if not isinstance(path, str) or not path:
+        return None
+    detail: dict[str, object] = {"path": path}
+    for key in ("line_start", "line_end"):
+        value = context.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            detail[key] = value
+    symbol = context.get("symbol")
+    if isinstance(symbol, str):
+        detail["symbol"] = symbol
+    return detail
 
 
 def _human_correction(event: Event) -> dict[str, object] | None:

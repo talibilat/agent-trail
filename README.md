@@ -104,6 +104,8 @@ Each change record groups the resolved and unresolved relationships originating 
 The run-level arrays remain available for all relationships, including those originating from events without valid change locators.
 To identify a motivating requirement, emit a `requirement.observed` event with non-empty `attributes.requirement.id` and `attributes.requirement.text` strings, then reference it from the change event.
 Resolved links to that event include the validated ID and text under `requirement`, while malformed optional requirement metadata is omitted without hiding the relationship.
+To identify repository or documentation evidence, emit a `context.read` event with a non-empty `attributes.context.path`, optional non-negative integer `line_start` and `line_end` fields, and an optional string `symbol`, then reference it from the change event.
+Resolved links to that event include the validated locator under `context`; malformed optional locator fields are omitted without hiding the relationship.
 To attach a test result, emit a `verification.finished` event with `attributes.verification.command` and boolean `attributes.verification.passed` fields, plus an optional integer `exit_code`.
 Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
 Resolved links to that event include the validated result under `verification`, so each linked hunk exposes its test command and outcome directly.
