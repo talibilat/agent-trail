@@ -1152,13 +1152,13 @@ def _context_read_detail(event: Event) -> dict[str, object] | None:
         return None
     detail: dict[str, object] = {"path": path}
     line_start = context.get("line_start")
-    if isinstance(line_start, int) and not isinstance(line_start, bool) and line_start >= 0:
+    if isinstance(line_start, int) and not isinstance(line_start, bool) and line_start > 0:
         detail["line_start"] = line_start
     line_end = context.get("line_end")
     if (
         isinstance(line_end, int)
         and not isinstance(line_end, bool)
-        and line_end >= 0
+        and line_end > 0
         and ("line_start" not in detail or line_end >= detail["line_start"])
     ):
         detail["line_end"] = line_end

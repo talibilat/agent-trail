@@ -699,6 +699,34 @@ class ServeTests(unittest.TestCase):
         })
         self.assertEqual(link["target_kind"], "context.read")
 
+    def test_evidence_omits_zero_context_line_coordinates(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                relationships=[{
+                    "type": "informed_by",
+                    "event_id": "context-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-1",
+                span_id="span-2",
+                sequence=2,
+                kind="context.read",
+                attributes={"context": {
+                    "path": "src/auth/config.py",
+                    "line_start": 0,
+                    "line_end": 0,
+                }},
+            )) + "\n",
+        ])
+
+        link = store.run_detail("trace-1")["evidence_map"]["links"][0]
+
+        self.assertEqual(link["context"], {"path": "src/auth/config.py"})
+        self.assertEqual(link["target_kind"], "context.read")
+
     def test_evidence_ignores_blank_context_read_paths(self):
         hunk = {
             "path": "src/auth/session.py",
