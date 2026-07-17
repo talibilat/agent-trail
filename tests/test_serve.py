@@ -541,6 +541,7 @@ class ServeTests(unittest.TestCase):
             event_data(event_id="proposal-1", sequence=5, kind="change.proposed"),
             event_data(
                 event_id="change-1",
+                emitter_id="change-worker",
                 sequence=6,
                 kind="change.applied",
                 attributes={"change": {
@@ -2002,6 +2003,7 @@ class ServeTests(unittest.TestCase):
             )) + "\n",
             json.dumps(event_data(
                 event_id="change-1",
+                emitter_id="change-worker",
                 span_id="span-3",
                 sequence=3,
                 kind="change.applied",
@@ -2095,6 +2097,7 @@ class ServeTests(unittest.TestCase):
             )) + "\n",
             json.dumps(event_data(
                 event_id="change-1",
+                emitter_id="change-worker",
                 span_id="span-change",
                 sequence=4,
                 timestamp="2026-07-13T11:01:30Z",
@@ -2139,7 +2142,7 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 2,
         })
 
-    def test_verification_before_change_is_a_temporal_diagnostic(self):
+    def test_verification_before_change_uses_same_emitter_sequence_ordering(self):
         hunk = {
             "path": "src/auth/session.py",
             "old_start": 84,
@@ -2150,6 +2153,7 @@ class ServeTests(unittest.TestCase):
         store = RunStore.from_lines([
             json.dumps(event_data(
                 event_id="verification-before-change",
+                emitter_id="worker-2",
                 timestamp="2026-07-13T11:01:00Z",
                 kind="verification.finished",
                 attributes={"verification": {
@@ -2171,6 +2175,43 @@ class ServeTests(unittest.TestCase):
                 }},
             )) + "\n",
             json.dumps(event_data(
+                event_id="verification-clock-skew-before-change",
+                span_id="span-clock-skew-before",
+                sequence=1,
+                timestamp="2026-07-13T11:03:00Z",
+                kind="verification.finished",
+                attributes={"verification": {
+                    "command": "pytest tests/test_session.py",
+                    "passed": True,
+                    "test_origin": "pre_existing",
+                }},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-clock-skew-after-change",
+                span_id="span-clock-skew-after",
+                sequence=4,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="verification.finished",
+                attributes={"verification": {
+                    "command": "pytest tests/test_session.py",
+                    "passed": True,
+                    "test_origin": "pre_existing",
+                }},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-same-time-other-emitter",
+                emitter_id="worker-2",
+                span_id="span-other-emitter",
+                sequence=2,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="verification.finished",
+                attributes={"verification": {
+                    "command": "pytest tests/test_session.py",
+                    "passed": True,
+                    "test_origin": "pre_existing",
+                }},
+            )) + "\n",
+            json.dumps(event_data(
                 event_id="change-1",
                 span_id="span-change",
                 sequence=3,
@@ -2180,6 +2221,18 @@ class ServeTests(unittest.TestCase):
                 relationships=[
                     {"type": "verified_by", "event_id": "verification-before-change"},
                     {"type": "verified_by", "event_id": "verification-same-time"},
+                    {
+                        "type": "verified_by",
+                        "event_id": "verification-clock-skew-before-change",
+                    },
+                    {
+                        "type": "verified_by",
+                        "event_id": "verification-clock-skew-after-change",
+                    },
+                    {
+                        "type": "verified_by",
+                        "event_id": "verification-same-time-other-emitter",
+                    },
                 ],
             )) + "\n",
         ])
@@ -2188,21 +2241,30 @@ class ServeTests(unittest.TestCase):
 
         self.assertEqual(
             [link["target_event_id"] for link in change["links"]],
-            ["verification-before-change", "verification-same-time"],
+            [
+                "verification-before-change",
+                "verification-same-time",
+                "verification-clock-skew-before-change",
+                "verification-clock-skew-after-change",
+                "verification-same-time-other-emitter",
+            ],
         )
-        self.assertEqual(change["unresolved"], [{
-            "source_event_id": "change-1",
-            "source_actor_id": "reviewer-1",
-            "source_kind": "change.applied",
-            "type": "verified_by",
-            "target_event_id": "verification-before-change",
-            "target_kind": "verification.finished",
-            "reason": "verification_precedes_change",
-        }])
+        self.assertEqual(
+            [item["target_event_id"] for item in change["unresolved"]],
+            [
+                "verification-before-change",
+                "verification-same-time",
+                "verification-clock-skew-before-change",
+            ],
+        )
+        self.assertTrue(all(
+            item["reason"] == "verification_precedes_change"
+            for item in change["unresolved"]
+        ))
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "decision"],
-            "unresolved_count": 1,
+            "unresolved_count": 3,
         })
 
     def test_conflicting_verification_outcomes_are_diagnostics(self):
@@ -3361,6 +3423,7 @@ class ServeTests(unittest.TestCase):
                     ),
                     event_data(
                         event_id="change-1",
+                        emitter_id="change-worker",
                         sequence=6,
                         kind="change.applied",
                         attributes={"change": hunk},
@@ -3708,6 +3771,7 @@ class ServeTests(unittest.TestCase):
             ),
             event_data(
                 event_id="change-1",
+                emitter_id="change-worker",
                 sequence=9,
                 kind="change.applied",
                 attributes={"change": hunk},
@@ -3916,6 +3980,7 @@ class ServeTests(unittest.TestCase):
                     ),
                     event_data(
                         event_id="change-1",
+                        emitter_id="change-worker",
                         sequence=7,
                         kind="change.applied",
                         attributes={"change": hunk},
@@ -4041,6 +4106,7 @@ class ServeTests(unittest.TestCase):
                     ),
                     event_data(
                         event_id="change-1",
+                        emitter_id="change-worker",
                         sequence=7,
                         kind="change.applied",
                         attributes={"change": hunk},
@@ -4119,6 +4185,7 @@ class ServeTests(unittest.TestCase):
             event_data(event_id="proposal-1", sequence=7, kind="change.proposed"),
             event_data(
                 event_id="change-1",
+                emitter_id="change-worker",
                 sequence=8,
                 kind="change.applied",
                 attributes={"change": hunk},

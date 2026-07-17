@@ -416,6 +416,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 json.dumps(event_data(
                     event_id="change-1",
                     span_id="span-5",
+                    emitter_id="change-worker",
                     sequence=9,
                     kind="change.applied",
                     actor={"id": "implementer-1"},
