@@ -42,6 +42,16 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="requirement-unknown-actor",
+                    span_id="span-requirement-unknown-actor",
+                    kind="requirement.observed",
+                    actor={"id": " \t"},
+                    attributes={"requirement": {
+                        "id": "R4",
+                        "text": "Requirement with an unknown observer.",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="context-1",
                     span_id="span-2",
                     sequence=2,
@@ -316,6 +326,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "applies", "event_id": "anonymous-proposal"},
                         {"type": "references", "event_id": "unrelated-proposal"},
                         {"type": "motivated_by", "event_id": "requirement-1"},
+                        {"type": "motivated_by", "event_id": "requirement-unknown-actor"},
                         {"type": "motivated_by", "event_id": "requirement-invalid-detail"},
                         {"type": "references", "event_id": "unrelated-requirement"},
                         {"type": "informed_by", "event_id": "context-1"},
@@ -657,7 +668,12 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).not_to_contain_text("unrelated-planner")
                 requirement = evidence.locator(".requirement-card").filter(has_text="R3")
                 expect(requirement).to_contain_text("event requirement-1")
+                expect(requirement).to_contain_text("observed by user")
                 expect(requirement).to_contain_text("Expired sessions must be rejected.")
+                anonymous_requirement = evidence.locator(".requirement-card").filter(has_text="R4")
+                expect(anonymous_requirement).to_contain_text("event requirement-unknown-actor")
+                expect(anonymous_requirement).to_contain_text("observing actor unknown")
+                expect(anonymous_requirement).not_to_contain_text("observed by")
                 expect(evidence).not_to_contain_text("R-unrelated")
                 expect(evidence).not_to_contain_text("Unrelated requirement")
                 direct_context = evidence.locator(".context-card").filter(has_text="docs/session-lifecycle.md")

@@ -299,6 +299,7 @@
     .change-evidence .actor { margin-top: 4px; font: 400 10px "IBM Plex Mono", monospace; color: var(--dim); }
     .requirement-card { margin-top: 10px; padding: 10px; border: 1px solid rgba(122,162,255,.35); border-radius: 8px; background: rgba(122,162,255,.08); }
     .requirement-card .id { font: 600 10px "IBM Plex Mono", monospace; color: var(--accent); }
+    .requirement-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
     .requirement-card .text { margin-top: 4px; font: 400 11.5px/1.5 "IBM Plex Sans", sans-serif; color: var(--text); }
     .proposal-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--orch); background: rgba(177,140,255,.06); }
     .proposal-card .title { font: 600 10px "IBM Plex Mono", monospace; color: var(--orch); }
@@ -1611,10 +1612,15 @@
           const requirementId = document.createElement('div');
           requirementId.className = 'id';
           requirementId.textContent = `Requirement ${link.requirement.id} · event ${link.target_event_id}`;
+          const observer = document.createElement('div');
+          observer.className = 'meta';
+          observer.textContent = typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+            ? `observed by ${link.target_actor_id}`
+            : 'observing actor unknown';
           const requirementText = document.createElement('div');
           requirementText.className = 'text';
           requirementText.textContent = link.requirement.text;
-          card.append(requirementId, requirementText);
+          card.append(requirementId, observer, requirementText);
           block.append(card);
         });
 
