@@ -55,22 +55,47 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
-                    event_id="verification-1",
+                    event_id="verification-started-1",
                     span_id="span-3",
                     sequence=3,
-                    kind="verification.finished",
-                    actor={"id": "implementer-1"},
+                    kind="verification.started",
+                    actor={"id": "test-runner-1<img id=verification-starter-injected>"},
                     attributes={"verification": {
                         "command": "pytest tests/test_session.py<img id=verification-injected>",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="verification-1",
+                    span_id="span-verification-finished",
+                    sequence=4,
+                    kind="verification.finished",
+                    actor={"id": "result-reporter-1"},
+                    attributes={"verification": {
                         "passed": True,
                         "exit_code": 0,
                         "test_origin": "same_agent",
                     }},
+                    relationships=[{
+                        "type": "completes",
+                        "event_id": "verification-started-1",
+                    }],
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="verification-2",
+                    span_id="span-verification-missing",
+                    sequence=5,
+                    kind="verification.finished",
+                    actor={"id": "result-reporter-2"},
+                    attributes={"verification": {"passed": False}},
+                    relationships=[{
+                        "type": "completes",
+                        "event_id": "missing-start<img id=verification-missing-injected>",
+                    }],
                 )) + "\n",
                 json.dumps(event_data(
                     event_id="compaction-1",
                     span_id="span-compaction",
-                    sequence=4,
+                    sequence=6,
                     kind="context.compacted",
                     actor={"id": "summarizer-1"},
                     relationships=[
@@ -81,7 +106,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 json.dumps(event_data(
                     event_id="tool-1",
                     span_id="span-4",
-                    sequence=5,
+                    sequence=7,
                     kind="tool.call.completed",
                     actor={"id": "shell-1"},
                     operation={"status": "ok", "name": "shell"},
@@ -94,14 +119,14 @@ class ServeEndToEndTests(unittest.TestCase):
                 json.dumps(event_data(
                     event_id="proposal-1",
                     span_id="span-proposal",
-                    sequence=6,
+                    sequence=8,
                     kind="change.proposed",
                     actor={"id": "planner-1<img id=proposal-injected>"},
                 )) + "\n",
                 json.dumps(event_data(
                     event_id="change-1",
                     span_id="span-5",
-                    sequence=7,
+                    sequence=9,
                     kind="change.applied",
                     actor={"id": "implementer-1"},
                     attributes={"change": {
@@ -118,13 +143,14 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "informed_by", "event_id": "compaction-1"},
                         {"type": "preceded_by", "event_id": "tool-1"},
                         {"type": "verified_by", "event_id": "verification-1"},
+                        {"type": "verified_by", "event_id": "verification-2"},
                         {"type": "reviewed_by", "event_id": "missing-review<img id=evidence-missing-injected>"},
                     ],
                 )) + "\n",
                 json.dumps(event_data(
                     event_id="correction-1",
                     span_id="span-6",
-                    sequence=8,
+                    sequence=10,
                     kind="human.corrected",
                     actor={"id": "maintainer-1<img id=correction-injected>"},
                     attributes={"correction": {"action": "modified"}},
@@ -133,7 +159,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 json.dumps(event_data(
                     event_id="correction-2",
                     span_id="span-7",
-                    sequence=9,
+                    sequence=11,
                     kind="human.corrected",
                     actor={"id": "maintainer-2"},
                     attributes={"correction": {"action": "reverted"}},
@@ -182,21 +208,29 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("run by shell-1 · ok · exit 0")
                 expect(evidence).to_contain_text("PASS")
                 expect(evidence).to_contain_text("pytest tests/test_session.py")
-                expect(evidence).to_contain_text("verified by implementer-1")
+                expect(evidence).to_contain_text("started by test-runner-1")
+                expect(evidence).to_contain_text("result reported by result-reporter-1")
                 expect(evidence).to_contain_text("exit 0")
                 expect(evidence).to_contain_text("implementation and test written by the same agent")
+                expect(evidence).to_contain_text("FAIL")
+                expect(evidence).to_contain_text("result reported by result-reporter-2")
+                expect(evidence).to_contain_text("Missing completes start")
+                expect(evidence).to_contain_text("missing-start")
+                expect(evidence).not_to_contain_text("undefined")
                 expect(evidence).to_contain_text("Human modified this change")
                 expect(evidence).to_contain_text("corrected by maintainer-1")
                 expect(evidence).to_contain_text("Human reverted this change")
                 expect(evidence).to_contain_text("corrected by maintainer-2")
                 expect(evidence).to_contain_text("Missing evidence · reviewed_by")
                 expect(evidence).to_contain_text("missing-review")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 2 unresolved references")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 3 unresolved references")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
                 expect(page.locator("#tool-command-injected")).to_have_count(0)
                 expect(page.locator("#tool-result-injected")).to_have_count(0)
                 expect(page.locator("#verification-injected")).to_have_count(0)
+                expect(page.locator("#verification-starter-injected")).to_have_count(0)
+                expect(page.locator("#verification-missing-injected")).to_have_count(0)
                 expect(page.locator("#correction-injected")).to_have_count(0)
                 expect(page.locator("#proposal-injected")).to_have_count(0)
                 expect(page.locator("#compaction-missing-injected")).to_have_count(0)

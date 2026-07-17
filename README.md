@@ -126,7 +126,8 @@ Finished-only events can instead include the command directly for producers that
 Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
 Resolved links to the finished event include the validated result under `verification`, including each resolved start event and its actor, so each linked hunk exposes its test command and outcome directly.
 Missing start events remain visible under `verification.unresolved` and contribute to incomplete hunk coverage until they arrive.
-The browser event inspector presents the command, pass or fail outcome, verifier, optional exit code, and whether the test predates the change or was written by the same agent.
+The browser event inspector presents each test starter and command separately from the result reporter, together with the pass or fail outcome, optional exit code, and whether the test predates the change or was written by the same agent.
+It identifies each missing verification start by relationship type and event ID rather than hiding lifecycle gaps behind the aggregate incomplete-coverage status.
 Malformed optional verification metadata is omitted without rejecting the event, its relationship, or other valid verification details.
 To record a later human change, emit a `human.corrected` event with a `corrects` relationship targeting the original `change.applied` event and set `attributes.correction.action` to `modified` or `reverted`.
 Each affected hunk exposes these inbound links in event order under `corrections`, including the human actor and validated action when available.

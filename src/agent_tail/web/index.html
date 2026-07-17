@@ -325,6 +325,7 @@
     .verification-card.failed .outcome, .verification-card.same-agent .provenance { color: var(--warn); }
     .verification-card .command { margin-top: 4px; font: 500 10.5px "IBM Plex Mono", monospace; color: var(--text); word-break: break-word; }
     .verification-card .meta, .verification-card .provenance { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .verification-card .incomplete { margin-top: 5px; font: 500 9.5px "IBM Plex Mono", monospace; color: var(--warn); word-break: break-all; }
     .correction-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--warn); background: rgba(255,190,92,.06); }
     .correction-card.reverted { border-left-color: var(--err); background: rgba(255,107,107,.06); }
     .correction-card .action { font: 600 10px "IBM Plex Mono", monospace; color: var(--warn); }
@@ -1654,15 +1655,38 @@
           const outcome = document.createElement('div');
           outcome.className = 'outcome';
           outcome.textContent = verification.passed ? 'PASS' : 'FAIL';
-          const command = document.createElement('div');
-          command.className = 'command';
-          command.textContent = verification.command;
+          card.append(outcome);
+          const starts = verification.starts || [];
+          starts.forEach((start) => {
+            if (start.command) {
+              const command = document.createElement('div');
+              command.className = 'command';
+              command.textContent = start.command;
+              card.append(command);
+            }
+            const startMeta = document.createElement('div');
+            startMeta.className = 'meta';
+            startMeta.textContent = `started by ${start.actor_id}`;
+            card.append(startMeta);
+          });
+          if (!starts.length && verification.command) {
+            const command = document.createElement('div');
+            command.className = 'command';
+            command.textContent = verification.command;
+            card.append(command);
+          }
           const meta = document.createElement('div');
           meta.className = 'meta';
-          const metaParts = [`verified by ${link.target_actor_id}`];
+          const metaParts = [`result reported by ${link.target_actor_id}`];
           if (verification.exit_code !== undefined) metaParts.push(`exit ${verification.exit_code}`);
           meta.textContent = metaParts.join(' · ');
-          card.append(outcome, command, meta);
+          card.append(meta);
+          (verification.unresolved || []).forEach((start) => {
+            const incomplete = document.createElement('div');
+            incomplete.className = 'incomplete';
+            incomplete.textContent = `Missing ${start.type} start · ${start.event_id}`;
+            card.append(incomplete);
+          });
           if (verification.test_origin) {
             const provenance = document.createElement('div');
             provenance.className = 'provenance';
