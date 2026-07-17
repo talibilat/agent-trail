@@ -1733,6 +1733,19 @@ class ServeTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
+            {
+                link["target_event_id"]: link["chronology"]
+                for link in change["links"]
+            },
+            {
+                "proposal-after-change": "after_change",
+                "proposal-same-time": "before_change",
+                "proposal-same-time-after": "after_change",
+                "proposal-clock-skewed-after": "after_change",
+                "proposal-same-time-independent": "undetermined",
+            },
+        )
+        self.assertEqual(
             [item["target_event_id"] for item in change["unresolved"]],
             [
                 "proposal-after-change",

@@ -925,6 +925,16 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     "target_kind": target.kind,
                     "target_actor_id": target.actor["id"],
                 }
+                if (
+                    source.kind == "change.applied"
+                    and relationship.type == "applies"
+                    and target.kind == "change.proposed"
+                ):
+                    resolved["chronology"] = _evidence_chronology(
+                        target,
+                        source,
+                        "change",
+                    )
                 verification = _verification_result(
                     target,
                     events_by_id,

@@ -1641,6 +1641,12 @@
           eventId.className = 'meta';
           eventId.textContent = `event ${link.target_event_id}`;
           card.append(title, meta, eventId);
+          if (link.chronology === 'undetermined') {
+            const chronology = document.createElement('div');
+            chronology.className = 'meta';
+            chronology.textContent = 'proposal chronology undetermined';
+            card.append(chronology);
+          }
           block.append(card);
         });
 

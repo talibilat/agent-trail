@@ -1270,6 +1270,15 @@ class ServeEndToEndTests(unittest.TestCase):
                     actor={"id": "planner-1"},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="proposal-undetermined",
+                    emitter_id="concurrent-planner-worker",
+                    span_id="span-concurrent-proposal",
+                    sequence=1,
+                    timestamp="2026-07-13T11:03:00Z",
+                    kind="change.proposed",
+                    actor={"id": "concurrent-planner"},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="context-same-time",
                     span_id="span-current-context",
                     sequence=3,
@@ -1390,6 +1399,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                     relationships=[
                         {"type": "applies", "event_id": "proposal-1"},
+                        {"type": "applies", "event_id": "proposal-undetermined"},
                         {"type": "motivated_by", "event_id": "requirement-after-decision"},
                         {"type": "motivated_by", "event_id": "requirement-undetermined"},
                         {"type": "informed_by", "event_id": "context-same-time"},
@@ -1427,6 +1437,10 @@ class ServeEndToEndTests(unittest.TestCase):
                 }""")
 
                 evidence = page.locator(".change-evidence")
+                undetermined_proposal = evidence.locator(".proposal-card").filter(
+                    has_text="concurrent-planner"
+                )
+                expect(undetermined_proposal).to_contain_text("proposal chronology undetermined")
                 early = evidence.locator(".compaction-card").filter(has_text="early-summarizer")
                 late = evidence.locator(".compaction-card").filter(has_text="late-summarizer")
                 expect(early).to_contain_text("Compaction chronology undetermined")
