@@ -1627,9 +1627,10 @@
           path.textContent = formatContextLocator(link.context);
           const hasReadingActor = typeof link.target_actor_id === 'string'
             && link.target_actor_id.trim();
-          const details = [hasReadingActor
+          const details = [`event ${link.target_event_id}`];
+          details.push(hasReadingActor
             ? `read by ${link.target_actor_id}`
-            : 'reading actor unknown'];
+            : 'reading actor unknown');
           if (link.context.symbol) details.push(link.context.symbol);
           const meta = document.createElement('div');
           meta.className = 'meta';
