@@ -855,10 +855,9 @@ def _relationships(view) -> dict[str, object]:
 
 
 def _event_follows(candidate: Event, reference: Event) -> bool:
-    if (
-        candidate.emitter_id == reference.emitter_id
-        and candidate.sequence != reference.sequence
-    ):
+    if candidate.emitter_id == reference.emitter_id:
+        if candidate.sequence == reference.sequence:
+            return False
         return candidate.sequence > reference.sequence
     return candidate.timestamp > reference.timestamp
 
