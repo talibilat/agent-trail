@@ -1556,7 +1556,11 @@
           block.append(card);
         });
 
-        (changeEvidence.links || []).filter((link) => link.requirement).forEach((link) => {
+        (changeEvidence.links || []).filter(
+          (link) => link.type === 'motivated_by'
+            && link.target_kind === 'requirement.observed'
+            && link.requirement
+        ).forEach((link) => {
           const card = document.createElement('div');
           card.className = 'requirement-card';
           const requirementId = document.createElement('div');

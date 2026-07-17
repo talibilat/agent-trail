@@ -693,29 +693,34 @@ class ServeTests(unittest.TestCase):
             "new_start": 84,
             "new_count": 19,
         }
-        for test_origin, decision_relationship, include_tool_detail, expected in (
-            (None, "applies", True, {
+        for test_origin, requirement_relationship, decision_relationship, include_tool_detail, expected in (
+            (None, "motivated_by", "applies", True, {
                 "status": "incomplete",
                 "missing": [],
                 "unresolved_count": 0,
                 "unknown_test_origin_count": 1,
             }),
-            ("pre_existing", None, True, {
+            ("pre_existing", "motivated_by", None, True, {
                 "status": "incomplete",
                 "missing": ["decision"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "references", True, {
+            ("pre_existing", "motivated_by", "references", True, {
                 "status": "incomplete",
                 "missing": ["decision"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "applies", False, {
+            ("pre_existing", "references", "applies", True, {
+                "status": "incomplete",
+                "missing": ["requirement"],
+                "unresolved_count": 0,
+            }),
+            ("pre_existing", "motivated_by", "applies", False, {
                 "status": "incomplete",
                 "missing": ["tool"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "applies", True, {
+            ("pre_existing", "motivated_by", "applies", True, {
                 "status": "complete",
                 "missing": [],
                 "unresolved_count": 0,
@@ -723,6 +728,7 @@ class ServeTests(unittest.TestCase):
         ):
             with self.subTest(
                 test_origin=test_origin,
+                requirement_relationship=requirement_relationship,
                 decision_relationship=decision_relationship,
                 include_tool_detail=include_tool_detail,
             ):
@@ -770,7 +776,7 @@ class ServeTests(unittest.TestCase):
                         kind="change.applied",
                         attributes={"change": hunk},
                         relationships=[
-                            {"type": "motivated_by", "event_id": "requirement-1"},
+                            {"type": requirement_relationship, "event_id": "requirement-1"},
                             {"type": "informed_by", "event_id": "context-1"},
                             {"type": "preceded_by", "event_id": "tool-1"},
                             {"type": "verified_by", "event_id": "verification-1"},
@@ -785,9 +791,14 @@ class ServeTests(unittest.TestCase):
                     json.dumps(event) + "\n" for event in targets
                 )
 
-                coverage = store.run_detail("trace-1")["evidence_map"]["changes"][0]["coverage"]
+                change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
-                self.assertEqual(coverage, expected)
+                self.assertEqual(change["coverage"], expected)
+                self.assertTrue(any(
+                    link["type"] == requirement_relationship
+                    and link["target_event_id"] == "requirement-1"
+                    for link in change["links"]
+                ))
 
     def test_bare_verification_start_does_not_satisfy_verification_coverage(self):
         hunk = {

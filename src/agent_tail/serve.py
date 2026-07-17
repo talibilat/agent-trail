@@ -927,7 +927,12 @@ def _evidence_coverage(
     unresolved: list[dict[str, object]],
 ) -> dict[str, object]:
     present = {
-        "requirement": any("requirement" in link for link in links),
+        "requirement": any(
+            link.get("type") == "motivated_by"
+            and link.get("target_kind") == "requirement.observed"
+            and "requirement" in link
+            for link in links
+        ),
         "context": any(
             "context" in link
             or (

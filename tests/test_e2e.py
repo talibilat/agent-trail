@@ -141,6 +141,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "applies", "event_id": "proposal-1"},
                         {"type": "references", "event_id": "unrelated-proposal"},
                         {"type": "motivated_by", "event_id": "requirement-1"},
+                        {"type": "references", "event_id": "unrelated-requirement"},
                         {"type": "informed_by", "event_id": "context-1"},
                         {"type": "informed_by", "event_id": "compaction-1"},
                         {"type": "preceded_by", "event_id": "tool-1"},
@@ -174,6 +175,17 @@ class ServeEndToEndTests(unittest.TestCase):
                     kind="change.proposed",
                     actor={"id": "unrelated-planner<img id=unrelated-proposal-injected>"},
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="unrelated-requirement",
+                    span_id="span-unrelated-requirement",
+                    sequence=13,
+                    kind="requirement.observed",
+                    actor={"id": "unrelated-user"},
+                    attributes={"requirement": {
+                        "id": "R-unrelated",
+                        "text": "Unrelated requirement <img id=unrelated-requirement-injected>",
+                    }},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -190,8 +202,13 @@ class ServeEndToEndTests(unittest.TestCase):
                 browser = playwright.chromium.launch(channel="chrome", headless=True)
                 page = browser.new_page()
                 page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
-                page.locator(".node-wrap").filter(has_text="implementer-1").click()
-                page.locator(".event-row").filter(has_text="change.applied").click()
+                expect(page.locator(".node-wrap").filter(has_text="implementer-1")).to_be_visible()
+                page.evaluate("""() => {
+                  [...document.querySelectorAll('.node-wrap')]
+                    .find((node) => node.textContent.includes('implementer-1')).click();
+                  [...document.querySelectorAll('.event-row')]
+                    .find((row) => row.textContent.includes('change.applied')).click();
+                }""")
 
                 evidence = page.locator(".change-evidence")
                 expect(evidence).to_contain_text("CHANGE EVIDENCE")
@@ -204,6 +221,8 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).not_to_contain_text("unrelated-planner")
                 expect(evidence).to_contain_text("R3")
                 expect(evidence).to_contain_text("Expired sessions must be rejected.")
+                expect(evidence).not_to_contain_text("R-unrelated")
+                expect(evidence).not_to_contain_text("Unrelated requirement")
                 expect(evidence).to_contain_text("docs/session-lifecycle.md")
                 expect(evidence).to_contain_text(":42-47")
                 expect(evidence).to_contain_text("researcher-1")
