@@ -1834,6 +1834,12 @@ def _verification_result(
             "actor_id": started.actor["id"],
             "chronology": _evidence_chronology(started, event, "finish"),
         }
+        if change_event is not None:
+            detail["change_chronology"] = _evidence_chronology(
+                started,
+                change_event,
+                "change",
+            )
         start_after_finish = _event_follows(started, event)
         start_before_change = (
             change_event is not None and _event_follows(change_event, started)

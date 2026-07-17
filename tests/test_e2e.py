@@ -1548,6 +1548,9 @@ class ServeEndToEndTests(unittest.TestCase):
                     "start chronology undetermined"
                 )
                 expect(undetermined_verification).to_contain_text(
+                    "start/change chronology undetermined"
+                )
+                expect(undetermined_verification).to_contain_text(
                     "verification chronology undetermined"
                 )
                 late_tool_diagnostic = evidence.locator(".unresolved-evidence").filter(

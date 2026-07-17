@@ -1867,6 +1867,9 @@
             if (start.chronology === 'undetermined') {
               startMetaParts.push('start chronology undetermined');
             }
+            if (start.change_chronology === 'undetermined') {
+              startMetaParts.push('start/change chronology undetermined');
+            }
             startMeta.textContent = startMetaParts.join(' · ');
             card.append(startMeta);
           });
