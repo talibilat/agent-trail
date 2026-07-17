@@ -1862,9 +1862,15 @@ def _verification_result(
                 change_event,
                 "change",
             )
+        unresolved_count_before_start = len(unresolved)
         start_after_finish = _event_follows(started, event)
         start_before_change = (
             change_event is not None and _event_follows(change_event, started)
+        )
+        start_change_chronology_undetermined = (
+            change_event is not None
+            and not start_before_change
+            and not _event_follows(started, change_event)
         )
         if start_after_finish:
             unresolved.append({
@@ -1900,12 +1906,26 @@ def _verification_result(
                         "reason": "conflicting_verification_command",
                     })
         starts.append(detail)
-        if not has_command and not start_after_finish and not start_before_change:
+        if (
+            not has_command
+            and not start_after_finish
+            and not start_before_change
+        ):
             unresolved.append({
                 "type": relationship.type,
                 "event_id": relationship.event_id,
                 "target_kind": started.kind,
                 "reason": "invalid_verification_command",
+            })
+        if (
+            start_change_chronology_undetermined
+            and len(unresolved) == unresolved_count_before_start
+        ):
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": started.kind,
+                "reason": "verification_start_change_chronology_undetermined",
             })
     if starts:
         result["starts"] = starts

@@ -2095,6 +2095,7 @@ class ServeTests(unittest.TestCase):
                 emitter_id="commandless-start-worker",
                 span_id="span-4",
                 sequence=4,
+                timestamp="2026-07-13T11:02:50Z",
                 kind="verification.started",
                 actor={"id": "commandless-runner"},
                 attributes={"verification": {"command": " \t"}},
@@ -2117,7 +2118,7 @@ class ServeTests(unittest.TestCase):
                 "event_id": "verification-started-without-command",
                 "actor_id": "commandless-runner",
                 "chronology": "before_finish",
-                "change_chronology": "undetermined",
+                "change_chronology": "after_change",
             }],
             "unresolved": [
                 {
@@ -2148,6 +2149,7 @@ class ServeTests(unittest.TestCase):
             emitter_id="resolved-start-worker",
             span_id="span-3",
             sequence=4,
+            timestamp="2026-07-13T11:02:50Z",
             kind="verification.started",
             actor={"id": "test-runner"},
             attributes={"verification": {
@@ -2165,13 +2167,13 @@ class ServeTests(unittest.TestCase):
                 "event_id": "verification-started-1",
                 "actor_id": "test-runner",
                 "chronology": "before_finish",
-                "change_chronology": "undetermined",
+                "change_chronology": "after_change",
                 "command": "pytest tests/test_session.py",
             }, {
                 "event_id": "verification-started-without-command",
                 "actor_id": "commandless-runner",
                 "chronology": "before_finish",
-                "change_chronology": "undetermined",
+                "change_chronology": "after_change",
             }],
             "unresolved": [
                 {
@@ -2497,6 +2499,12 @@ class ServeTests(unittest.TestCase):
             },
             {
                 "type": "completes",
+                "event_id": "verification-started-with-change",
+                "target_kind": "verification.started",
+                "reason": "verification_start_change_chronology_undetermined",
+            },
+            {
+                "type": "completes",
                 "event_id": "verification-started-clock-skew-after-finish",
                 "target_kind": "verification.started",
                 "reason": "verification_start_after_finish",
@@ -2511,7 +2519,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "decision"],
-            "unresolved_count": 4,
+            "unresolved_count": 5,
         })
 
     def test_verification_before_change_uses_same_emitter_sequence_ordering(self):
@@ -4325,6 +4333,7 @@ class ServeTests(unittest.TestCase):
                 started_event = event_data(
                     event_id="verification-started-1",
                     sequence=4,
+                    timestamp="2026-07-13T11:02:50Z",
                     kind="verification.started",
                 )
                 if started_command is not None:
@@ -4409,7 +4418,7 @@ class ServeTests(unittest.TestCase):
                             "event_id": "verification-started-1",
                             "actor_id": "reviewer-1",
                             "chronology": "before_finish",
-                            "change_chronology": "undetermined",
+                            "change_chronology": "after_change",
                             "command": "pytest tests/test_session.py",
                         }],
                     })
@@ -4430,7 +4439,7 @@ class ServeTests(unittest.TestCase):
                             "event_id": "verification-started-1",
                             "actor_id": "reviewer-1",
                             "chronology": "before_finish",
-                            "change_chronology": "undetermined",
+                            "change_chronology": "after_change",
                         }],
                         "unresolved": [{
                             "type": "completes",
