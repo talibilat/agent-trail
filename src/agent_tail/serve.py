@@ -1088,9 +1088,14 @@ def _verification_result(
         result["test_origin"] = test_origin
     starts = []
     unresolved = []
+    projected_relationships = set()
     for relationship in event.relationships:
         if relationship.type != "completes":
             continue
+        relationship_key = (relationship.type, relationship.event_id)
+        if relationship_key in projected_relationships:
+            continue
+        projected_relationships.add(relationship_key)
         started = events_by_id.get(relationship.event_id)
         if started is None:
             unresolved.append({

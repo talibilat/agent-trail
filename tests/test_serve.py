@@ -426,14 +426,22 @@ class ServeTests(unittest.TestCase):
                     "exit_code": 0,
                     "test_origin": "pre_existing",
                 }},
-                relationships=[{
-                    "type": "completes",
-                    "event_id": "verification-started-1",
-                }],
+                relationships=[
+                    {
+                        "type": "completes",
+                        "event_id": "verification-started-1",
+                    },
+                    {
+                        "type": "completes",
+                        "event_id": "verification-started-1",
+                    },
+                ],
             )) + "\n",
         ])
 
-        before_start = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+        before_detail = store.run_detail("trace-1")
+        before_start = before_detail["evidence_map"]["changes"][0]
+        self.assertEqual(len(before_detail["events"][1]["relationships"]), 2)
         self.assertEqual(before_start["links"][0]["verification"], {
             "passed": True,
             "exit_code": 0,
