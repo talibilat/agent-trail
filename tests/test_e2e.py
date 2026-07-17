@@ -328,6 +328,14 @@ class ServeEndToEndTests(unittest.TestCase):
                     actor={"id": " \t"},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="proposal-after-change",
+                    span_id="span-proposal-after-change",
+                    sequence=10,
+                    timestamp="2026-07-13T11:03:00Z",
+                    kind="change.proposed",
+                    actor={"id": "late-planner"},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="change-1",
                     span_id="span-5",
                     sequence=9,
@@ -344,6 +352,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[
                         {"type": "applies", "event_id": "proposal-1"},
                         {"type": "applies", "event_id": "anonymous-proposal"},
+                        {"type": "applies", "event_id": "proposal-after-change"},
                         {"type": "references", "event_id": "unrelated-proposal"},
                         {"type": "motivated_by", "event_id": "requirement-1"},
                         {"type": "motivated_by", "event_id": "requirement-unknown-actor"},
@@ -695,7 +704,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("implementer-1")
                 expect(evidence).to_contain_text("event change-1")
                 expect(evidence).to_contain_text("Change proposed")
-                expect(evidence.locator(".proposal-card")).to_have_count(2)
+                expect(evidence.locator(".proposal-card")).to_have_count(3)
                 named_proposal = evidence.locator(".proposal-card").filter(
                     has_text="proposed by planner-1"
                 )
@@ -711,6 +720,17 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(invalid_decision).to_contain_text("Invalid decision actor · applies")
                 expect(invalid_decision).to_contain_text("change.proposed")
+                late_proposal = evidence.locator(".proposal-card").filter(
+                    has_text="proposed by late-planner"
+                )
+                expect(late_proposal).to_contain_text("event proposal-after-change")
+                late_proposal_diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="proposal-after-change"
+                )
+                expect(late_proposal_diagnostic).to_contain_text(
+                    "Change proposed after application · applies"
+                )
+                expect(late_proposal_diagnostic).to_contain_text("change.proposed")
                 expect(evidence).not_to_contain_text("unrelated-planner")
                 requirement = evidence.locator(".requirement-card").filter(has_text="R3")
                 expect(requirement).to_contain_text("event requirement-1")
@@ -1002,7 +1022,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(later_tool).to_contain_text("Tool occurred after change · preceded_by")
                 expect(later_tool).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("git diff --stat")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 31 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 32 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
