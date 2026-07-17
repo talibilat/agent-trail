@@ -1284,7 +1284,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 change["integrity"] = integrity
             changes.append(change)
         elif any(
-            issue["field"] in {"path", "old_start", "old_count"}
+            issue["field"] in {"path", "old_start", "old_count", "new_start"}
             for issue in integrity
         ):
             invalid_changes.append({
@@ -1477,6 +1477,21 @@ def _change_hunk_integrity(event: Event) -> list[dict[str, str]]:
         integrity.append({
             "field": "old_count",
             "reason": "invalid_change_old_count",
+        })
+    new_start = change.get("new_start")
+    new_count = change.get("new_count")
+    if (
+        not isinstance(new_start, int)
+        or isinstance(new_start, bool)
+        or new_start < 0
+        or new_start == 0
+        and isinstance(new_count, int)
+        and not isinstance(new_count, bool)
+        and new_count > 0
+    ):
+        integrity.append({
+            "field": "new_start",
+            "reason": "invalid_change_new_start",
         })
     if "symbol" in change:
         symbol = change["symbol"]

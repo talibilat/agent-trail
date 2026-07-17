@@ -288,6 +288,14 @@ class ServeTests(unittest.TestCase):
                 }],
             },
             {
+                "event_id": "invalid-zero-new-start-change",
+                "actor_id": "reviewer-1",
+                "integrity": [{
+                    "field": "new_start",
+                    "reason": "invalid_change_new_start",
+                }],
+            },
+            {
                 "event_id": "invalid-zero-old-start-change",
                 "actor_id": "reviewer-1",
                 "integrity": [{
@@ -367,6 +375,51 @@ class ServeTests(unittest.TestCase):
                 "integrity": [{
                     "field": "old_count",
                     "reason": "invalid_change_old_count",
+                }],
+            },
+        ])
+
+    def test_invalid_change_new_start_remains_traceable(self):
+        valid_hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="boolean-new-start-change",
+                kind="change.applied",
+                attributes={"change": {**valid_hunk, "new_start": True}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="zero-new-start-change",
+                span_id="span-2",
+                sequence=2,
+                kind="change.applied",
+                attributes={"change": {**valid_hunk, "new_start": 0}},
+            )) + "\n",
+        ])
+
+        evidence = store.run_detail("trace-1")["evidence_map"]
+
+        self.assertEqual(evidence["changes"], [])
+        self.assertEqual(evidence["invalid_changes"], [
+            {
+                "event_id": "boolean-new-start-change",
+                "actor_id": "reviewer-1",
+                "integrity": [{
+                    "field": "new_start",
+                    "reason": "invalid_change_new_start",
+                }],
+            },
+            {
+                "event_id": "zero-new-start-change",
+                "actor_id": "reviewer-1",
+                "integrity": [{
+                    "field": "new_start",
+                    "reason": "invalid_change_new_start",
                 }],
             },
         ])
