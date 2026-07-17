@@ -270,14 +270,32 @@ class ServeTests(unittest.TestCase):
         ])
         self.assertEqual(evidence["links"], [])
         self.assertEqual(evidence["unresolved"], [])
-        self.assertEqual(evidence["invalid_changes"], [{
-            "event_id": "blank-path-change",
-            "actor_id": "reviewer-1",
-            "integrity": [{
-                "field": "path",
-                "reason": "invalid_change_path",
-            }],
-        }])
+        self.assertEqual(evidence["invalid_changes"], [
+            {
+                "event_id": "invalid-change",
+                "actor_id": "reviewer-1",
+                "integrity": [{
+                    "field": "old_start",
+                    "reason": "invalid_change_old_start",
+                }],
+            },
+            {
+                "event_id": "blank-path-change",
+                "actor_id": "reviewer-1",
+                "integrity": [{
+                    "field": "path",
+                    "reason": "invalid_change_path",
+                }],
+            },
+            {
+                "event_id": "invalid-zero-old-start-change",
+                "actor_id": "reviewer-1",
+                "integrity": [{
+                    "field": "old_start",
+                    "reason": "invalid_change_old_start",
+                }],
+            },
+        ])
 
     def test_invalid_change_path_remains_traceable(self):
         store = RunStore.from_lines([
