@@ -1723,7 +1723,9 @@
           (verification.unresolved || []).forEach((start) => {
             const incomplete = document.createElement('div');
             incomplete.className = 'incomplete';
-            incomplete.textContent = `Missing ${start.type} start · ${start.event_id}`;
+            incomplete.textContent = start.target_kind
+              ? `Invalid ${start.type} start target · ${start.event_id} · ${start.target_kind}`
+              : `Missing ${start.type} start · ${start.event_id}`;
             card.append(incomplete);
           });
           const provenance = document.createElement('div');

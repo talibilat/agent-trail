@@ -1130,6 +1130,7 @@ def _verification_result(
             unresolved.append({
                 "type": relationship.type,
                 "event_id": relationship.event_id,
+                "target_kind": started.kind,
             })
             continue
         detail: dict[str, object] = {

@@ -478,6 +478,7 @@ class ServeTests(unittest.TestCase):
                 {
                     "type": "completes",
                     "event_id": "not-a-verification-start",
+                    "target_kind": "requirement.observed",
                 },
             ],
         })
@@ -512,6 +513,7 @@ class ServeTests(unittest.TestCase):
             "unresolved": [{
                 "type": "completes",
                 "event_id": "not-a-verification-start",
+                "target_kind": "requirement.observed",
             }],
         })
         self.assertEqual(after_start["coverage"], {
