@@ -270,6 +270,43 @@ class ServeTests(unittest.TestCase):
         ])
         self.assertEqual(evidence["links"], [])
         self.assertEqual(evidence["unresolved"], [])
+        self.assertEqual(evidence["invalid_changes"], [{
+            "event_id": "blank-path-change",
+            "actor_id": "reviewer-1",
+            "integrity": [{
+                "field": "path",
+                "reason": "invalid_change_path",
+            }],
+        }])
+
+    def test_invalid_change_path_remains_traceable(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="invalid-path-change",
+                kind="change.applied",
+                actor={"id": "implementer-1"},
+                attributes={"change": {
+                    "path": ["src/auth/session.py"],
+                    "old_start": 84,
+                    "old_count": 18,
+                    "new_start": 84,
+                    "new_count": 19,
+                    "symbol": "reject_expired_session",
+                }},
+            )) + "\n",
+        ])
+
+        evidence = store.run_detail("trace-1")["evidence_map"]
+
+        self.assertEqual(evidence["changes"], [])
+        self.assertEqual(evidence["invalid_changes"], [{
+            "event_id": "invalid-path-change",
+            "actor_id": "implementer-1",
+            "integrity": [{
+                "field": "path",
+                "reason": "invalid_change_path",
+            }],
+        }])
 
     def test_invalid_change_symbol_reduces_complete_coverage(self):
         targets = [

@@ -859,6 +859,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
     events_by_id = {event.event_id: event for event in event_list}
     corrections_by_change: dict[str, list[dict[str, object]]] = {}
     changes = []
+    invalid_changes = []
     links = []
     unresolved = []
     for source in event_list:
@@ -1264,8 +1265,8 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 ):
                     unresolved.append({**item, "target_kind": target.kind})
         hunk = _change_hunk(source)
+        integrity = _change_hunk_integrity(source)
         if hunk is not None:
-            integrity = _change_hunk_integrity(source)
             change = {
                 "event_id": source.event_id,
                 "actor_id": source.actor["id"],
@@ -1282,7 +1283,18 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
             if integrity:
                 change["integrity"] = integrity
             changes.append(change)
-    return {"changes": changes, "links": links, "unresolved": unresolved}
+        elif any(issue["field"] == "path" for issue in integrity):
+            invalid_changes.append({
+                "event_id": source.event_id,
+                "actor_id": source.actor["id"],
+                "integrity": integrity,
+            })
+    return {
+        "changes": changes,
+        "invalid_changes": invalid_changes,
+        "links": links,
+        "unresolved": unresolved,
+    }
 
 
 def _evidence_coverage(
@@ -1433,12 +1445,17 @@ def _change_hunk(event: Event) -> dict[str, object] | None:
 
 def _change_hunk_integrity(event: Event) -> list[dict[str, str]]:
     change = _attributes(event).get("change")
-    if not isinstance(change, dict) or "symbol" not in change:
+    if event.kind != "change.applied" or not isinstance(change, dict):
         return []
-    symbol = change["symbol"]
-    if isinstance(symbol, str) and symbol.strip():
-        return []
-    return [{"field": "symbol", "reason": "invalid_change_symbol"}]
+    integrity = []
+    path = change.get("path")
+    if not isinstance(path, str) or not path.strip():
+        integrity.append({"field": "path", "reason": "invalid_change_path"})
+    if "symbol" in change:
+        symbol = change["symbol"]
+        if not isinstance(symbol, str) or not symbol.strip():
+            integrity.append({"field": "symbol", "reason": "invalid_change_symbol"})
+    return integrity
 
 
 def _verification_result(

@@ -100,6 +100,7 @@ For repository changes, emit a `change.applied` event with a Git hunk locator un
 ```
 
 `path` is a non-blank string, the four range values are non-negative integers, each positive count has a positive start, and `symbol` is an optional non-blank string.
+A change event with a malformed or blank required path cannot identify a Git hunk, so it is excluded from `evidence_map.changes` but remains traceable under `evidence_map.invalid_changes` with its event ID, actor ID, and an `invalid_change_path` integrity diagnostic.
 A supplied malformed or blank symbol is omitted while the valid hunk remains visible, produces an `invalid_change_symbol` integrity diagnostic, and keeps coverage incomplete; an absent symbol remains valid optional metadata.
 Valid locators are exposed in event order under `evidence_map.changes`, together with the change event and actor IDs.
 Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
