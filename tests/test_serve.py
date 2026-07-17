@@ -662,16 +662,23 @@ class ServeTests(unittest.TestCase):
                 "tool-after-change",
                 "tool-same-time-after-change",
                 "tool-clock-skew-after-change",
+                "tool-same-time-other-emitter",
             ],
         )
-        self.assertTrue(all(
-            item["reason"] == "tool_not_preceding_change"
-            for item in change["unresolved"]
-        ))
+        self.assertEqual(
+            [item["reason"] for item in change["unresolved"]],
+            [
+                "tool_not_preceding_change",
+                "tool_not_preceding_change",
+                "tool_not_preceding_change",
+                "tool_chronology_undetermined",
+            ],
+        )
+        self.assertNotIn("decision_event_id", change["unresolved"][-1])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "verification", "decision"],
-            "unresolved_count": 3,
+            "unresolved_count": 4,
         })
 
     def test_tool_after_decision_is_incomplete_evidence(self):
