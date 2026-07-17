@@ -158,6 +158,19 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="tool-unknown-actor",
+                    span_id="span-tool-unknown-actor",
+                    emitter_id="unknown-tool-worker",
+                    sequence=1,
+                    kind="tool.call.completed",
+                    actor={"id": " \t"},
+                    operation={"status": "ok", "name": "shell"},
+                    attributes={"tool": {
+                        "command": "git status --short",
+                        "result": "clean",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="proposal-1",
                     span_id="span-proposal",
                     sequence=8,
@@ -198,6 +211,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "informed_by", "event_id": "compaction-1"},
                         {"type": "informed_by", "event_id": "compaction-unknown-actor"},
                         {"type": "preceded_by", "event_id": "tool-1"},
+                        {"type": "preceded_by", "event_id": "tool-unknown-actor"},
                         {"type": "references", "event_id": "unrelated-tool"},
                         {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-1"},
@@ -418,6 +432,9 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("git diff -- src/auth/session.py")
                 expect(evidence).to_contain_text("1 file changed")
                 expect(evidence).to_contain_text("run by shell-1 · exit 0")
+                unknown_tool_actor = evidence.locator(".tool-card").filter(has_text="git status --short")
+                expect(unknown_tool_actor).to_contain_text("running actor unknown · ok")
+                expect(unknown_tool_actor).not_to_contain_text("run by")
                 expect(evidence).not_to_contain_text("undefined")
                 expect(evidence).not_to_contain_text("rm unrelated.tmp")
                 expect(evidence).not_to_contain_text("unrelated result")

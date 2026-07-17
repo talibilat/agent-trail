@@ -1715,7 +1715,9 @@
           }
           const meta = document.createElement('div');
           meta.className = 'meta';
-          const metaParts = [`run by ${link.target_actor_id}`];
+          const metaParts = [typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+            ? `run by ${link.target_actor_id}`
+            : 'running actor unknown'];
           if (tool.status) metaParts.push(tool.status);
           if (tool.exit_code !== undefined) metaParts.push(`exit ${tool.exit_code}`);
           meta.textContent = metaParts.join(' · ');
