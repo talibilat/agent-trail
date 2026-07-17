@@ -934,6 +934,9 @@ def _verification_result(event: Event) -> dict[str, object] | None:
     exit_code = verification.get("exit_code")
     if isinstance(exit_code, int) and not isinstance(exit_code, bool):
         result["exit_code"] = exit_code
+    test_origin = verification.get("test_origin")
+    if test_origin in {"pre_existing", "same_agent"}:
+        result["test_origin"] = test_origin
     return result
 
 

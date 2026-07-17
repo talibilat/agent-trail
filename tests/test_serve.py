@@ -223,6 +223,7 @@ class ServeTests(unittest.TestCase):
                 "command": "pytest tests/test_session.py",
                 "passed": True,
                 "exit_code": 0,
+                "test_origin": "same_agent",
             }},
         )) + "\n")
         after_verification = store.run_detail("trace-1")["evidence_map"]
@@ -262,6 +263,7 @@ class ServeTests(unittest.TestCase):
                     "command": "pytest tests/test_session.py",
                     "passed": True,
                     "exit_code": 0,
+                    "test_origin": "same_agent",
                 },
             }],
             "unresolved": [],
@@ -293,15 +295,19 @@ class ServeTests(unittest.TestCase):
                 kind="verification.finished",
                 attributes={"verification": {
                     "command": "pytest",
-                    "passed": "yes",
+                    "passed": True,
                     "exit_code": True,
+                    "test_origin": "generated",
                 }},
             )) + "\n",
         ])
 
         link = store.run_detail("trace-1")["evidence_map"]["links"][0]
 
-        self.assertNotIn("verification", link)
+        self.assertEqual(link["verification"], {
+            "command": "pytest",
+            "passed": True,
+        })
 
     def test_http_server_serves_offline_shell_and_versioned_api(self):
         store = RunStore.from_lines([
