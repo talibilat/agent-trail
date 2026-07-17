@@ -693,24 +693,29 @@ class ServeTests(unittest.TestCase):
             "new_start": 84,
             "new_count": 19,
         }
-        for test_origin, include_decision, include_tool_detail, expected in (
-            (None, True, True, {
+        for test_origin, decision_relationship, include_tool_detail, expected in (
+            (None, "applies", True, {
                 "status": "incomplete",
                 "missing": [],
                 "unresolved_count": 0,
                 "unknown_test_origin_count": 1,
             }),
-            ("pre_existing", False, True, {
+            ("pre_existing", None, True, {
                 "status": "incomplete",
                 "missing": ["decision"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", True, False, {
+            ("pre_existing", "references", True, {
+                "status": "incomplete",
+                "missing": ["decision"],
+                "unresolved_count": 0,
+            }),
+            ("pre_existing", "applies", False, {
                 "status": "incomplete",
                 "missing": ["tool"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", True, True, {
+            ("pre_existing", "applies", True, {
                 "status": "complete",
                 "missing": [],
                 "unresolved_count": 0,
@@ -718,7 +723,7 @@ class ServeTests(unittest.TestCase):
         ):
             with self.subTest(
                 test_origin=test_origin,
-                include_decision=include_decision,
+                decision_relationship=decision_relationship,
                 include_tool_detail=include_tool_detail,
             ):
                 verification = {"command": "pytest", "passed": True}
@@ -769,8 +774,10 @@ class ServeTests(unittest.TestCase):
                             {"type": "informed_by", "event_id": "context-1"},
                             {"type": "preceded_by", "event_id": "tool-1"},
                             {"type": "verified_by", "event_id": "verification-1"},
-                            *([{"type": "applies", "event_id": "proposal-1"}]
-                              if include_decision else []),
+                            *([{
+                                "type": decision_relationship,
+                                "event_id": "proposal-1",
+                            }] if decision_relationship is not None else []),
                         ],
                     ),
                 ]

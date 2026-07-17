@@ -950,7 +950,11 @@ def _evidence_coverage(
             and "command" in verification
             for link in links
         ),
-        "decision": any(link.get("target_kind") == "change.proposed" for link in links),
+        "decision": any(
+            link.get("type") == "applies"
+            and link.get("target_kind") == "change.proposed"
+            for link in links
+        ),
     }
     missing = [kind for kind, is_present in present.items() if not is_present]
     unresolved_count = len(unresolved) + sum(
