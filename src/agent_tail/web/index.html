@@ -1833,9 +1833,10 @@
                 : 'Human corrected this change';
           const meta = document.createElement('div');
           meta.className = 'meta';
-          meta.textContent = typeof link.source_actor_id === 'string' && link.source_actor_id.trim()
+          const actor = typeof link.source_actor_id === 'string' && link.source_actor_id.trim()
             ? `corrected by ${link.source_actor_id}`
             : 'correcting actor unknown';
+          meta.textContent = `event ${link.source_event_id} · ${actor}`;
           card.append(actionNode, meta);
           block.append(card);
         });
