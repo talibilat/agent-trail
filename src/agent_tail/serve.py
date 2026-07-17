@@ -1045,7 +1045,7 @@ def _change_hunk(event: Event) -> dict[str, object] | None:
         return None
     path = change.get("path")
     range_keys = ("old_start", "old_count", "new_start", "new_count")
-    if not isinstance(path, str) or not path or any(
+    if not isinstance(path, str) or not path.strip() or any(
         not isinstance(change.get(key), int)
         or isinstance(change.get(key), bool)
         or change[key] < 0
