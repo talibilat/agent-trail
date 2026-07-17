@@ -75,7 +75,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     actor={"id": "summarizer-1"},
                     relationships=[
                         {"type": "summarizes", "event_id": "context-1"},
-                        {"type": "summarizes", "event_id": "missing-context"},
+                        {"type": "summarizes", "event_id": "missing-context<img id=compaction-missing-injected>"},
                     ],
                 )) + "\n",
                 json.dumps(event_data(
@@ -110,6 +110,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "informed_by", "event_id": "compaction-1"},
                         {"type": "preceded_by", "event_id": "tool-1"},
                         {"type": "verified_by", "event_id": "verification-1"},
+                        {"type": "reviewed_by", "event_id": "missing-review<img id=evidence-missing-injected>"},
                     ],
                 )) + "\n",
                 json.dumps(event_data(
@@ -162,6 +163,8 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("Context compacted before change")
                 expect(evidence).to_contain_text("compacted by summarizer-1")
                 expect(evidence).to_contain_text("source from researcher-1")
+                expect(evidence).to_contain_text("Missing summarizes source")
+                expect(evidence).to_contain_text("missing-context")
                 expect(evidence).to_contain_text("1 compacted source unresolved")
                 expect(evidence).to_contain_text("Tool · shell")
                 expect(evidence).to_contain_text("git diff -- src/auth/session.py")
@@ -176,12 +179,17 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("corrected by maintainer-1")
                 expect(evidence).to_contain_text("Human reverted this change")
                 expect(evidence).to_contain_text("corrected by maintainer-2")
+                expect(evidence).to_contain_text("Missing evidence · reviewed_by")
+                expect(evidence).to_contain_text("missing-review")
+                expect(evidence).to_contain_text("1 unresolved evidence reference")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
                 expect(page.locator("#tool-command-injected")).to_have_count(0)
                 expect(page.locator("#tool-result-injected")).to_have_count(0)
                 expect(page.locator("#verification-injected")).to_have_count(0)
                 expect(page.locator("#correction-injected")).to_have_count(0)
+                expect(page.locator("#compaction-missing-injected")).to_have_count(0)
+                expect(page.locator("#evidence-missing-injected")).to_have_count(0)
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):

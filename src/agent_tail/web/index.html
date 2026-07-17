@@ -308,6 +308,9 @@
     .compaction-card .source { margin-top: 5px; font: 500 10.5px "IBM Plex Mono", monospace; color: var(--text); word-break: break-word; }
     .compaction-card .meta { margin-top: 3px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
     .compaction-card .incomplete { margin-top: 5px; font: 500 9.5px "IBM Plex Mono", monospace; color: var(--warn); }
+    .unresolved-evidence { margin-top: 8px; padding: 8px 10px; border-left: 2px solid var(--warn); background: rgba(255,190,92,.06); }
+    .unresolved-evidence .type { font: 600 10px "IBM Plex Mono", monospace; color: var(--warn); word-break: break-word; }
+    .unresolved-evidence .event-id { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); word-break: break-all; }
     .tool-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--accent); background: rgba(122,162,255,.06); }
     .tool-card .operation { font: 600 10px "IBM Plex Mono", monospace; color: var(--accent); }
     .tool-card .command, .tool-card .result { margin-top: 4px; font: 500 10.5px/1.45 "IBM Plex Mono", monospace; color: var(--text); white-space: pre-wrap; word-break: break-word; }
@@ -1580,7 +1583,14 @@
             sourceMeta.textContent = `source from ${source.actor_id}`;
             card.append(sourceNode, sourceMeta);
           });
-          const missingCount = (link.compaction.unresolved || []).length;
+          const unresolvedSources = link.compaction.unresolved || [];
+          unresolvedSources.forEach((source) => {
+            const incomplete = document.createElement('div');
+            incomplete.className = 'incomplete';
+            incomplete.textContent = `Missing ${source.type} source · ${source.event_id}`;
+            card.append(incomplete);
+          });
+          const missingCount = unresolvedSources.length;
           if (missingCount) {
             const incomplete = document.createElement('div');
             incomplete.className = 'incomplete';
@@ -1665,7 +1675,20 @@
           block.append(card);
         });
 
-        const unresolvedCount = (changeEvidence.unresolved || []).length;
+        const unresolved = changeEvidence.unresolved || [];
+        unresolved.forEach((link) => {
+          const card = document.createElement('div');
+          card.className = 'unresolved-evidence';
+          const type = document.createElement('div');
+          type.className = 'type';
+          type.textContent = `Missing evidence · ${link.type}`;
+          const eventId = document.createElement('div');
+          eventId.className = 'event-id';
+          eventId.textContent = link.target_event_id;
+          card.append(type, eventId);
+          block.append(card);
+        });
+        const unresolvedCount = unresolved.length;
         const completeness = document.createElement('div');
         completeness.className = `evidence-completeness${unresolvedCount ? ' incomplete' : ''}`;
         completeness.textContent = unresolvedCount
