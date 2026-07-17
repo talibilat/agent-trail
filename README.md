@@ -102,7 +102,8 @@ The four range values are non-negative integers and `symbol` is optional.
 Valid locators are exposed in event order under `evidence_map.changes`, together with the change event and actor IDs.
 Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
 It also includes factual `coverage` for requirement, context, tool, verification, and decision evidence, plus an unresolved count that includes missing compacted-context sources and verification-start events.
-A context category is present only when a direct context locator or a context locator among a compaction's resolved sources identifies repository or documentation evidence; an empty compaction does not satisfy it.
+A context category is present for direct context only when an `informed_by` relationship resolves to a `context.read` event with a validated locator; other links to context reads remain visible but do not identify what informed the applied hunk.
+A context locator among a compaction's resolved sources also satisfies the category; an empty compaction does not.
 A tool category is present only when a linked tool call identifies a non-empty command or result; operation identity and status alone do not satisfy it.
 A verification category is present only when a linked finished verification identifies a non-empty command, either directly or through a resolved start event; an outcome or bare start event alone does not satisfy it.
 A requirement category is present only when a `motivated_by` relationship resolves to a `requirement.observed` event with validated requirement details; other links to requirements remain visible but do not identify the motivation behind the applied hunk.
@@ -115,9 +116,9 @@ Resolved links to that event include the validated ID and text under `requiremen
 The browser event inspector presents the selected hunk path, new-file range, canonical old/new Git hunk header, optional symbol, and applying agent together with requirements linked by `motivated_by`; it does not attribute unrelated requirement links as motivations.
 To distinguish the agent that made the change decision from the agent that applied it, reference the relevant `change.proposed` event from `change.applied` with an `applies` relationship; the browser presents both actors separately on the selected hunk and does not attribute unrelated proposal links as decisions.
 Each unresolved hunk relationship is identified by its relationship type and target event ID, followed by an aggregate unresolved-reference status.
-To identify repository or documentation evidence, emit a `context.read` event with a non-empty `attributes.context.path`, optional non-negative integer `line_start` and `line_end` fields, and an optional string `symbol`, then reference it from the change event.
+To identify repository or documentation evidence, emit a `context.read` event with a non-empty `attributes.context.path`, optional non-negative integer `line_start` and `line_end` fields, and an optional string `symbol`, then reference it from the change event with an `informed_by` relationship.
 Resolved links to that event include the validated locator under `context`; malformed optional locator fields are omitted without hiding the relationship.
-The browser event inspector presents each linked context path, line range, symbol, and reading actor directly on the selected change hunk.
+The browser event inspector presents each context path, line range, symbol, and reading actor linked by `informed_by` directly on the selected change hunk; it does not attribute unrelated context links as informing evidence.
 To expose commands and tool results that preceded a change, reference the relevant `tool.call.*` events from the change event.
 Resolved links to tool calls include the required operation status and optional non-empty operation name under `tool`.
 Producers can add non-empty `attributes.tool.command` and `attributes.tool.result` strings and an optional integer `attributes.tool.exit_code`; malformed optional fields are omitted without hiding the relationship or operation details.

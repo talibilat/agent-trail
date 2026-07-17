@@ -934,7 +934,11 @@ def _evidence_coverage(
             for link in links
         ),
         "context": any(
-            "context" in link
+            (
+                link.get("type") == "informed_by"
+                and link.get("target_kind") == "context.read"
+                and "context" in link
+            )
             or (
                 isinstance((compaction := link.get("compaction")), dict)
                 and isinstance((sources := compaction.get("sources")), list)

@@ -1573,7 +1573,11 @@
           block.append(card);
         });
 
-        (changeEvidence.links || []).filter((link) => link.context).forEach((link) => {
+        (changeEvidence.links || []).filter(
+          (link) => link.type === 'informed_by'
+            && link.target_kind === 'context.read'
+            && link.context
+        ).forEach((link) => {
           const card = document.createElement('div');
           card.className = 'context-card';
           const path = document.createElement('div');

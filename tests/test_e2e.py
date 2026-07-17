@@ -143,6 +143,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "motivated_by", "event_id": "requirement-1"},
                         {"type": "references", "event_id": "unrelated-requirement"},
                         {"type": "informed_by", "event_id": "context-1"},
+                        {"type": "references", "event_id": "unrelated-context"},
                         {"type": "informed_by", "event_id": "compaction-1"},
                         {"type": "preceded_by", "event_id": "tool-1"},
                         {"type": "verified_by", "event_id": "verification-1"},
@@ -186,6 +187,16 @@ class ServeEndToEndTests(unittest.TestCase):
                         "text": "Unrelated requirement <img id=unrelated-requirement-injected>",
                     }},
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="unrelated-context",
+                    span_id="span-unrelated-context",
+                    sequence=14,
+                    kind="context.read",
+                    actor={"id": "unrelated-researcher"},
+                    attributes={"context": {
+                        "path": "docs/unrelated.md<img id=unrelated-context-injected>",
+                    }},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -227,6 +238,8 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text(":42-47")
                 expect(evidence).to_contain_text("researcher-1")
                 expect(evidence).to_contain_text("Session expiry")
+                expect(evidence).not_to_contain_text("docs/unrelated.md")
+                expect(evidence).not_to_contain_text("unrelated-researcher")
                 expect(evidence).to_contain_text("Context compacted before change")
                 expect(evidence).to_contain_text("compacted by summarizer-1")
                 expect(evidence).to_contain_text("source from researcher-1")
@@ -259,6 +272,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
+                expect(page.locator("#unrelated-context-injected")).to_have_count(0)
                 expect(page.locator("#tool-command-injected")).to_have_count(0)
                 expect(page.locator("#tool-result-injected")).to_have_count(0)
                 expect(page.locator("#verification-injected")).to_have_count(0)

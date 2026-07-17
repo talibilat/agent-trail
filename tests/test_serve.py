@@ -693,34 +693,39 @@ class ServeTests(unittest.TestCase):
             "new_start": 84,
             "new_count": 19,
         }
-        for test_origin, requirement_relationship, decision_relationship, include_tool_detail, expected in (
-            (None, "motivated_by", "applies", True, {
+        for test_origin, requirement_relationship, context_relationship, decision_relationship, include_tool_detail, expected in (
+            (None, "motivated_by", "informed_by", "applies", True, {
                 "status": "incomplete",
                 "missing": [],
                 "unresolved_count": 0,
                 "unknown_test_origin_count": 1,
             }),
-            ("pre_existing", "motivated_by", None, True, {
+            ("pre_existing", "motivated_by", "informed_by", None, True, {
                 "status": "incomplete",
                 "missing": ["decision"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "motivated_by", "references", True, {
+            ("pre_existing", "motivated_by", "informed_by", "references", True, {
                 "status": "incomplete",
                 "missing": ["decision"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "references", "applies", True, {
+            ("pre_existing", "references", "informed_by", "applies", True, {
                 "status": "incomplete",
                 "missing": ["requirement"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "motivated_by", "applies", False, {
+            ("pre_existing", "motivated_by", "references", "applies", True, {
+                "status": "incomplete",
+                "missing": ["context"],
+                "unresolved_count": 0,
+            }),
+            ("pre_existing", "motivated_by", "informed_by", "applies", False, {
                 "status": "incomplete",
                 "missing": ["tool"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "motivated_by", "applies", True, {
+            ("pre_existing", "motivated_by", "informed_by", "applies", True, {
                 "status": "complete",
                 "missing": [],
                 "unresolved_count": 0,
@@ -729,6 +734,7 @@ class ServeTests(unittest.TestCase):
             with self.subTest(
                 test_origin=test_origin,
                 requirement_relationship=requirement_relationship,
+                context_relationship=context_relationship,
                 decision_relationship=decision_relationship,
                 include_tool_detail=include_tool_detail,
             ):
@@ -777,7 +783,7 @@ class ServeTests(unittest.TestCase):
                         attributes={"change": hunk},
                         relationships=[
                             {"type": requirement_relationship, "event_id": "requirement-1"},
-                            {"type": "informed_by", "event_id": "context-1"},
+                            {"type": context_relationship, "event_id": "context-1"},
                             {"type": "preceded_by", "event_id": "tool-1"},
                             {"type": "verified_by", "event_id": "verification-1"},
                             *([{
@@ -797,6 +803,11 @@ class ServeTests(unittest.TestCase):
                 self.assertTrue(any(
                     link["type"] == requirement_relationship
                     and link["target_event_id"] == "requirement-1"
+                    for link in change["links"]
+                ))
+                self.assertTrue(any(
+                    link["type"] == context_relationship
+                    and link["target_event_id"] == "context-1"
                     for link in change["links"]
                 ))
 
