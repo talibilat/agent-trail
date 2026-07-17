@@ -80,6 +80,26 @@ Every event must be a JSON object containing these fields:
 Relationship types are extensible, and referenced events may arrive later in a stream.
 Run-detail responses project these references into an `evidence_map` with resolved event links and unresolved references.
 Resolved links include source and target kinds and actors so clients can present the smallest relevant evidence chain without joining the event list themselves.
+For repository changes, emit a `change.applied` event with a Git hunk locator under `attributes.change`:
+
+```json
+{
+  "kind": "change.applied",
+  "attributes": {
+    "change": {
+      "path": "src/auth/session.py",
+      "old_start": 84,
+      "old_count": 18,
+      "new_start": 84,
+      "new_count": 19,
+      "symbol": "reject_expired_session"
+    }
+  }
+}
+```
+
+The four range values are non-negative integers and `symbol` is optional.
+Valid locators are exposed in event order under `evidence_map.changes`, together with the change event and actor IDs.
 Unknown kinds, fields, and supported minor schema versions are retained so the canonical envelope can evolve.
 
 Harnesses other than the v1 runtime need an adapter that emits this envelope.

@@ -857,9 +857,17 @@ def _relationships(view) -> dict[str, object]:
 def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
     event_list = list(events)
     events_by_id = {event.event_id: event for event in event_list}
+    changes = []
     links = []
     unresolved = []
     for source in event_list:
+        hunk = _change_hunk(source)
+        if hunk is not None:
+            changes.append({
+                "event_id": source.event_id,
+                "actor_id": source.actor["id"],
+                "hunk": hunk,
+            })
         for relationship in source.relationships:
             item = {
                 "type": relationship.type,
@@ -877,7 +885,29 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     "target_kind": target.kind,
                     "target_actor_id": target.actor["id"],
                 })
-    return {"links": links, "unresolved": unresolved}
+    return {"changes": changes, "links": links, "unresolved": unresolved}
+
+
+def _change_hunk(event: Event) -> dict[str, object] | None:
+    if event.kind != "change.applied":
+        return None
+    change = _attributes(event).get("change")
+    if not isinstance(change, dict):
+        return None
+    path = change.get("path")
+    range_keys = ("old_start", "old_count", "new_start", "new_count")
+    if not isinstance(path, str) or not path or any(
+        not isinstance(change.get(key), int)
+        or isinstance(change.get(key), bool)
+        or change[key] < 0
+        for key in range_keys
+    ):
+        return None
+    hunk = {"path": path, **{key: change[key] for key in range_keys}}
+    symbol = change.get("symbol")
+    if isinstance(symbol, str):
+        hunk["symbol"] = symbol
+    return hunk
 
 
 def _actor_role(events: Iterable[Event], actor_id: str) -> object:

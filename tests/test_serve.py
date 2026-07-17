@@ -110,6 +110,69 @@ class ServeTests(unittest.TestCase):
             "target_event_id": "missing-test",
         }])
 
+    def test_run_evidence_map_projects_valid_change_hunks(self):
+        valid_hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+            "symbol": "reject_expired_session",
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                attributes={"change": valid_hunk},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-2",
+                span_id="span-2",
+                sequence=2,
+                kind="change.applied",
+                attributes={"change": {
+                    **valid_hunk,
+                    "path": "tests/test_session.py",
+                    "new_start": 91,
+                }},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="proposal-1",
+                span_id="span-3",
+                sequence=3,
+                kind="change.proposed",
+                attributes={"change": valid_hunk},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="invalid-change",
+                span_id="span-4",
+                sequence=4,
+                kind="change.applied",
+                attributes={"change": {**valid_hunk, "old_start": True}},
+            )) + "\n",
+        ])
+
+        evidence = store.run_detail("trace-1")["evidence_map"]
+
+        self.assertEqual(evidence["changes"], [
+            {
+                "event_id": "change-1",
+                "actor_id": "reviewer-1",
+                "hunk": valid_hunk,
+            },
+            {
+                "event_id": "change-2",
+                "actor_id": "reviewer-1",
+                "hunk": {
+                    **valid_hunk,
+                    "path": "tests/test_session.py",
+                    "new_start": 91,
+                },
+            },
+        ])
+        self.assertEqual(evidence["links"], [])
+        self.assertEqual(evidence["unresolved"], [])
+
     def test_http_server_serves_offline_shell_and_versioned_api(self):
         store = RunStore.from_lines([
             json.dumps(event_data(trace_id="trace/1", kind="<script>kind</script>")) + "\n"
