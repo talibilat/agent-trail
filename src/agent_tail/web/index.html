@@ -1558,10 +1558,11 @@
         };
 
         const hunk = changeEvidence.hunk;
-        const hunkEnd = hunk.new_count ? hunk.new_start + hunk.new_count - 1 : hunk.new_start;
         const locator = document.createElement('div');
         locator.className = 'hunk';
-        locator.textContent = `${hunk.path}:${hunk.new_start}-${hunkEnd}`;
+        locator.textContent = hunk.new_count === 0
+          ? `${hunk.path}:${hunk.new_start} (0 lines)`
+          : `${hunk.path}:${hunk.new_start}-${hunk.new_start + hunk.new_count - 1}`;
         const diffRange = document.createElement('div');
         diffRange.className = 'actor';
         diffRange.textContent = `@@ -${hunk.old_start},${hunk.old_count} +${hunk.new_start},${hunk.new_count} @@`;

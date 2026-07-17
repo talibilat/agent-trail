@@ -525,6 +525,21 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="deletion-change",
+                    span_id="span-deletion-change",
+                    emitter_id="deletion-change-worker",
+                    sequence=1,
+                    kind="change.applied",
+                    actor={"id": "deletion-implementer"},
+                    attributes={"change": {
+                        "path": "src/obsolete.py",
+                        "old_start": 12,
+                        "old_count": 3,
+                        "new_start": 11,
+                        "new_count": 0,
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="verification-invalid-result",
                     span_id="span-verification-invalid-result",
                     sequence=23,
@@ -929,6 +944,17 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(anonymous_evidence).to_contain_text("src/anonymous.py:1-1")
                 expect(anonymous_evidence).to_contain_text("applying actor unknown")
                 expect(anonymous_evidence).not_to_contain_text("applied by")
+                page.locator(".back-btn").click()
+                page.evaluate("""() => {
+                  [...document.querySelectorAll('.node-wrap')]
+                    .find((node) => node.textContent.includes('deletion-implementer')).click();
+                  [...document.querySelectorAll('.event-row')]
+                    .find((row) => row.textContent.includes('change.applied')).click();
+                }""")
+                deletion_evidence = page.locator(".change-evidence")
+                expect(deletion_evidence.locator(".hunk")).to_have_text("src/obsolete.py:11 (0 lines)")
+                expect(deletion_evidence).to_contain_text("@@ -12,3 +11,0 @@")
+                expect(deletion_evidence).not_to_contain_text("src/obsolete.py:11-11")
                 page.locator(".back-btn").click()
                 page.evaluate("""() => {
                   [...document.querySelectorAll('.node-wrap')]
