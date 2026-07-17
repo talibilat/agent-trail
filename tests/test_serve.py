@@ -422,6 +422,50 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 0,
         })
 
+    def test_outcome_only_verification_remains_visible_but_incomplete(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[{
+                    "type": "verified_by",
+                    "event_id": "verification-finished-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-finished-1",
+                span_id="span-2",
+                sequence=2,
+                kind="verification.finished",
+                attributes={"verification": {
+                    "passed": False,
+                    "exit_code": 1,
+                    "test_origin": "pre_existing",
+                }},
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(change["links"][0]["verification"], {
+            "passed": False,
+            "exit_code": 1,
+            "test_origin": "pre_existing",
+        })
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "context", "tool", "verification", "decision"],
+            "unresolved_count": 0,
+        })
+
     def test_evidence_ignores_malformed_optional_requirement_details(self):
         store = RunStore.from_lines([
             json.dumps(event_data(

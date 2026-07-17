@@ -1081,8 +1081,6 @@ def _verification_result(
         result["starts"] = starts
     if unresolved:
         result["unresolved"] = unresolved
-    if "command" not in result and not starts and not unresolved:
-        return None
     return result
 
 

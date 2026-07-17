@@ -151,6 +151,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "references", "event_id": "unrelated-tool"},
                         {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-2"},
+                        {"type": "verified_by", "event_id": "verification-outcome-only"},
                         {"type": "references", "event_id": "unrelated-verification"},
                         {"type": "reviewed_by", "event_id": "missing-review<img id=evidence-missing-injected>"},
                     ],
@@ -237,6 +238,18 @@ class ServeEndToEndTests(unittest.TestCase):
                     attributes={"correction": {"action": "reverted"}},
                     relationships=[{"type": "references", "event_id": "change-1"}],
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="verification-outcome-only",
+                    span_id="span-verification-outcome-only",
+                    sequence=18,
+                    kind="verification.finished",
+                    actor={"id": "outcome-only-reporter"},
+                    attributes={"verification": {
+                        "passed": False,
+                        "exit_code": 2,
+                        "test_origin": "pre_existing",
+                    }},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -305,6 +318,10 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("Missing completes start")
                 expect(evidence).to_contain_text("missing-start")
                 expect(evidence).to_contain_text("Test provenance unknown")
+                outcome_only = evidence.locator(".verification-card").filter(has_text="outcome-only-reporter")
+                expect(outcome_only).to_contain_text("FAIL")
+                expect(outcome_only).to_contain_text("exit 2")
+                expect(outcome_only).to_contain_text("Test existed before this change")
                 expect(evidence).not_to_contain_text("undefined")
                 expect(evidence).not_to_contain_text("pytest unrelated_test.py")
                 expect(evidence).not_to_contain_text("unrelated-reporter")
