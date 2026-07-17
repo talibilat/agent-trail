@@ -1663,7 +1663,9 @@
             }
             const sourceMeta = document.createElement('div');
             sourceMeta.className = 'meta';
-            const sourceDetails = [`source from ${source.actor_id}`];
+            const sourceDetails = [typeof source.actor_id === 'string' && source.actor_id.trim()
+              ? `source from ${source.actor_id}`
+              : 'source actor unknown'];
             if (source.context?.symbol) sourceDetails.push(source.context.symbol);
             sourceMeta.textContent = sourceDetails.join(' · ');
             card.append(sourceNode, sourceMeta);

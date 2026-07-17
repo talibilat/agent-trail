@@ -412,6 +412,8 @@ class ServeEndToEndTests(unittest.TestCase):
                 unknown_compaction_actor = evidence.locator(".compaction-card").filter(has_text="docs/anonymous-research.md")
                 expect(unknown_compaction_actor).to_contain_text("compacting actor unknown")
                 expect(unknown_compaction_actor).not_to_contain_text("compacted by")
+                expect(unknown_compaction_actor).to_contain_text("source actor unknown")
+                expect(unknown_compaction_actor).not_to_contain_text("source from")
                 expect(evidence).to_contain_text("Tool · shell")
                 expect(evidence).to_contain_text("git diff -- src/auth/session.py")
                 expect(evidence).to_contain_text("1 file changed")
