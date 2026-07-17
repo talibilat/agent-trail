@@ -108,6 +108,17 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="context-after-compaction",
+                    span_id="span-context-after-compaction",
+                    sequence=8,
+                    timestamp="2026-07-13T11:03:00Z",
+                    kind="context.read",
+                    actor={"id": "late-source-researcher"},
+                    attributes={"context": {
+                        "path": "docs/read-after-summary.md",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="context-invalid-line-start",
                     span_id="span-context-invalid-line-start",
                     sequence=2,
@@ -240,6 +251,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "summarizes", "event_id": "context-invalid-line-start"},
                         {"type": "summarizes", "event_id": "context-invalid-line-end"},
                         {"type": "summarizes", "event_id": "context-invalid-symbol"},
+                        {"type": "summarizes", "event_id": "context-after-compaction"},
                         {"type": "summarizes", "event_id": "context-invalid-detail<img id=invalid-context-injected>"},
                         {"type": "summarizes", "event_id": "missing-context<img id=compaction-missing-injected>"},
                         {"type": "summarizes", "event_id": "tool-1"},
@@ -848,12 +860,17 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(compaction.locator(".source").filter(has_text="docs/session-retention.md")).to_have_text("docs/session-retention.md:?-51")
                 expect(compaction).to_contain_text("source from researcher-2")
                 expect(compaction).to_contain_text("event context-end-only")
+                expect(compaction).to_contain_text("docs/read-after-summary.md")
+                expect(compaction).to_contain_text("source from late-source-researcher")
+                expect(compaction).to_contain_text(
+                    "Context read after compaction · context-after-compaction · context.read"
+                )
                 expect(evidence).to_contain_text("Missing summarizes source")
                 expect(evidence).to_contain_text("missing-context")
                 expect(compaction).to_contain_text("Invalid summarizes source target · tool-1 · tool.call.completed")
                 expect(compaction).not_to_contain_text("source from shell-1")
                 expect(evidence).not_to_contain_text("irrelevant-missing-context")
-                expect(evidence).to_contain_text("6 compacted sources unresolved")
+                expect(evidence).to_contain_text("7 compacted sources unresolved")
                 unknown_compaction_actor = evidence.locator(".compaction-card").filter(has_text="docs/anonymous-research.md")
                 expect(unknown_compaction_actor).to_contain_text("compacting actor unknown")
                 expect(unknown_compaction_actor).not_to_contain_text("compacted by")
@@ -1120,7 +1137,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(later_tool).to_contain_text("Tool occurred after change · preceded_by")
                 expect(later_tool).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("git diff --stat")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 36 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 37 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)

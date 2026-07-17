@@ -806,6 +806,78 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 1,
         })
 
+    def test_context_read_after_compaction_cannot_be_summarized_evidence(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="context-before-compaction",
+                timestamp="2026-07-13T11:01:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/before.md"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-same-time",
+                span_id="span-current-context",
+                sequence=2,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/current.md"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-after-compaction",
+                span_id="span-late-context",
+                sequence=3,
+                timestamp="2026-07-13T11:03:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/late.md"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="compaction-1",
+                span_id="span-compaction",
+                sequence=4,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="context.compacted",
+                relationships=[
+                    {"type": "summarizes", "event_id": "context-before-compaction"},
+                    {"type": "summarizes", "event_id": "context-same-time"},
+                    {"type": "summarizes", "event_id": "context-after-compaction"},
+                ],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                span_id="span-change",
+                sequence=5,
+                timestamp="2026-07-13T11:03:00Z",
+                kind="change.applied",
+                attributes={"change": {
+                    "path": "src/auth/session.py",
+                    "old_start": 84,
+                    "old_count": 18,
+                    "new_start": 84,
+                    "new_count": 19,
+                }},
+                relationships=[{"type": "informed_by", "event_id": "compaction-1"}],
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+        compaction = change["links"][0]["compaction"]
+
+        self.assertEqual(
+            [source["context"]["path"] for source in compaction["sources"]],
+            ["docs/before.md", "docs/current.md", "docs/late.md"],
+        )
+        self.assertEqual(compaction["unresolved"], [{
+            "type": "summarizes",
+            "event_id": "context-after-compaction",
+            "target_kind": "context.read",
+            "reason": "context_not_preceding_compaction",
+        }])
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "tool", "verification", "decision"],
+            "unresolved_count": 1,
+        })
+
     def test_proposal_after_change_cannot_be_decision_evidence(self):
         store = RunStore.from_lines([
             json.dumps(event_data(

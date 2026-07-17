@@ -1835,7 +1835,14 @@ def _context_compaction_detail(
         if context is not None:
             item["context"] = context
         sources.append(item)
-        if relationship.type == "summarizes" and _has_invalid_context_line_start(source):
+        if relationship.type == "summarizes" and source.timestamp > event.timestamp:
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": source.kind,
+                "reason": "context_not_preceding_compaction",
+            })
+        elif relationship.type == "summarizes" and _has_invalid_context_line_start(source):
             unresolved.append({
                 "type": relationship.type,
                 "event_id": relationship.event_id,
