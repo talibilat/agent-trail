@@ -1161,7 +1161,7 @@ def _tool_call_detail(event: Event) -> dict[str, object] | None:
         return detail
     for key in ("command", "result"):
         value = tool.get(key)
-        if isinstance(value, str) and value:
+        if isinstance(value, str) and value.strip():
             detail[key] = value
     exit_code = tool.get("exit_code")
     if isinstance(exit_code, int) and not isinstance(exit_code, bool):

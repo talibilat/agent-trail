@@ -632,33 +632,46 @@ class ServeTests(unittest.TestCase):
             "exit_code": 0,
         })
 
-    def test_evidence_omits_malformed_optional_tool_call_fields(self):
-        store = RunStore.from_lines([
-            json.dumps(event_data(
-                event_id="change-1",
-                kind="change.applied",
-                relationships=[{
-                    "type": "preceded_by",
-                    "event_id": "tool-1",
-                }],
-            )) + "\n",
-            json.dumps(event_data(
-                event_id="tool-1",
-                span_id="span-2",
-                sequence=2,
-                kind="tool.call.completed",
-                operation={"status": "failed", "name": ""},
-                attributes={"tool": {
-                    "command": 17,
-                    "result": "",
-                    "exit_code": True,
-                }},
-            )) + "\n",
-        ])
+    def test_evidence_omits_malformed_or_blank_optional_tool_call_fields(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        for tool_attributes in (
+            {"command": 17, "result": "", "exit_code": True},
+            {"command": " \t", "result": "\n ", "exit_code": True},
+        ):
+            with self.subTest(tool_attributes=tool_attributes):
+                store = RunStore.from_lines([
+                    json.dumps(event_data(
+                        event_id="change-1",
+                        kind="change.applied",
+                        attributes={"change": hunk},
+                        relationships=[{
+                            "type": "preceded_by",
+                            "event_id": "tool-1",
+                        }],
+                    )) + "\n",
+                    json.dumps(event_data(
+                        event_id="tool-1",
+                        span_id="span-2",
+                        sequence=2,
+                        kind="tool.call.completed",
+                        operation={"status": "failed", "name": ""},
+                        attributes={"tool": tool_attributes},
+                    )) + "\n",
+                ])
 
-        link = store.run_detail("trace-1")["evidence_map"]["links"][0]
+                change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
-        self.assertEqual(link["tool"], {"status": "failed"})
+                self.assertEqual(
+                    change["links"][0]["tool"],
+                    {"status": "failed"},
+                )
+                self.assertIn("tool", change["coverage"]["missing"])
 
     def test_change_hunks_include_context_compaction_sources(self):
         hunk = {
