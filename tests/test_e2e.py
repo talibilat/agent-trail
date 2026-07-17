@@ -266,6 +266,25 @@ class ServeEndToEndTests(unittest.TestCase):
                         "test_origin": "pre_existing",
                     }},
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="invalid-correction",
+                    span_id="span-invalid-correction",
+                    sequence=19,
+                    kind="human.corrected",
+                    actor={"id": "invalid-maintainer"},
+                    relationships=[{
+                        "type": "corrects",
+                        "event_id": "context-1<img id=invalid-correction-target-injected>",
+                    }],
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="context-1<img id=invalid-correction-target-injected>",
+                    span_id="span-invalid-correction-target",
+                    sequence=20,
+                    kind="context.read",
+                    actor={"id": "invalid-correction-target"},
+                    attributes={"context": {"path": "docs/not-a-change.md"}},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -379,6 +398,19 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#unrelated-proposal-injected")).to_have_count(0)
                 expect(page.locator("#compaction-missing-injected")).to_have_count(0)
                 expect(page.locator("#evidence-missing-injected")).to_have_count(0)
+                page.locator(".back-btn").click()
+                page.evaluate("""() => {
+                  [...document.querySelectorAll('.node-wrap')]
+                    .find((node) => node.textContent.includes('invalid-maintainer')).click();
+                  [...document.querySelectorAll('.event-row')]
+                    .find((row) => row.textContent.includes('human.corrected')).click();
+                }""")
+                diagnostics = page.locator(".relationship-diagnostics")
+                expect(diagnostics).to_contain_text("RELATIONSHIP DIAGNOSTICS")
+                expect(diagnostics).to_contain_text("Invalid relationship target · corrects")
+                expect(diagnostics).to_contain_text("context-1")
+                expect(diagnostics).to_contain_text("context.read")
+                expect(page.locator("#invalid-correction-target-injected")).to_have_count(0)
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):

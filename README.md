@@ -149,6 +149,7 @@ To record a later human change, emit a `human.corrected` event with a `corrects`
 Each affected hunk exposes these inbound links in event order under `corrections`, including the human actor and validated action when available.
 The browser event inspector highlights each later human modification or reversion, together with the correcting actor, directly on the selected change hunk.
 Wrong-kind `corrects` targets remain inspectable as generic links and are also reported as invalid targets in the run-level unresolved diagnostics.
+When the correction event is selected, the browser presents the relationship type, target event ID, and actual target kind from that diagnostic without attributing it to a change hunk.
 Other inbound relationship types remain available as generic evidence links but are not attributed as human corrections.
 Malformed correction metadata is omitted without hiding the correction relationship.
 Unknown kinds, fields, and supported minor schema versions are retained so the canonical envelope can evolve.

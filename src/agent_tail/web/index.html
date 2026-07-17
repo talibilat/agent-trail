@@ -1516,6 +1516,31 @@
 
       const evidenceMap = detail.evidence_map || {};
       const changeEvidence = (evidenceMap.changes || []).find((change) => change.event_id === event.event_id);
+      const sourceDiagnostics = (evidenceMap.unresolved || []).filter(
+        (link) => link.source_event_id === event.event_id
+      );
+      if (!changeEvidence && sourceDiagnostics.length) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block relationship-diagnostics';
+        block.innerHTML = `<div class="inspector-label">RELATIONSHIP DIAGNOSTICS</div>`;
+        sourceDiagnostics.forEach((link) => {
+          const card = document.createElement('div');
+          card.className = 'unresolved-evidence';
+          const type = document.createElement('div');
+          type.className = 'type';
+          type.textContent = link.target_kind
+            ? `Invalid relationship target · ${link.type}`
+            : `Missing relationship target · ${link.type}`;
+          const eventId = document.createElement('div');
+          eventId.className = 'event-id';
+          eventId.textContent = link.target_kind
+            ? `${link.target_event_id} · ${link.target_kind}`
+            : link.target_event_id;
+          card.append(type, eventId);
+          block.append(card);
+        });
+        wrap.append(block);
+      }
       if (changeEvidence) {
         const block = document.createElement('div');
         block.className = 'inspector-block change-evidence';
