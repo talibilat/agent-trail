@@ -149,6 +149,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "references", "event_id": "unrelated-tool"},
                         {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-2"},
+                        {"type": "references", "event_id": "unrelated-verification"},
                         {"type": "reviewed_by", "event_id": "missing-review<img id=evidence-missing-injected>"},
                     ],
                 )) + "\n",
@@ -209,6 +210,21 @@ class ServeEndToEndTests(unittest.TestCase):
                         "command": "rm unrelated.tmp<img id=unrelated-tool-injected>",
                         "result": "unrelated result",
                     }},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="unrelated-verification",
+                    span_id="span-unrelated-verification",
+                    sequence=16,
+                    kind="verification.finished",
+                    actor={"id": "unrelated-reporter<img id=unrelated-verification-reporter-injected>"},
+                    attributes={"verification": {
+                        "command": "pytest unrelated_test.py<img id=unrelated-verification-injected>",
+                        "passed": False,
+                    }},
+                    relationships=[{
+                        "type": "completes",
+                        "event_id": "unrelated-missing-start",
+                    }],
                 )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
@@ -278,6 +294,9 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("missing-start")
                 expect(evidence).to_contain_text("Test provenance unknown")
                 expect(evidence).not_to_contain_text("undefined")
+                expect(evidence).not_to_contain_text("pytest unrelated_test.py")
+                expect(evidence).not_to_contain_text("unrelated-reporter")
+                expect(evidence).not_to_contain_text("unrelated-missing-start")
                 expect(evidence).to_contain_text("Human modified this change")
                 expect(evidence).to_contain_text("corrected by maintainer-1")
                 expect(evidence).to_contain_text("Human reverted this change")
@@ -295,6 +314,8 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#verification-injected")).to_have_count(0)
                 expect(page.locator("#verification-starter-injected")).to_have_count(0)
                 expect(page.locator("#verification-missing-injected")).to_have_count(0)
+                expect(page.locator("#unrelated-verification-injected")).to_have_count(0)
+                expect(page.locator("#unrelated-verification-reporter-injected")).to_have_count(0)
                 expect(page.locator("#correction-injected")).to_have_count(0)
                 expect(page.locator("#proposal-injected")).to_have_count(0)
                 expect(page.locator("#unrelated-proposal-injected")).to_have_count(0)

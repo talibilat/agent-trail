@@ -961,7 +961,8 @@ def _evidence_coverage(
             for link in links
         ),
         "verification": any(
-            isinstance((verification := link.get("verification")), dict)
+            link.get("type") == "verified_by"
+            and isinstance((verification := link.get("verification")), dict)
             and "command" in verification
             for link in links
         ),
@@ -985,13 +986,15 @@ def _evidence_coverage(
     ) + sum(
         len(verification.get("unresolved", []))
         for link in links
-        if isinstance((verification := link.get("verification")), dict)
+        if link.get("type") == "verified_by"
+        and isinstance((verification := link.get("verification")), dict)
         and isinstance(verification.get("unresolved"), list)
     )
     unknown_test_origin_count = sum(
         "test_origin" not in verification
         for link in links
-        if isinstance((verification := link.get("verification")), dict)
+        if link.get("type") == "verified_by"
+        and isinstance((verification := link.get("verification")), dict)
     )
     coverage = {
         "status": "incomplete"

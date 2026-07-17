@@ -1669,7 +1669,9 @@
           block.append(card);
         });
 
-        (changeEvidence.links || []).filter((link) => link.verification).forEach((link) => {
+        (changeEvidence.links || []).filter(
+          (link) => link.type === 'verified_by' && link.verification
+        ).forEach((link) => {
           const verification = link.verification;
           const sameAgent = verification.test_origin === 'same_agent';
           const unknownOrigin = !verification.test_origin;
