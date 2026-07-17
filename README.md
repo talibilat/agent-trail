@@ -107,6 +107,7 @@ Resolved links to that event include the validated ID and text under `requiremen
 The browser event inspector presents this motivating requirement with the selected change hunk, applying agent, and unresolved-reference status.
 To identify repository or documentation evidence, emit a `context.read` event with a non-empty `attributes.context.path`, optional non-negative integer `line_start` and `line_end` fields, and an optional string `symbol`, then reference it from the change event.
 Resolved links to that event include the validated locator under `context`; malformed optional locator fields are omitted without hiding the relationship.
+The browser event inspector presents each linked context path, line range, symbol, and reading actor directly on the selected change hunk.
 To expose commands and tool results that preceded a change, reference the relevant `tool.call.*` events from the change event.
 Resolved links to tool calls include the required operation status and optional non-empty operation name under `tool`.
 Producers can add non-empty `attributes.tool.command` and `attributes.tool.result` strings and an optional integer `attributes.tool.exit_code`; malformed optional fields are omitted without hiding the relationship or operation details.

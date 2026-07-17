@@ -28,7 +28,7 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
-    def test_change_inspector_shows_motivating_requirement_safely(self):
+    def test_change_inspector_shows_requirement_and_context_safely(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "change-evidence.jsonl")
             source.write_text("".join((
@@ -42,9 +42,22 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
-                    event_id="change-1",
+                    event_id="context-1",
                     span_id="span-2",
                     sequence=2,
+                    kind="context.read",
+                    actor={"id": "researcher-1"},
+                    attributes={"context": {
+                        "path": "docs/session-lifecycle.md<img id=context-injected>",
+                        "line_start": 42,
+                        "line_end": 47,
+                        "symbol": "Session expiry",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="change-1",
+                    span_id="span-3",
+                    sequence=3,
                     kind="change.applied",
                     actor={"id": "implementer-1"},
                     attributes={"change": {
@@ -54,7 +67,10 @@ class ServeEndToEndTests(unittest.TestCase):
                         "new_start": 84,
                         "new_count": 19,
                     }},
-                    relationships=[{"type": "motivated_by", "event_id": "requirement-1"}],
+                    relationships=[
+                        {"type": "motivated_by", "event_id": "requirement-1"},
+                        {"type": "informed_by", "event_id": "context-1"},
+                    ],
                 )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
@@ -81,7 +97,12 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("implementer-1")
                 expect(evidence).to_contain_text("R3")
                 expect(evidence).to_contain_text("Expired sessions must be rejected.")
+                expect(evidence).to_contain_text("docs/session-lifecycle.md")
+                expect(evidence).to_contain_text(":42-47")
+                expect(evidence).to_contain_text("researcher-1")
+                expect(evidence).to_contain_text("Session expiry")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
+                expect(page.locator("#context-injected")).to_have_count(0)
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):

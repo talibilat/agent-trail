@@ -300,6 +300,9 @@
     .requirement-card { margin-top: 10px; padding: 10px; border: 1px solid rgba(122,162,255,.35); border-radius: 8px; background: rgba(122,162,255,.08); }
     .requirement-card .id { font: 600 10px "IBM Plex Mono", monospace; color: var(--accent); }
     .requirement-card .text { margin-top: 4px; font: 400 11.5px/1.5 "IBM Plex Sans", sans-serif; color: var(--text); }
+    .context-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--run); background: rgba(51,201,255,.06); }
+    .context-card .path { font: 600 10.5px "IBM Plex Mono", monospace; color: var(--run); word-break: break-word; }
+    .context-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
     .evidence-completeness { margin-top: 9px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--faint); }
     .evidence-completeness.incomplete { color: var(--warn); }
     .usage-inline-row { display: flex; gap: 16px; }
@@ -1509,6 +1512,24 @@
           requirementText.className = 'text';
           requirementText.textContent = link.requirement.text;
           card.append(requirementId, requirementText);
+          block.append(card);
+        });
+
+        (changeEvidence.links || []).filter((link) => link.context).forEach((link) => {
+          const card = document.createElement('div');
+          card.className = 'context-card';
+          const path = document.createElement('div');
+          path.className = 'path';
+          const lineRange = link.context.line_start === undefined
+            ? ''
+            : `:${link.context.line_start}${link.context.line_end === undefined ? '' : `-${link.context.line_end}`}`;
+          path.textContent = `${link.context.path}${lineRange}`;
+          const details = [`read by ${link.target_actor_id}`];
+          if (link.context.symbol) details.push(link.context.symbol);
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          meta.textContent = details.join(' · ');
+          card.append(path, meta);
           block.append(card);
         });
 
