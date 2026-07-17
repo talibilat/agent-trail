@@ -208,6 +208,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "informed_by", "event_id": "context-1"},
                         {"type": "informed_by", "event_id": "context-end-only"},
                         {"type": "informed_by", "event_id": "context-unknown-actor"},
+                        {"type": "informed_by", "event_id": "context-invalid-detail<img id=invalid-context-injected>"},
                         {"type": "references", "event_id": "unrelated-context"},
                         {"type": "informed_by", "event_id": "compaction-1"},
                         {"type": "informed_by", "event_id": "compaction-unknown-actor"},
@@ -410,6 +411,13 @@ class ServeEndToEndTests(unittest.TestCase):
                         "text": " \t",
                     }},
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="context-invalid-detail<img id=invalid-context-injected>",
+                    span_id="span-context-invalid-detail",
+                    sequence=25,
+                    kind="context.read",
+                    attributes={"context": {"path": " \t"}},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -549,7 +557,12 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(malformed_requirement).to_contain_text("Invalid requirement details · motivated_by")
                 expect(malformed_requirement).to_contain_text("requirement.observed")
                 expect(evidence).not_to_contain_text("Requirement R-BAD")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 7 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                malformed_context = evidence.locator(".unresolved-evidence").filter(
+                    has_text="context-invalid-detail"
+                )
+                expect(malformed_context).to_contain_text("Invalid context details · informed_by")
+                expect(malformed_context).to_contain_text("context.read")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 8 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
@@ -562,6 +575,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#verification-starter-injected")).to_have_count(0)
                 expect(page.locator("#verification-missing-injected")).to_have_count(0)
                 expect(page.locator("#invalid-requirement-injected")).to_have_count(0)
+                expect(page.locator("#invalid-context-injected")).to_have_count(0)
                 expect(page.locator("#unrelated-verification-injected")).to_have_count(0)
                 expect(page.locator("#unrelated-verification-reporter-injected")).to_have_count(0)
                 expect(page.locator("#correction-injected")).to_have_count(0)

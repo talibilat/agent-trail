@@ -928,6 +928,19 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     source_unresolved.append(invalid)
                 elif (
                     source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.read"
+                    and context is None
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_context_detail",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
                     and relationship.type == "verified_by"
                     and target.kind == "verification.finished"
                     and verification is None

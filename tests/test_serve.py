@@ -1501,6 +1501,12 @@ class ServeTests(unittest.TestCase):
                 attributes={"requirement": {"id": "R4", "text": " \t"}},
             ),
             event_data(
+                event_id="invalid-context-1",
+                sequence=8,
+                kind="context.read",
+                attributes={"context": {"path": " \t"}},
+            ),
+            event_data(
                 event_id="change-1",
                 sequence=9,
                 kind="change.applied",
@@ -1513,6 +1519,7 @@ class ServeTests(unittest.TestCase):
                     {"type": "verified_by", "event_id": "wrong-verification-1"},
                     {"type": "verified_by", "event_id": "invalid-verification-1"},
                     {"type": "motivated_by", "event_id": "invalid-requirement-1"},
+                    {"type": "informed_by", "event_id": "invalid-context-1"},
                     {"type": "applies", "event_id": "proposal-1"},
                     {"type": "references", "event_id": "missing-note"},
                 ],
@@ -1525,7 +1532,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": [],
-            "unresolved_count": 3,
+            "unresolved_count": 4,
         })
         self.assertEqual(change["unresolved"], [
             {
@@ -1555,6 +1562,15 @@ class ServeTests(unittest.TestCase):
                 "reason": "invalid_requirement_detail",
             },
             {
+                "type": "informed_by",
+                "source_event_id": "change-1",
+                "target_event_id": "invalid-context-1",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "context.read",
+                "reason": "invalid_context_detail",
+            },
+            {
                 "type": "references",
                 "source_event_id": "change-1",
                 "target_event_id": "missing-note",
@@ -1572,6 +1588,10 @@ class ServeTests(unittest.TestCase):
         )
         self.assertIn(
             "invalid-requirement-1",
+            [link["target_event_id"] for link in change["links"]],
+        )
+        self.assertIn(
+            "invalid-context-1",
             [link["target_event_id"] for link in change["links"]],
         )
 

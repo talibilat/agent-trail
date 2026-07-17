@@ -1822,11 +1822,13 @@
             ? `Invalid verification result · ${link.type}`
             : link.reason === 'invalid_requirement_detail'
               ? `Invalid requirement details · ${link.type}`
-              : link.target_kind
-                ? `Invalid evidence target · ${link.type}`
-                : evidenceRelationshipTypes.has(link.type)
-                  ? `Missing evidence target · ${link.type}`
-                  : `Missing relationship target · ${link.type}`;
+              : link.reason === 'invalid_context_detail'
+                ? `Invalid context details · ${link.type}`
+                : link.target_kind
+                  ? `Invalid evidence target · ${link.type}`
+                  : evidenceRelationshipTypes.has(link.type)
+                    ? `Missing evidence target · ${link.type}`
+                    : `Missing relationship target · ${link.type}`;
           const eventId = document.createElement('div');
           eventId.className = 'event-id';
           eventId.textContent = link.target_kind
