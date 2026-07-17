@@ -1875,6 +1875,7 @@
             ? `result reported by ${link.target_actor_id}`
             : 'reporting actor unknown');
           if (verification.exit_code !== undefined) metaParts.push(`exit ${verification.exit_code}`);
+          if (link.chronology === 'undetermined') metaParts.push('verification chronology undetermined');
           meta.textContent = metaParts.join(' · ');
           card.append(meta);
           (verification.unresolved || []).forEach((start) => {

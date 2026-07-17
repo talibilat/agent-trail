@@ -1361,6 +1361,20 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[{"type": "summarizes", "event_id": "context-1"}],
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="verification-undetermined",
+                    emitter_id="verification-worker",
+                    span_id="span-concurrent-verification",
+                    sequence=1,
+                    timestamp="2026-07-13T11:03:00Z",
+                    kind="verification.finished",
+                    actor={"id": "concurrent-verifier"},
+                    attributes={"verification": {
+                        "command": "pytest tests/test_decision.py",
+                        "passed": True,
+                        "test_origin": "pre_existing",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="change-1",
                     span_id="span-change",
                     sequence=7,
@@ -1385,6 +1399,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "informed_by", "event_id": "compaction-after-decision"},
                         {"type": "preceded_by", "event_id": "tool-after-decision"},
                         {"type": "preceded_by", "event_id": "tool-undetermined"},
+                        {"type": "verified_by", "event_id": "verification-undetermined"},
                     ],
                 )) + "\n",
             )), encoding="utf-8")
@@ -1458,6 +1473,13 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(undetermined_tool).to_contain_text("concurrent-runner")
                 expect(undetermined_tool).to_contain_text("tool chronology undetermined")
+                undetermined_verification = evidence.locator(".verification-card").filter(
+                    has_text="pytest tests/test_decision.py"
+                )
+                expect(undetermined_verification).to_contain_text("concurrent-verifier")
+                expect(undetermined_verification).to_contain_text(
+                    "verification chronology undetermined"
+                )
                 late_tool_diagnostic = evidence.locator(".unresolved-evidence").filter(
                     has_text="tool-after-decision"
                 )

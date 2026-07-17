@@ -934,6 +934,16 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     else None,
                 )
                 if verification is not None:
+                    if (
+                        source.kind == "change.applied"
+                        and relationship.type == "verified_by"
+                        and target.kind == "verification.finished"
+                    ):
+                        resolved["chronology"] = _evidence_chronology(
+                            target,
+                            source,
+                            "change",
+                        )
                     resolved["verification"] = verification
                 requirement = _requirement_detail(target)
                 if requirement is not None:

@@ -1847,6 +1847,7 @@ class ServeTests(unittest.TestCase):
                 **verified_by_unresolved,
                 "target_kind": "verification.finished",
                 "target_actor_id": "reviewer-1",
+                "chronology": "after_change",
                 "verification": {
                     "command": "pytest tests/test_session.py",
                     "passed": True,
@@ -2497,6 +2498,19 @@ class ServeTests(unittest.TestCase):
                 "verification-clock-skew-after-change",
                 "verification-same-time-other-emitter",
             ],
+        )
+        self.assertEqual(
+            {
+                link["target_event_id"]: link["chronology"]
+                for link in change["links"]
+            },
+            {
+                "verification-before-change": "before_change",
+                "verification-same-time": "before_change",
+                "verification-clock-skew-before-change": "before_change",
+                "verification-clock-skew-after-change": "after_change",
+                "verification-same-time-other-emitter": "undetermined",
+            },
         )
         self.assertEqual(
             [item["target_event_id"] for item in change["unresolved"]],
