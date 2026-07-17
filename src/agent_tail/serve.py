@@ -1073,7 +1073,7 @@ def _verification_result(
     if not isinstance(passed, bool):
         return None
     result: dict[str, object] = {"passed": passed}
-    if isinstance(command, str) and command:
+    if isinstance(command, str) and command.strip():
         result["command"] = command
     exit_code = verification.get("exit_code")
     if isinstance(exit_code, int) and not isinstance(exit_code, bool):
@@ -1102,7 +1102,7 @@ def _verification_result(
         started_verification = _attributes(started).get("verification")
         if isinstance(started_verification, dict):
             started_command = started_verification.get("command")
-            if isinstance(started_command, str) and started_command:
+            if isinstance(started_command, str) and started_command.strip():
                 detail["command"] = started_command
                 result.setdefault("command", started_command)
         starts.append(detail)

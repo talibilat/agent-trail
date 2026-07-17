@@ -961,7 +961,7 @@ class ServeTests(unittest.TestCase):
             "source_actor_id": "reviewer-1",
         }])
 
-    def test_bare_verification_start_does_not_satisfy_verification_coverage(self):
+    def test_blank_verification_commands_do_not_satisfy_verification_coverage(self):
         hunk = {
             "path": "src/auth/session.py",
             "old_start": 84,
@@ -969,71 +969,104 @@ class ServeTests(unittest.TestCase):
             "new_start": 84,
             "new_count": 19,
         }
-        events = [
-            event_data(
-                event_id="requirement-1",
-                kind="requirement.observed",
-                attributes={"requirement": {"id": "R3", "text": "Reject expiry."}},
-            ),
-            event_data(
-                event_id="context-1",
-                sequence=2,
-                kind="context.read",
-                attributes={"context": {"path": "src/auth/config.py"}},
-            ),
-            event_data(
-                event_id="tool-1",
-                sequence=3,
-                kind="tool.call.completed",
-                operation={"status": "ok", "name": "shell"},
-                attributes={"tool": {"command": "pytest"}},
-            ),
-            event_data(
-                event_id="verification-started-1",
-                sequence=4,
-                kind="verification.started",
-            ),
-            event_data(
-                event_id="verification-finished-1",
-                sequence=5,
-                kind="verification.finished",
-                attributes={"verification": {
+        for finished_command, started_command in (
+            (None, None),
+            (" \t", None),
+            (None, "\n "),
+        ):
+            with self.subTest(
+                finished_command=finished_command,
+                started_command=started_command,
+            ):
+                started_event = event_data(
+                    event_id="verification-started-1",
+                    sequence=4,
+                    kind="verification.started",
+                )
+                if started_command is not None:
+                    started_event["attributes"] = {
+                        "verification": {"command": started_command},
+                    }
+                finished_verification = {
                     "passed": True,
                     "test_origin": "pre_existing",
-                }},
-                relationships=[{
-                    "type": "completes",
-                    "event_id": "verification-started-1",
-                }],
-            ),
-            event_data(
-                event_id="proposal-1",
-                sequence=6,
-                kind="change.proposed",
-            ),
-            event_data(
-                event_id="change-1",
-                sequence=7,
-                kind="change.applied",
-                attributes={"change": hunk},
-                relationships=[
-                    {"type": "motivated_by", "event_id": "requirement-1"},
-                    {"type": "informed_by", "event_id": "context-1"},
-                    {"type": "preceded_by", "event_id": "tool-1"},
-                    {"type": "verified_by", "event_id": "verification-finished-1"},
-                    {"type": "applies", "event_id": "proposal-1"},
-                ],
-            ),
-        ]
-        store = RunStore.from_lines(json.dumps(event) + "\n" for event in events)
+                }
+                if finished_command is not None:
+                    finished_verification["command"] = finished_command
+                events = [
+                    event_data(
+                        event_id="requirement-1",
+                        kind="requirement.observed",
+                        attributes={"requirement": {
+                            "id": "R3",
+                            "text": "Reject expiry.",
+                        }},
+                    ),
+                    event_data(
+                        event_id="context-1",
+                        sequence=2,
+                        kind="context.read",
+                        attributes={"context": {"path": "src/auth/config.py"}},
+                    ),
+                    event_data(
+                        event_id="tool-1",
+                        sequence=3,
+                        kind="tool.call.completed",
+                        operation={"status": "ok", "name": "shell"},
+                        attributes={"tool": {"command": "pytest"}},
+                    ),
+                    started_event,
+                    event_data(
+                        event_id="verification-finished-1",
+                        sequence=5,
+                        kind="verification.finished",
+                        attributes={"verification": finished_verification},
+                        relationships=[{
+                            "type": "completes",
+                            "event_id": "verification-started-1",
+                        }],
+                    ),
+                    event_data(
+                        event_id="proposal-1",
+                        sequence=6,
+                        kind="change.proposed",
+                    ),
+                    event_data(
+                        event_id="change-1",
+                        sequence=7,
+                        kind="change.applied",
+                        attributes={"change": hunk},
+                        relationships=[
+                            {"type": "motivated_by", "event_id": "requirement-1"},
+                            {"type": "informed_by", "event_id": "context-1"},
+                            {"type": "preceded_by", "event_id": "tool-1"},
+                            {
+                                "type": "verified_by",
+                                "event_id": "verification-finished-1",
+                            },
+                            {"type": "applies", "event_id": "proposal-1"},
+                        ],
+                    ),
+                ]
+                store = RunStore.from_lines(
+                    json.dumps(event) + "\n" for event in events
+                )
 
-        coverage = store.run_detail("trace-1")["evidence_map"]["changes"][0]["coverage"]
+                change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
-        self.assertEqual(coverage, {
-            "status": "incomplete",
-            "missing": ["verification"],
-            "unresolved_count": 0,
-        })
+                self.assertEqual(change["links"][3]["verification"], {
+                    "passed": True,
+                    "test_origin": "pre_existing",
+                    "starts": [{
+                        "event_id": "verification-started-1",
+                        "actor_id": "reviewer-1",
+                    }],
+                })
+                self.assertEqual(change["coverage"], {
+                    "status": "incomplete",
+                    "missing": ["verification"],
+                    "unresolved_count": 0,
+                })
 
     def test_only_canonical_compaction_links_satisfy_context_coverage(self):
         hunk = {
