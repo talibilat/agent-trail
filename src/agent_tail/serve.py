@@ -883,11 +883,13 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
             and target.actor["id"].strip()
             and not _event_follows(target, source)
         ] if source.kind == "change.applied" else []
-        earliest_decision = min(
-            decision_events,
-            key=lambda event: event.timestamp,
-            default=None,
-        )
+        earliest_decision = None
+        for decision_event in decision_events:
+            if earliest_decision is None or _event_follows(
+                earliest_decision,
+                decision_event,
+            ):
+                earliest_decision = decision_event
         projected_relationships = set()
         for relationship in source.relationships:
             relationship_key = (relationship.type, relationship.event_id)
