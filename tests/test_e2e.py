@@ -1244,7 +1244,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#invalid-correction-target-injected")).to_have_count(0)
                 browser.close()
 
-    def test_compaction_after_decision_is_visible_as_incomplete_evidence(self):
+    def test_context_after_decision_is_visible_as_incomplete_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "compaction-after-decision.jsonl")
             source.write_text("".join((
@@ -1264,9 +1264,27 @@ class ServeEndToEndTests(unittest.TestCase):
                     actor={"id": "planner-1"},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="context-same-time",
+                    span_id="span-current-context",
+                    sequence=3,
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="context.read",
+                    actor={"id": "current-researcher"},
+                    attributes={"context": {"path": "docs/current.md"}},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="context-after-decision",
+                    span_id="span-late-context",
+                    sequence=4,
+                    timestamp="2026-07-13T11:02:00Z",
+                    kind="context.read",
+                    actor={"id": "late-researcher"},
+                    attributes={"context": {"path": "docs/late.md"}},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="compaction-before-decision",
                     span_id="span-early-compaction",
-                    sequence=3,
+                    sequence=5,
                     timestamp="2026-07-13T11:01:00Z",
                     kind="context.compacted",
                     actor={"id": "early-summarizer"},
@@ -1275,7 +1293,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 json.dumps(event_data(
                     event_id="compaction-after-decision",
                     span_id="span-late-compaction",
-                    sequence=4,
+                    sequence=6,
                     timestamp="2026-07-13T11:02:00Z",
                     kind="context.compacted",
                     actor={"id": "late-summarizer"},
@@ -1284,7 +1302,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 json.dumps(event_data(
                     event_id="change-1",
                     span_id="span-change",
-                    sequence=5,
+                    sequence=7,
                     timestamp="2026-07-13T11:03:00Z",
                     kind="change.applied",
                     actor={"id": "implementer-1"},
@@ -1297,6 +1315,8 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                     relationships=[
                         {"type": "applies", "event_id": "proposal-1"},
+                        {"type": "informed_by", "event_id": "context-same-time"},
+                        {"type": "informed_by", "event_id": "context-after-decision"},
                         {"type": "informed_by", "event_id": "compaction-before-decision"},
                         {"type": "informed_by", "event_id": "compaction-after-decision"},
                     ],
@@ -1330,12 +1350,19 @@ class ServeEndToEndTests(unittest.TestCase):
                 late = evidence.locator(".compaction-card").filter(has_text="late-summarizer")
                 expect(early).to_contain_text("Context compacted before decision")
                 expect(late).to_contain_text("Context compacted after decision")
+                expect(evidence.locator(".context-card").filter(has_text="docs/current.md")).to_be_visible()
+                expect(evidence.locator(".context-card").filter(has_text="docs/late.md")).to_be_visible()
+                late_context_diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="context-after-decision"
+                )
+                expect(late_context_diagnostic).to_contain_text("Context read after decision · informed_by")
+                expect(late_context_diagnostic).to_contain_text("context.read")
                 diagnostic = evidence.locator(".unresolved-evidence").filter(
                     has_text="compaction-after-decision"
                 )
                 expect(diagnostic).to_contain_text("Context compacted after decision · informed_by")
                 expect(diagnostic).to_contain_text("context.compacted")
-                expect(evidence).to_contain_text("1 unresolved reference")
+                expect(evidence).to_contain_text("2 unresolved references")
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):

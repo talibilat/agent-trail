@@ -996,6 +996,21 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     source.kind == "change.applied"
                     and relationship.type == "informed_by"
                     and target.kind == "context.read"
+                    and earliest_decision is not None
+                    and target.timestamp > earliest_decision.timestamp
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "context_follows_decision",
+                        "decision_event_id": earliest_decision.event_id,
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.read"
                     and context is None
                 ):
                     invalid = {

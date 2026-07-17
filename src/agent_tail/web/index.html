@@ -1954,10 +1954,12 @@
                   ? `Requirement observed after change · ${link.type}`
                 : link.reason === 'invalid_requirement_detail'
                 ? `Invalid requirement details · ${link.type}`
-                : link.reason === 'context_not_preceding_change'
-                  ? `Context read after change · ${link.type}`
-                : link.reason === 'compaction_not_preceding_change'
-                  ? `Context compacted after change · ${link.type}`
+                 : link.reason === 'context_not_preceding_change'
+                   ? `Context read after change · ${link.type}`
+                 : link.reason === 'context_follows_decision'
+                   ? `Context read after decision · ${link.type}`
+                 : link.reason === 'compaction_not_preceding_change'
+                   ? `Context compacted after change · ${link.type}`
                 : link.reason === 'compaction_follows_decision'
                   ? `Context compacted after decision · ${link.type}`
                 : link.reason === 'invalid_context_detail'
