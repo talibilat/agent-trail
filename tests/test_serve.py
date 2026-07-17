@@ -87,6 +87,7 @@ class ServeTests(unittest.TestCase):
             emitter_id="requirements",
             span_id="span-2",
             sequence=2,
+            timestamp="2026-07-13T11:01:00Z",
             kind="requirement.observed",
             actor={"id": "user"},
             attributes={"requirement": {
@@ -108,7 +109,7 @@ class ServeTests(unittest.TestCase):
             **unresolved_requirement,
             "target_kind": "requirement.observed",
             "target_actor_id": "user",
-            "chronology": "undetermined",
+            "chronology": "before_change",
             "requirement": {
                 "id": "R1",
                 "text": "Resolve the forward requirement.",
@@ -970,16 +971,22 @@ class ServeTests(unittest.TestCase):
                 "requirement-after-change",
                 "requirement-same-time-after-change",
                 "requirement-clock-skew-after-change",
+                "requirement-same-time-other-emitter",
             ],
         )
-        self.assertTrue(all(
-            item["reason"] == "requirement_not_preceding_change"
-            for item in change["unresolved"]
-        ))
+        self.assertEqual(
+            [item["reason"] for item in change["unresolved"]],
+            [
+                "requirement_not_preceding_change",
+                "requirement_not_preceding_change",
+                "requirement_not_preceding_change",
+                "requirement_chronology_undetermined",
+            ],
+        )
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["context", "tool", "verification", "decision"],
-            "unresolved_count": 3,
+            "unresolved_count": 4,
         })
 
     def test_requirement_observed_after_decision_is_incomplete_evidence(self):
