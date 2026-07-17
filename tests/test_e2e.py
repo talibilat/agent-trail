@@ -710,6 +710,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("Verification command · pytest tests/test_session.py")
                 verification = evidence.locator(".verification-card").filter(has_text="result-reporter-1")
                 expect(verification).to_have_count(1)
+                expect(verification).to_contain_text("event verification-started-1 · started by test-runner-1")
                 expect(verification).to_contain_text("event verification-1 · result reported by result-reporter-1")
                 expect(evidence).to_contain_text("exit 0")
                 expect(evidence).to_contain_text("implementation and test written by the same agent")
@@ -724,7 +725,9 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(outcome_only).to_contain_text("exit 2")
                 expect(outcome_only).to_contain_text("Test existed before this change")
                 unknown_verification_actors = evidence.locator(".verification-card").filter(has_text="test_anonymous_verifier.py")
-                expect(unknown_verification_actors).to_contain_text("starting actor unknown")
+                expect(unknown_verification_actors).to_contain_text(
+                    "event verification-started-unknown-actor · starting actor unknown"
+                )
                 expect(unknown_verification_actors).to_contain_text("reporting actor unknown")
                 expect(unknown_verification_actors).not_to_contain_text("started by")
                 expect(unknown_verification_actors).not_to_contain_text("result reported by")

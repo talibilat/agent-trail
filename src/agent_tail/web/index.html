@@ -1765,9 +1765,11 @@
             }
             const startMeta = document.createElement('div');
             startMeta.className = 'meta';
-            startMeta.textContent = typeof start.actor_id === 'string' && start.actor_id.trim()
-              ? `started by ${start.actor_id}`
-              : 'starting actor unknown';
+            startMeta.textContent = `event ${start.event_id} · ${
+              typeof start.actor_id === 'string' && start.actor_id.trim()
+                ? `started by ${start.actor_id}`
+                : 'starting actor unknown'
+            }`;
             card.append(startMeta);
           });
           const conflictingCommand = starts.some(
