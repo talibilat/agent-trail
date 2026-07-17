@@ -28,7 +28,7 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
-    def test_change_inspector_shows_requirement_context_tool_and_verification_safely(self):
+    def test_change_inspector_shows_requirement_context_compaction_tool_and_verification_safely(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "change-evidence.jsonl")
             source.write_text("".join((
@@ -68,9 +68,20 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="compaction-1",
+                    span_id="span-compaction",
+                    sequence=4,
+                    kind="context.compacted",
+                    actor={"id": "summarizer-1"},
+                    relationships=[
+                        {"type": "summarizes", "event_id": "context-1"},
+                        {"type": "summarizes", "event_id": "missing-context"},
+                    ],
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="tool-1",
                     span_id="span-4",
-                    sequence=4,
+                    sequence=5,
                     kind="tool.call.completed",
                     actor={"id": "shell-1"},
                     operation={"status": "ok", "name": "shell"},
@@ -83,7 +94,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 json.dumps(event_data(
                     event_id="change-1",
                     span_id="span-5",
-                    sequence=5,
+                    sequence=6,
                     kind="change.applied",
                     actor={"id": "implementer-1"},
                     attributes={"change": {
@@ -96,6 +107,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[
                         {"type": "motivated_by", "event_id": "requirement-1"},
                         {"type": "informed_by", "event_id": "context-1"},
+                        {"type": "informed_by", "event_id": "compaction-1"},
                         {"type": "preceded_by", "event_id": "tool-1"},
                         {"type": "verified_by", "event_id": "verification-1"},
                     ],
@@ -129,6 +141,10 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text(":42-47")
                 expect(evidence).to_contain_text("researcher-1")
                 expect(evidence).to_contain_text("Session expiry")
+                expect(evidence).to_contain_text("Context compacted before change")
+                expect(evidence).to_contain_text("compacted by summarizer-1")
+                expect(evidence).to_contain_text("source from researcher-1")
+                expect(evidence).to_contain_text("1 compacted source unresolved")
                 expect(evidence).to_contain_text("Tool · shell")
                 expect(evidence).to_contain_text("git diff -- src/auth/session.py")
                 expect(evidence).to_contain_text("1 file changed")

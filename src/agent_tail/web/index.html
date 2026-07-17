@@ -303,6 +303,11 @@
     .context-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--run); background: rgba(51,201,255,.06); }
     .context-card .path { font: 600 10.5px "IBM Plex Mono", monospace; color: var(--run); word-break: break-word; }
     .context-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .compaction-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--orch); background: rgba(177,140,255,.06); }
+    .compaction-card .title { font: 600 10px "IBM Plex Mono", monospace; color: var(--orch); }
+    .compaction-card .source { margin-top: 5px; font: 500 10.5px "IBM Plex Mono", monospace; color: var(--text); word-break: break-word; }
+    .compaction-card .meta { margin-top: 3px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .compaction-card .incomplete { margin-top: 5px; font: 500 9.5px "IBM Plex Mono", monospace; color: var(--warn); }
     .tool-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--accent); background: rgba(122,162,255,.06); }
     .tool-card .operation { font: 600 10px "IBM Plex Mono", monospace; color: var(--accent); }
     .tool-card .command, .tool-card .result { margin-top: 4px; font: 500 10.5px/1.45 "IBM Plex Mono", monospace; color: var(--text); white-space: pre-wrap; word-break: break-word; }
@@ -1541,6 +1546,42 @@
           meta.className = 'meta';
           meta.textContent = details.join(' · ');
           card.append(path, meta);
+          block.append(card);
+        });
+
+        (changeEvidence.links || []).filter((link) => link.compaction).forEach((link) => {
+          const card = document.createElement('div');
+          card.className = 'compaction-card';
+          const title = document.createElement('div');
+          title.className = 'title';
+          title.textContent = 'Context compacted before change';
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          meta.textContent = `compacted by ${link.target_actor_id}`;
+          card.append(title, meta);
+          (link.compaction.sources || []).forEach((source) => {
+            const sourceNode = document.createElement('div');
+            sourceNode.className = 'source';
+            if (source.context) {
+              const lineRange = source.context.line_start === undefined
+                ? ''
+                : `:${source.context.line_start}${source.context.line_end === undefined ? '' : `-${source.context.line_end}`}`;
+              sourceNode.textContent = `${source.context.path}${lineRange}`;
+            } else {
+              sourceNode.textContent = source.kind;
+            }
+            const sourceMeta = document.createElement('div');
+            sourceMeta.className = 'meta';
+            sourceMeta.textContent = `source from ${source.actor_id}`;
+            card.append(sourceNode, sourceMeta);
+          });
+          const missingCount = (link.compaction.unresolved || []).length;
+          if (missingCount) {
+            const incomplete = document.createElement('div');
+            incomplete.className = 'incomplete';
+            incomplete.textContent = `${missingCount} compacted source${missingCount === 1 ? '' : 's'} unresolved`;
+            card.append(incomplete);
+          }
           block.append(card);
         });
 

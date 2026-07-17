@@ -115,6 +115,7 @@ The browser event inspector presents each linked tool operation, command, result
 When context is summarized before a decision, emit a `context.compacted` event with relationships to the source events it summarizes, then reference the compaction event from the change.
 Resolved links to that event include `compaction.sources` with source event kinds, actors, and any context-read locators, plus `compaction.unresolved` for missing source events.
 This preserves the observable compaction boundary without capturing private reasoning or summary contents.
+The browser event inspector presents the compaction actor, source kinds or repository locators, source actors, and missing-source count directly on the selected change hunk.
 To attach a test result, emit a `verification.finished` event with `attributes.verification.command` and boolean `attributes.verification.passed` fields, plus an optional integer `exit_code`.
 Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
 Resolved links to that event include the validated result under `verification`, so each linked hunk exposes its test command and outcome directly.
