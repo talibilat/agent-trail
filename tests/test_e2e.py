@@ -1505,6 +1505,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     has_text="docs/concurrent.md"
                 )
                 expect(undetermined_context).to_contain_text("context chronology undetermined")
+                expect(undetermined_context).to_contain_text("decision event proposal-1")
                 expect(undetermined_context).to_contain_text("concurrent-researcher")
                 current_context_diagnostic = evidence.locator(".unresolved-evidence").filter(
                     has_text="context-same-time"

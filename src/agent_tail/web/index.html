@@ -1693,6 +1693,7 @@
             ? `read by ${link.target_actor_id}`
             : 'reading actor unknown');
           if (link.context.symbol) details.push(link.context.symbol);
+          if (link.decision_event_id) details.push(`decision event ${link.decision_event_id}`);
           if (link.chronology === 'undetermined') details.push('context chronology undetermined');
           const meta = document.createElement('div');
           meta.className = 'meta';
