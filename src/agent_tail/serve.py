@@ -951,6 +951,19 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 elif (
                     source.kind == "change.applied"
                     and relationship.type == "informed_by"
+                    and target.kind == "context.read"
+                    and _has_invalid_context_line_start(target)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_context_line_start",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
                     and target.kind == "context.compacted"
                     and not any(
                         candidate.type == "summarizes"
@@ -1499,6 +1512,18 @@ def _context_read_detail(event: Event) -> dict[str, object] | None:
     return detail
 
 
+def _has_invalid_context_line_start(event: Event) -> bool:
+    context = _attributes(event).get("context")
+    if not isinstance(context, dict) or "line_start" not in context:
+        return False
+    line_start = context["line_start"]
+    return (
+        not isinstance(line_start, int)
+        or isinstance(line_start, bool)
+        or line_start <= 0
+    )
+
+
 def _tool_call_detail(event: Event) -> dict[str, object] | None:
     if not event.kind.startswith("tool.call."):
         return None
@@ -1563,6 +1588,13 @@ def _context_compaction_detail(
         if context is not None:
             item["context"] = context
         sources.append(item)
+        if relationship.type == "summarizes" and _has_invalid_context_line_start(source):
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": source.kind,
+                "reason": "invalid_context_line_start",
+            })
     return {"sources": sources, "unresolved": unresolved}
 
 

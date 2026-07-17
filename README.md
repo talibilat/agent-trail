@@ -106,6 +106,7 @@ It also includes factual `coverage` for requirement, context, tool, verification
 Unresolved generic relationships remain inspectable but do not reduce factual evidence coverage.
 A context category is present for direct context only when an `informed_by` relationship resolves to a `context.read` event with a validated locator; other links to context reads remain visible but do not identify what informed the applied hunk.
 Canonical context-read events without a valid non-blank path remain inspectable as generic links but are reported as invalid context details and keep coverage incomplete.
+A supplied `line_start` that is not a positive integer is omitted, reported as an invalid context line start, and keeps coverage incomplete while the valid path remains visible.
 A context locator among a compaction's resolved `summarizes` sources also satisfies the category when the change references that compaction with `informed_by`; unrelated outer or source links do not.
 An `informed_by` compaction without any `summarizes` relationship remains visible but is reported as invalid compaction details and keeps coverage incomplete even when other context evidence satisfies the category.
 A tool category is present only when a `preceded_by` relationship resolves to a tool call with a non-blank command or result; other links to tool calls remain visible, while operation identity and status alone do not satisfy it.
@@ -138,6 +139,7 @@ The browser event inspector presents each tool operation, command, result, actor
 When context is summarized before a decision, emit a `context.compacted` event with at least one `summarizes` relationship to a source `context.read` event, then reference the compaction event from the change with `informed_by`.
 Resolved links to that event include `compaction.sources` with each distinct valid source event, its kind, actor, and context-read locator, plus `compaction.unresolved` for each distinct missing source event or source of the wrong event kind.
 Canonical summarized context reads without a valid non-blank path remain inspectable through their events but are reported as invalid compacted source details and keep coverage incomplete even when another valid source exists.
+A summarized context read with an invalid supplied `line_start` retains its valid path in the compaction source list while producing the same typed line-start diagnostic.
 Wrong-kind `summarizes` targets remain inspectable as generic links, include their actual kind in the nested diagnostic, and keep coverage incomplete.
 This preserves the observable compaction boundary without capturing private reasoning or summary contents.
 The browser event inspector presents the actor for compactions linked by `informed_by`, or labels the compacting actor unknown when its ID is blank, plus repository locators with optional symbols, source actors, and missing or wrong-kind source diagnostics linked by `summarizes` directly on the selected change hunk; a blank source actor is also identified as unknown, and unrelated outer and source relationships are not attributed as compacted context.

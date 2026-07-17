@@ -76,6 +76,17 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="context-invalid-line-start",
+                    span_id="span-context-invalid-line-start",
+                    sequence=2,
+                    kind="context.read",
+                    actor={"id": "invalid-line-researcher"},
+                    attributes={"context": {
+                        "path": "docs/invalid-line.md",
+                        "line_start": "<img id=invalid-context-line-start-injected>",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="verification-started-1",
                     span_id="span-3",
                     sequence=3,
@@ -143,6 +154,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[
                         {"type": "summarizes", "event_id": "context-1"},
                         {"type": "summarizes", "event_id": "context-end-only"},
+                        {"type": "summarizes", "event_id": "context-invalid-line-start"},
                         {"type": "summarizes", "event_id": "context-invalid-detail<img id=invalid-context-injected>"},
                         {"type": "summarizes", "event_id": "missing-context<img id=compaction-missing-injected>"},
                         {"type": "summarizes", "event_id": "tool-1"},
@@ -284,6 +296,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "informed_by", "event_id": "context-1"},
                         {"type": "informed_by", "event_id": "context-end-only"},
                         {"type": "informed_by", "event_id": "context-unknown-actor"},
+                        {"type": "informed_by", "event_id": "context-invalid-line-start"},
                         {"type": "informed_by", "event_id": "context-invalid-detail<img id=invalid-context-injected>"},
                         {"type": "references", "event_id": "unrelated-context"},
                         {"type": "informed_by", "event_id": "compaction-1"},
@@ -624,7 +637,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(compaction).to_contain_text("Invalid summarizes source target · tool-1 · tool.call.completed")
                 expect(compaction).not_to_contain_text("source from shell-1")
                 expect(evidence).not_to_contain_text("irrelevant-missing-context")
-                expect(evidence).to_contain_text("3 compacted sources unresolved")
+                expect(evidence).to_contain_text("4 compacted sources unresolved")
                 unknown_compaction_actor = evidence.locator(".compaction-card").filter(has_text="docs/anonymous-research.md")
                 expect(unknown_compaction_actor).to_contain_text("compacting actor unknown")
                 expect(unknown_compaction_actor).not_to_contain_text("compacted by")
@@ -751,6 +764,21 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_context).to_contain_text("Invalid context details · informed_by")
                 expect(malformed_context).to_contain_text("context.read")
+                invalid_context_line_start = evidence.locator(".unresolved-evidence").filter(
+                    has_text="context-invalid-line-start"
+                )
+                expect(invalid_context_line_start).to_contain_text(
+                    "Invalid context line start · informed_by"
+                )
+                expect(invalid_context_line_start).to_contain_text("context.read")
+                expect(evidence).to_contain_text("docs/invalid-line.md")
+                invalid_compacted_line_start = evidence.locator(".compaction-card").filter(
+                    has_text="Context compacted before change"
+                ).locator(".incomplete").filter(has_text="context-invalid-line-start")
+                expect(invalid_compacted_line_start).to_contain_text(
+                    "Invalid summarizes source line start"
+                )
+                expect(invalid_compacted_line_start).to_contain_text("context.read")
                 malformed_compacted_context = evidence.locator(".compaction-card").filter(
                     has_text="Context compacted before change"
                 ).locator(".incomplete").filter(has_text="context-invalid-detail")
@@ -805,7 +833,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_tool_result).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("git status --ignored")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 23 unresolved references · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 25 unresolved references · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
@@ -820,6 +848,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#verification-missing-injected")).to_have_count(0)
                 expect(page.locator("#invalid-requirement-injected")).to_have_count(0)
                 expect(page.locator("#invalid-context-injected")).to_have_count(0)
+                expect(page.locator("#invalid-context-line-start-injected")).to_have_count(0)
                 expect(page.locator("#invalid-compaction-injected")).to_have_count(0)
                 expect(page.locator("#invalid-tool-injected")).to_have_count(0)
                 expect(page.locator("#invalid-tool-result-injected")).to_have_count(0)
