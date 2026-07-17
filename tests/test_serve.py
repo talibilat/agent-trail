@@ -571,9 +571,10 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "verification", "decision"],
-            "unresolved_count": 0,
+            "unresolved_count": 1,
             "failed_verification_count": 1,
         })
+        self.assertEqual(change["unresolved"][0]["reason"], "invalid_verification_command")
 
     def test_evidence_ignores_malformed_or_blank_requirement_details(self):
         hunk = {
@@ -1529,6 +1530,15 @@ class ServeTests(unittest.TestCase):
                 actor={"id": " \t"},
             ),
             event_data(
+                event_id="commandless-verification-1",
+                sequence=8,
+                kind="verification.finished",
+                attributes={"verification": {
+                    "passed": True,
+                    "test_origin": "pre_existing",
+                }},
+            ),
+            event_data(
                 event_id="change-1",
                 sequence=9,
                 kind="change.applied",
@@ -1543,6 +1553,10 @@ class ServeTests(unittest.TestCase):
                     {"type": "motivated_by", "event_id": "invalid-requirement-1"},
                     {"type": "informed_by", "event_id": "invalid-context-1"},
                     {"type": "preceded_by", "event_id": "invalid-tool-1"},
+                    {
+                        "type": "verified_by",
+                        "event_id": "commandless-verification-1",
+                    },
                     {"type": "applies", "event_id": "proposal-1"},
                     {"type": "applies", "event_id": "invalid-proposal-1"},
                     {"type": "references", "event_id": "missing-note"},
@@ -1556,7 +1570,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": [],
-            "unresolved_count": 6,
+            "unresolved_count": 7,
         })
         self.assertEqual(change["unresolved"], [
             {
@@ -1602,6 +1616,15 @@ class ServeTests(unittest.TestCase):
                 "source_actor_id": "reviewer-1",
                 "target_kind": "tool.call.completed",
                 "reason": "invalid_tool_detail",
+            },
+            {
+                "type": "verified_by",
+                "source_event_id": "change-1",
+                "target_event_id": "commandless-verification-1",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "verification.finished",
+                "reason": "invalid_verification_command",
             },
             {
                 "type": "applies",
@@ -1745,8 +1768,17 @@ class ServeTests(unittest.TestCase):
                 self.assertEqual(change["coverage"], {
                     "status": "incomplete",
                     "missing": ["verification"],
-                    "unresolved_count": 0,
+                    "unresolved_count": 1,
                 })
+                self.assertEqual(change["unresolved"], [{
+                    "type": "verified_by",
+                    "source_event_id": "change-1",
+                    "target_event_id": "verification-finished-1",
+                    "source_kind": "change.applied",
+                    "source_actor_id": "reviewer-1",
+                    "target_kind": "verification.finished",
+                    "reason": "invalid_verification_command",
+                }])
 
     def test_only_canonical_compaction_links_satisfy_context_coverage(self):
         hunk = {

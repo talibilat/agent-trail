@@ -566,6 +566,11 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(malformed_result).to_contain_text("Invalid verification result · verified_by")
                 expect(malformed_result).to_contain_text("verification.finished")
                 expect(evidence).not_to_contain_text("invalid-result-reporter")
+                commandless_result = evidence.locator(".unresolved-evidence").filter(
+                    has_text="verification-outcome-only"
+                )
+                expect(commandless_result).to_contain_text("Invalid verification command · verified_by")
+                expect(commandless_result).to_contain_text("verification.finished")
                 malformed_requirement = evidence.locator(".unresolved-evidence").filter(
                     has_text="requirement-invalid-detail"
                 )
@@ -587,7 +592,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_tool).to_contain_text("Invalid tool details · preceded_by")
                 expect(malformed_tool).to_contain_text("tool.call.completed")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 11 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 12 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
