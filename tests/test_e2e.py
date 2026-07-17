@@ -171,6 +171,14 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="tool-invalid-detail<img id=invalid-tool-injected>",
+                    span_id="span-tool-invalid-detail",
+                    sequence=2,
+                    kind="tool.call.completed",
+                    operation={"status": "ok", "name": "shell"},
+                    attributes={"tool": {"command": " \t", "result": 42}},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="proposal-1",
                     span_id="span-proposal",
                     sequence=8,
@@ -214,6 +222,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "informed_by", "event_id": "compaction-unknown-actor"},
                         {"type": "preceded_by", "event_id": "tool-1"},
                         {"type": "preceded_by", "event_id": "tool-unknown-actor"},
+                        {"type": "preceded_by", "event_id": "tool-invalid-detail<img id=invalid-tool-injected>"},
                         {"type": "references", "event_id": "unrelated-tool"},
                         {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-1"},
@@ -562,7 +571,12 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_context).to_contain_text("Invalid context details · informed_by")
                 expect(malformed_context).to_contain_text("context.read")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 8 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                malformed_tool = evidence.locator(".unresolved-evidence").filter(
+                    has_text="tool-invalid-detail"
+                )
+                expect(malformed_tool).to_contain_text("Invalid tool details · preceded_by")
+                expect(malformed_tool).to_contain_text("tool.call.completed")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 9 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
@@ -576,6 +590,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#verification-missing-injected")).to_have_count(0)
                 expect(page.locator("#invalid-requirement-injected")).to_have_count(0)
                 expect(page.locator("#invalid-context-injected")).to_have_count(0)
+                expect(page.locator("#invalid-tool-injected")).to_have_count(0)
                 expect(page.locator("#unrelated-verification-injected")).to_have_count(0)
                 expect(page.locator("#unrelated-verification-reporter-injected")).to_have_count(0)
                 expect(page.locator("#correction-injected")).to_have_count(0)

@@ -941,6 +941,22 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     source_unresolved.append(invalid)
                 elif (
                     source.kind == "change.applied"
+                    and relationship.type == "preceded_by"
+                    and target.kind.startswith("tool.call.")
+                    and (
+                        not isinstance(tool, dict)
+                        or "command" not in tool and "result" not in tool
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_tool_detail",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
                     and relationship.type == "verified_by"
                     and target.kind == "verification.finished"
                     and verification is None

@@ -1136,7 +1136,7 @@ class ServeTests(unittest.TestCase):
             ("pre_existing", True, "motivated_by", "informed_by", "preceded_by", "verified_by", "applies", False, {
                 "status": "incomplete",
                 "missing": ["tool"],
-                "unresolved_count": 0,
+                "unresolved_count": 1,
             }),
             ("pre_existing", False, "motivated_by", "informed_by", "preceded_by", "verified_by", "applies", True, {
                 "status": "incomplete",
@@ -1507,6 +1507,13 @@ class ServeTests(unittest.TestCase):
                 attributes={"context": {"path": " \t"}},
             ),
             event_data(
+                event_id="invalid-tool-1",
+                sequence=8,
+                kind="tool.call.completed",
+                operation={"status": "ok", "name": "shell"},
+                attributes={"tool": {"command": " \t", "result": 42}},
+            ),
+            event_data(
                 event_id="change-1",
                 sequence=9,
                 kind="change.applied",
@@ -1520,6 +1527,7 @@ class ServeTests(unittest.TestCase):
                     {"type": "verified_by", "event_id": "invalid-verification-1"},
                     {"type": "motivated_by", "event_id": "invalid-requirement-1"},
                     {"type": "informed_by", "event_id": "invalid-context-1"},
+                    {"type": "preceded_by", "event_id": "invalid-tool-1"},
                     {"type": "applies", "event_id": "proposal-1"},
                     {"type": "references", "event_id": "missing-note"},
                 ],
@@ -1532,7 +1540,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": [],
-            "unresolved_count": 4,
+            "unresolved_count": 5,
         })
         self.assertEqual(change["unresolved"], [
             {
@@ -1571,6 +1579,15 @@ class ServeTests(unittest.TestCase):
                 "reason": "invalid_context_detail",
             },
             {
+                "type": "preceded_by",
+                "source_event_id": "change-1",
+                "target_event_id": "invalid-tool-1",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "tool.call.completed",
+                "reason": "invalid_tool_detail",
+            },
+            {
                 "type": "references",
                 "source_event_id": "change-1",
                 "target_event_id": "missing-note",
@@ -1592,6 +1609,10 @@ class ServeTests(unittest.TestCase):
         )
         self.assertIn(
             "invalid-context-1",
+            [link["target_event_id"] for link in change["links"]],
+        )
+        self.assertIn(
+            "invalid-tool-1",
             [link["target_event_id"] for link in change["links"]],
         )
 
