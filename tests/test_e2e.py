@@ -28,7 +28,7 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
-    def test_change_inspector_shows_requirement_context_and_verification_safely(self):
+    def test_change_inspector_shows_requirement_context_tool_and_verification_safely(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "change-evidence.jsonl")
             source.write_text("".join((
@@ -68,9 +68,22 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
-                    event_id="change-1",
+                    event_id="tool-1",
                     span_id="span-4",
                     sequence=4,
+                    kind="tool.call.completed",
+                    actor={"id": "shell-1"},
+                    operation={"status": "ok", "name": "shell"},
+                    attributes={"tool": {
+                        "command": "git diff -- src/auth/session.py<img id=tool-command-injected>",
+                        "result": "1 file changed<img id=tool-result-injected>",
+                        "exit_code": 0,
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="change-1",
+                    span_id="span-5",
+                    sequence=5,
                     kind="change.applied",
                     actor={"id": "implementer-1"},
                     attributes={"change": {
@@ -83,6 +96,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[
                         {"type": "motivated_by", "event_id": "requirement-1"},
                         {"type": "informed_by", "event_id": "context-1"},
+                        {"type": "preceded_by", "event_id": "tool-1"},
                         {"type": "verified_by", "event_id": "verification-1"},
                     ],
                 )) + "\n",
@@ -115,6 +129,10 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text(":42-47")
                 expect(evidence).to_contain_text("researcher-1")
                 expect(evidence).to_contain_text("Session expiry")
+                expect(evidence).to_contain_text("Tool · shell")
+                expect(evidence).to_contain_text("git diff -- src/auth/session.py")
+                expect(evidence).to_contain_text("1 file changed")
+                expect(evidence).to_contain_text("run by shell-1 · ok · exit 0")
                 expect(evidence).to_contain_text("PASS")
                 expect(evidence).to_contain_text("pytest tests/test_session.py")
                 expect(evidence).to_contain_text("verified by implementer-1")
@@ -122,6 +140,8 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("implementation and test written by the same agent")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
+                expect(page.locator("#tool-command-injected")).to_have_count(0)
+                expect(page.locator("#tool-result-injected")).to_have_count(0)
                 expect(page.locator("#verification-injected")).to_have_count(0)
                 browser.close()
 

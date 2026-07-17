@@ -303,6 +303,11 @@
     .context-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--run); background: rgba(51,201,255,.06); }
     .context-card .path { font: 600 10.5px "IBM Plex Mono", monospace; color: var(--run); word-break: break-word; }
     .context-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .tool-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--accent); background: rgba(122,162,255,.06); }
+    .tool-card .operation { font: 600 10px "IBM Plex Mono", monospace; color: var(--accent); }
+    .tool-card .command, .tool-card .result { margin-top: 4px; font: 500 10.5px/1.45 "IBM Plex Mono", monospace; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+    .tool-card .result { color: var(--dim); }
+    .tool-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
     .verification-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--ok); background: rgba(73,209,125,.06); }
     .verification-card.failed, .verification-card.same-agent { border-left-color: var(--warn); background: rgba(255,190,92,.06); }
     .verification-card .outcome { font: 600 10px "IBM Plex Mono", monospace; color: var(--ok); }
@@ -1536,6 +1541,35 @@
           meta.className = 'meta';
           meta.textContent = details.join(' · ');
           card.append(path, meta);
+          block.append(card);
+        });
+
+        (changeEvidence.links || []).filter((link) => link.tool).forEach((link) => {
+          const tool = link.tool;
+          const card = document.createElement('div');
+          card.className = 'tool-card';
+          const operation = document.createElement('div');
+          operation.className = 'operation';
+          operation.textContent = tool.name ? `Tool · ${tool.name}` : 'Tool';
+          card.append(operation);
+          if (tool.command) {
+            const command = document.createElement('div');
+            command.className = 'command';
+            command.textContent = `$ ${tool.command}`;
+            card.append(command);
+          }
+          if (tool.result) {
+            const result = document.createElement('div');
+            result.className = 'result';
+            result.textContent = tool.result;
+            card.append(result);
+          }
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          const metaParts = [`run by ${link.target_actor_id}`, tool.status];
+          if (tool.exit_code !== undefined) metaParts.push(`exit ${tool.exit_code}`);
+          meta.textContent = metaParts.join(' · ');
+          card.append(meta);
           block.append(card);
         });
 
