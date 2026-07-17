@@ -575,13 +575,39 @@ class ServeTests(unittest.TestCase):
             "integrity_issue_count": 1,
         })
 
-    def test_tool_after_change_cannot_be_masked_as_preceding_evidence(self):
+    def test_tool_after_change_uses_same_emitter_sequence_ordering(self):
         store = RunStore.from_lines([
             json.dumps(event_data(
                 event_id="tool-after-change",
+                emitter_id="worker-2",
                 timestamp="2026-07-13T11:03:00Z",
                 kind="tool.call.completed",
                 attributes={"tool": {"command": "git diff --check"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="tool-same-time-after-change",
+                span_id="span-same-time-tool",
+                sequence=3,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="tool.call.completed",
+                attributes={"tool": {"command": "git status --short"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="tool-clock-skew-after-change",
+                span_id="span-skewed-tool",
+                sequence=4,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="tool.call.completed",
+                attributes={"tool": {"command": "git diff --stat"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="tool-same-time-other-emitter",
+                emitter_id="worker-2",
+                span_id="span-other-emitter-tool",
+                sequence=2,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="tool.call.completed",
+                attributes={"tool": {"command": "git status --porcelain"}},
             )) + "\n",
             json.dumps(event_data(
                 event_id="change-1",
@@ -596,29 +622,43 @@ class ServeTests(unittest.TestCase):
                     "new_start": 84,
                     "new_count": 19,
                 }},
-                relationships=[{
-                    "type": "preceded_by",
-                    "event_id": "tool-after-change",
-                }],
+                relationships=[
+                    {"type": "preceded_by", "event_id": "tool-after-change"},
+                    {
+                        "type": "preceded_by",
+                        "event_id": "tool-same-time-after-change",
+                    },
+                    {
+                        "type": "preceded_by",
+                        "event_id": "tool-clock-skew-after-change",
+                    },
+                    {
+                        "type": "preceded_by",
+                        "event_id": "tool-same-time-other-emitter",
+                    },
+                ],
             )) + "\n",
         ])
 
         change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
         self.assertEqual(change["links"][0]["tool"]["command"], "git diff --check")
-        self.assertEqual(change["unresolved"], [{
-            "type": "preceded_by",
-            "source_event_id": "change-1",
-            "target_event_id": "tool-after-change",
-            "source_kind": "change.applied",
-            "source_actor_id": "reviewer-1",
-            "target_kind": "tool.call.completed",
-            "reason": "tool_not_preceding_change",
-        }])
+        self.assertEqual(
+            [item["target_event_id"] for item in change["unresolved"]],
+            [
+                "tool-after-change",
+                "tool-same-time-after-change",
+                "tool-clock-skew-after-change",
+            ],
+        )
+        self.assertTrue(all(
+            item["reason"] == "tool_not_preceding_change"
+            for item in change["unresolved"]
+        ))
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "verification", "decision"],
-            "unresolved_count": 1,
+            "unresolved_count": 3,
         })
 
     def test_tool_after_decision_is_incomplete_evidence(self):
@@ -2621,6 +2661,7 @@ class ServeTests(unittest.TestCase):
                     )) + "\n",
                     json.dumps(event_data(
                         event_id="tool-1",
+                        emitter_id="worker-2",
                         span_id="span-2",
                         sequence=2,
                         kind="tool.call.completed",
@@ -2660,6 +2701,7 @@ class ServeTests(unittest.TestCase):
                     )) + "\n",
                     json.dumps(event_data(
                         event_id="tool-1",
+                        emitter_id="worker-2",
                         span_id="span-2",
                         sequence=2,
                         kind="tool.call.completed",
@@ -2708,6 +2750,7 @@ class ServeTests(unittest.TestCase):
                     )) + "\n",
                     json.dumps(event_data(
                         event_id="tool-1",
+                        emitter_id="worker-2",
                         span_id="span-2",
                         sequence=2,
                         kind="tool.call.completed",
@@ -2760,6 +2803,7 @@ class ServeTests(unittest.TestCase):
                     )) + "\n",
                     json.dumps(event_data(
                         event_id="tool-1",
+                        emitter_id="worker-2",
                         span_id="span-2",
                         sequence=2,
                         kind="tool.call.completed",
@@ -2810,6 +2854,7 @@ class ServeTests(unittest.TestCase):
             )) + "\n",
             json.dumps(event_data(
                 event_id="tool-1",
+                emitter_id="worker-2",
                 span_id="span-2",
                 sequence=2,
                 kind="tool.call.completed",
@@ -2858,6 +2903,7 @@ class ServeTests(unittest.TestCase):
                     )) + "\n",
                     json.dumps(event_data(
                         event_id="tool-1",
+                        emitter_id="worker-2",
                         span_id="span-2",
                         sequence=2,
                         kind="tool.call.completed",

@@ -1131,7 +1131,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     source.kind == "change.applied"
                     and relationship.type == "preceded_by"
                     and target.kind.startswith("tool.call.")
-                    and target.timestamp > source.timestamp
+                    and _event_follows(target, source)
                 ):
                     invalid = {
                         **item,
