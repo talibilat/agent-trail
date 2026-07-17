@@ -1638,7 +1638,9 @@
           block.append(card);
         });
 
-        (changeEvidence.links || []).filter((link) => link.tool).forEach((link) => {
+        (changeEvidence.links || []).filter(
+          (link) => link.type === 'preceded_by' && link.tool
+        ).forEach((link) => {
           const tool = link.tool;
           const card = document.createElement('div');
           card.className = 'tool-card';

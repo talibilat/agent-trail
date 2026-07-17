@@ -146,6 +146,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "references", "event_id": "unrelated-context"},
                         {"type": "informed_by", "event_id": "compaction-1"},
                         {"type": "preceded_by", "event_id": "tool-1"},
+                        {"type": "references", "event_id": "unrelated-tool"},
                         {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-2"},
                         {"type": "reviewed_by", "event_id": "missing-review<img id=evidence-missing-injected>"},
@@ -195,6 +196,18 @@ class ServeEndToEndTests(unittest.TestCase):
                     actor={"id": "unrelated-researcher"},
                     attributes={"context": {
                         "path": "docs/unrelated.md<img id=unrelated-context-injected>",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="unrelated-tool",
+                    span_id="span-unrelated-tool",
+                    sequence=15,
+                    kind="tool.call.completed",
+                    actor={"id": "unrelated-shell"},
+                    operation={"status": "ok", "name": "shell"},
+                    attributes={"tool": {
+                        "command": "rm unrelated.tmp<img id=unrelated-tool-injected>",
+                        "result": "unrelated result",
                     }},
                 )) + "\n",
             )), encoding="utf-8")
@@ -250,6 +263,9 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("git diff -- src/auth/session.py")
                 expect(evidence).to_contain_text("1 file changed")
                 expect(evidence).to_contain_text("run by shell-1 · ok · exit 0")
+                expect(evidence).not_to_contain_text("rm unrelated.tmp")
+                expect(evidence).not_to_contain_text("unrelated result")
+                expect(evidence).not_to_contain_text("unrelated-shell")
                 expect(evidence).to_contain_text("PASS")
                 expect(evidence).to_contain_text("pytest tests/test_session.py")
                 expect(evidence).to_contain_text("started by test-runner-1")
@@ -275,6 +291,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#unrelated-context-injected")).to_have_count(0)
                 expect(page.locator("#tool-command-injected")).to_have_count(0)
                 expect(page.locator("#tool-result-injected")).to_have_count(0)
+                expect(page.locator("#unrelated-tool-injected")).to_have_count(0)
                 expect(page.locator("#verification-injected")).to_have_count(0)
                 expect(page.locator("#verification-starter-injected")).to_have_count(0)
                 expect(page.locator("#verification-missing-injected")).to_have_count(0)
