@@ -222,6 +222,7 @@ class RunStore:
             view = self._index.trace(trace_id)
             now = self._warning_now(view.events)
             projection = _relationships(view)
+            evidence_map = _event_evidence(view.events)
             started_at = min((event.timestamp for event in view.events), default=None)
             return {
                 "api_version": "v1",
@@ -260,6 +261,7 @@ class RunStore:
                 "warnings": self._warnings_for_trace(trace_id, now) + projection["warnings"],
                 "links": projection["links"],
                 "unresolved_endpoints": projection["unresolved_endpoints"],
+                "evidence_map": evidence_map,
                 "source": dict(self._source_status),
                 "findings": [
                     finding for finding in self._findings
@@ -850,6 +852,32 @@ def _relationships(view) -> dict[str, object]:
         "warnings": warnings,
         "unresolved_endpoints": list(unresolved.values()),
     }
+
+
+def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
+    event_list = list(events)
+    events_by_id = {event.event_id: event for event in event_list}
+    links = []
+    unresolved = []
+    for source in event_list:
+        for relationship in source.relationships:
+            item = {
+                "type": relationship.type,
+                "source_event_id": source.event_id,
+                "target_event_id": relationship.event_id,
+                "source_kind": source.kind,
+                "source_actor_id": source.actor["id"],
+            }
+            target = events_by_id.get(relationship.event_id)
+            if target is None:
+                unresolved.append(item)
+            else:
+                links.append({
+                    **item,
+                    "target_kind": target.kind,
+                    "target_actor_id": target.actor["id"],
+                })
+    return {"links": links, "unresolved": unresolved}
 
 
 def _actor_role(events: Iterable[Event], actor_id: str) -> object:

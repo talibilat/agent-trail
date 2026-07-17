@@ -78,6 +78,8 @@ Every event must be a JSON object containing these fields:
 `parent_span_id` is optional and links an event to a parent span in the same trace.
 `relationships` is an optional array of event references with string `type` and `event_id` fields.
 Relationship types are extensible, and referenced events may arrive later in a stream.
+Run-detail responses project these references into an `evidence_map` with resolved event links and unresolved references.
+Resolved links include source and target kinds and actors so clients can present the smallest relevant evidence chain without joining the event list themselves.
 Unknown kinds, fields, and supported minor schema versions are retained so the canonical envelope can evolve.
 
 Harnesses other than the v1 runtime need an adapter that emits this envelope.

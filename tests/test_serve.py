@@ -70,6 +70,46 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(update["type"], "event")
         self.assertEqual(update["data"]["relationships"], expected)
 
+    def test_run_evidence_map_resolves_forward_references_and_reports_missing(self):
+        store = RunStore()
+        store.feed_line(json.dumps(event_data(
+            event_id="change-1",
+            kind="change.applied",
+            relationships=[
+                {"type": "motivated_by", "event_id": "requirement-1"},
+                {"type": "verified_by", "event_id": "missing-test"},
+            ],
+        )) + "\n")
+
+        before_target = store.run_detail("trace-1")["evidence_map"]
+        store.feed_line(json.dumps(event_data(
+            event_id="requirement-1",
+            span_id="span-2",
+            sequence=2,
+            kind="requirement.observed",
+            actor={"id": "user"},
+        )) + "\n")
+        after_target = store.run_detail("trace-1")["evidence_map"]
+
+        unresolved_requirement = {
+            "type": "motivated_by",
+            "source_event_id": "change-1",
+            "target_event_id": "requirement-1",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+        }
+        self.assertIn(unresolved_requirement, before_target["unresolved"])
+        self.assertEqual(after_target["links"], [{
+            **unresolved_requirement,
+            "target_kind": "requirement.observed",
+            "target_actor_id": "user",
+        }])
+        self.assertEqual(after_target["unresolved"], [{
+            **unresolved_requirement,
+            "type": "verified_by",
+            "target_event_id": "missing-test",
+        }])
+
     def test_http_server_serves_offline_shell_and_versioned_api(self):
         store = RunStore.from_lines([
             json.dumps(event_data(trace_id="trace/1", kind="<script>kind</script>")) + "\n"
