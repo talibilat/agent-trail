@@ -88,6 +88,10 @@ class ServeTests(unittest.TestCase):
             sequence=2,
             kind="requirement.observed",
             actor={"id": "user"},
+            attributes={"requirement": {
+                "id": "R1",
+                "text": "Resolve the forward requirement.",
+            }},
         )) + "\n")
         after_target = store.run_detail("trace-1")["evidence_map"]
 
@@ -103,6 +107,10 @@ class ServeTests(unittest.TestCase):
             **unresolved_requirement,
             "target_kind": "requirement.observed",
             "target_actor_id": "user",
+            "requirement": {
+                "id": "R1",
+                "text": "Resolve the forward requirement.",
+            },
         }])
         self.assertEqual(after_target["unresolved"], [{
             **unresolved_requirement,
@@ -1434,7 +1442,7 @@ class ServeTests(unittest.TestCase):
         }])
         self.assertEqual(change["links"][0]["target_event_id"], "wrong-tool-1")
 
-    def test_invalid_verification_targets_reduce_complete_coverage(self):
+    def test_invalid_canonical_evidence_reduces_complete_coverage(self):
         hunk = {
             "path": "src/auth/session.py",
             "old_start": 84,
@@ -1487,8 +1495,14 @@ class ServeTests(unittest.TestCase):
                 }},
             ),
             event_data(
-                event_id="change-1",
+                event_id="invalid-requirement-1",
                 sequence=8,
+                kind="requirement.observed",
+                attributes={"requirement": {"id": "R4", "text": " \t"}},
+            ),
+            event_data(
+                event_id="change-1",
+                sequence=9,
                 kind="change.applied",
                 attributes={"change": hunk},
                 relationships=[
@@ -1498,6 +1512,7 @@ class ServeTests(unittest.TestCase):
                     {"type": "verified_by", "event_id": "verification-1"},
                     {"type": "verified_by", "event_id": "wrong-verification-1"},
                     {"type": "verified_by", "event_id": "invalid-verification-1"},
+                    {"type": "motivated_by", "event_id": "invalid-requirement-1"},
                     {"type": "applies", "event_id": "proposal-1"},
                     {"type": "references", "event_id": "missing-note"},
                 ],
@@ -1510,7 +1525,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": [],
-            "unresolved_count": 2,
+            "unresolved_count": 3,
         })
         self.assertEqual(change["unresolved"], [
             {
@@ -1531,6 +1546,15 @@ class ServeTests(unittest.TestCase):
                 "reason": "invalid_verification_result",
             },
             {
+                "type": "motivated_by",
+                "source_event_id": "change-1",
+                "target_event_id": "invalid-requirement-1",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "requirement.observed",
+                "reason": "invalid_requirement_detail",
+            },
+            {
                 "type": "references",
                 "source_event_id": "change-1",
                 "target_event_id": "missing-note",
@@ -1544,6 +1568,10 @@ class ServeTests(unittest.TestCase):
         )
         self.assertIn(
             "invalid-verification-1",
+            [link["target_event_id"] for link in change["links"]],
+        )
+        self.assertIn(
+            "invalid-requirement-1",
             [link["target_event_id"] for link in change["links"]],
         )
 

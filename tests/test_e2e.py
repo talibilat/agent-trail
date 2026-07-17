@@ -203,6 +203,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "applies", "event_id": "anonymous-proposal"},
                         {"type": "references", "event_id": "unrelated-proposal"},
                         {"type": "motivated_by", "event_id": "requirement-1"},
+                        {"type": "motivated_by", "event_id": "requirement-invalid-detail"},
                         {"type": "references", "event_id": "unrelated-requirement"},
                         {"type": "informed_by", "event_id": "context-1"},
                         {"type": "informed_by", "event_id": "context-end-only"},
@@ -399,6 +400,16 @@ class ServeEndToEndTests(unittest.TestCase):
                         "test_origin": "pre_existing",
                     }},
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="requirement-invalid-detail",
+                    span_id="span-requirement-invalid-detail",
+                    sequence=24,
+                    kind="requirement.observed",
+                    attributes={"requirement": {
+                        "id": "R-BAD<img id=invalid-requirement-injected>",
+                        "text": " \t",
+                    }},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -532,7 +543,13 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(malformed_result).to_contain_text("Invalid verification result · verified_by")
                 expect(malformed_result).to_contain_text("verification.finished")
                 expect(evidence).not_to_contain_text("invalid-result-reporter")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 6 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                malformed_requirement = evidence.locator(".unresolved-evidence").filter(
+                    has_text="requirement-invalid-detail"
+                )
+                expect(malformed_requirement).to_contain_text("Invalid requirement details · motivated_by")
+                expect(malformed_requirement).to_contain_text("requirement.observed")
+                expect(evidence).not_to_contain_text("Requirement R-BAD")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 7 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
@@ -544,6 +561,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#verification-injected")).to_have_count(0)
                 expect(page.locator("#verification-starter-injected")).to_have_count(0)
                 expect(page.locator("#verification-missing-injected")).to_have_count(0)
+                expect(page.locator("#invalid-requirement-injected")).to_have_count(0)
                 expect(page.locator("#unrelated-verification-injected")).to_have_count(0)
                 expect(page.locator("#unrelated-verification-reporter-injected")).to_have_count(0)
                 expect(page.locator("#correction-injected")).to_have_count(0)
