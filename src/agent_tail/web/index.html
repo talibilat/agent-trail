@@ -297,6 +297,8 @@
     .field-grid .v { font: 500 10.5px "IBM Plex Mono", monospace; word-break: break-all; }
     .change-evidence .hunk { font: 600 11px "IBM Plex Mono", monospace; color: var(--accent); word-break: break-word; }
     .change-evidence .actor { margin-top: 4px; font: 400 10px "IBM Plex Mono", monospace; color: var(--dim); }
+    .invalid-change .meta { font: 400 10px "IBM Plex Mono", monospace; color: var(--dim); word-break: break-word; }
+    .invalid-change .issue { margin-top: 8px; padding: 8px 10px; border-left: 2px solid var(--warn); background: rgba(255,190,92,.06); font: 600 10px "IBM Plex Mono", monospace; color: var(--warn); }
     .requirement-card { margin-top: 10px; padding: 10px; border: 1px solid rgba(122,162,255,.35); border-radius: 8px; background: rgba(122,162,255,.08); }
     .requirement-card .id { font: 600 10px "IBM Plex Mono", monospace; color: var(--accent); }
     .requirement-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
@@ -1517,6 +1519,9 @@
 
       const evidenceMap = detail.evidence_map || {};
       const changeEvidence = (evidenceMap.changes || []).find((change) => change.event_id === event.event_id);
+      const invalidChange = (evidenceMap.invalid_changes || []).find(
+        (change) => change.event_id === event.event_id
+      );
       const sourceDiagnostics = (evidenceMap.unresolved || []).filter(
         (link) => link.source_event_id === event.event_id
       );
@@ -1541,6 +1546,32 @@
             : link.target_event_id;
           card.append(type, eventId);
           block.append(card);
+        });
+        wrap.append(block);
+      }
+      if (invalidChange) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block invalid-change';
+        block.innerHTML = `<div class="inspector-label">CHANGE INTEGRITY</div>`;
+        const actor = document.createElement('div');
+        actor.className = 'meta';
+        actor.textContent = typeof invalidChange.actor_id === 'string' && invalidChange.actor_id.trim()
+          ? `event ${invalidChange.event_id} · applied by ${invalidChange.actor_id}`
+          : `event ${invalidChange.event_id} · applying actor unknown`;
+        block.append(actor);
+        const labels = {
+          invalid_change_detail: 'Invalid change details',
+          invalid_change_path: 'Invalid change path',
+          invalid_change_old_start: 'Invalid change old start',
+          invalid_change_old_count: 'Invalid change old count',
+          invalid_change_new_start: 'Invalid change new start',
+          invalid_change_new_count: 'Invalid change new count',
+        };
+        (invalidChange.integrity || []).forEach((issue) => {
+          const warning = document.createElement('div');
+          warning.className = 'issue';
+          warning.textContent = labels[issue.reason] || `Invalid change metadata · ${issue.field}`;
+          block.append(warning);
         });
         wrap.append(block);
       }

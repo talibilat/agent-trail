@@ -633,6 +633,14 @@ class ServeEndToEndTests(unittest.TestCase):
                         "symbol": ["<img id=invalid-change-symbol-injected>"],
                     }},
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="change-invalid-detail",
+                    span_id="span-change-invalid-detail",
+                    emitter_id="invalid-change-worker",
+                    sequence=1,
+                    kind="change.applied",
+                    actor={"id": "invalid-change-producer<img id=invalid-change-actor-injected>"},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -996,6 +1004,20 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(invalid_symbol_evidence).to_contain_text("Invalid change symbol")
                 expect(invalid_symbol_evidence).to_contain_text("1 change integrity issue")
                 expect(page.locator("#invalid-change-symbol-injected")).to_have_count(0)
+                page.locator(".back-btn").click()
+                page.evaluate("""() => {
+                  [...document.querySelectorAll('.node-wrap')]
+                    .find((node) => node.textContent.includes('invalid-change-producer')).click();
+                  [...document.querySelectorAll('.event-row')]
+                    .find((row) => row.textContent.includes('span-change-invalid-detail')).click();
+                }""")
+                invalid_change = page.locator(".invalid-change")
+                expect(invalid_change).to_contain_text("CHANGE INTEGRITY")
+                expect(invalid_change).to_contain_text("event change-invalid-detail")
+                expect(invalid_change).to_contain_text("applied by invalid-change-producer")
+                expect(invalid_change).to_contain_text("Invalid change details")
+                expect(page.locator(".change-evidence")).to_have_count(0)
+                expect(page.locator("#invalid-change-actor-injected")).to_have_count(0)
                 page.locator(".back-btn").click()
                 page.evaluate("""() => {
                   [...document.querySelectorAll('.node-wrap')]
