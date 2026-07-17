@@ -123,6 +123,7 @@ The browser event inspector presents the command, pass or fail outcome, verifier
 Malformed optional verification metadata is omitted without rejecting the event, its relationship, or other valid verification details.
 To record a later human change, emit a `human.corrected` event with a `corrects` relationship targeting the original `change.applied` event and set `attributes.correction.action` to `modified` or `reverted`.
 Each affected hunk exposes these inbound links in event order under `corrections`, including the human actor and validated action when available.
+The browser event inspector highlights each later human modification or reversion, together with the correcting actor, directly on the selected change hunk.
 Malformed correction metadata is omitted without hiding the correction relationship.
 Unknown kinds, fields, and supported minor schema versions are retained so the canonical envelope can evolve.
 

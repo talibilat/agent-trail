@@ -28,7 +28,7 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
-    def test_change_inspector_shows_requirement_context_compaction_tool_and_verification_safely(self):
+    def test_change_inspector_shows_evidence_and_human_corrections_safely(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "change-evidence.jsonl")
             source.write_text("".join((
@@ -112,6 +112,24 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "verified_by", "event_id": "verification-1"},
                     ],
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="correction-1",
+                    span_id="span-6",
+                    sequence=7,
+                    kind="human.corrected",
+                    actor={"id": "maintainer-1<img id=correction-injected>"},
+                    attributes={"correction": {"action": "modified"}},
+                    relationships=[{"type": "corrects", "event_id": "change-1"}],
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="correction-2",
+                    span_id="span-7",
+                    sequence=8,
+                    kind="human.corrected",
+                    actor={"id": "maintainer-2"},
+                    attributes={"correction": {"action": "reverted"}},
+                    relationships=[{"type": "corrects", "event_id": "change-1"}],
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -154,11 +172,16 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("verified by implementer-1")
                 expect(evidence).to_contain_text("exit 0")
                 expect(evidence).to_contain_text("implementation and test written by the same agent")
+                expect(evidence).to_contain_text("Human modified this change")
+                expect(evidence).to_contain_text("corrected by maintainer-1")
+                expect(evidence).to_contain_text("Human reverted this change")
+                expect(evidence).to_contain_text("corrected by maintainer-2")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
                 expect(page.locator("#tool-command-injected")).to_have_count(0)
                 expect(page.locator("#tool-result-injected")).to_have_count(0)
                 expect(page.locator("#verification-injected")).to_have_count(0)
+                expect(page.locator("#correction-injected")).to_have_count(0)
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):
