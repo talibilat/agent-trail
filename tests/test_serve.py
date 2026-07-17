@@ -134,6 +134,7 @@ class ServeTests(unittest.TestCase):
                     **valid_hunk,
                     "path": "tests/test_session.py",
                     "new_start": 91,
+                    "symbol": " \t\n",
                 }},
             )) + "\n",
             json.dumps(event_data(
@@ -179,9 +180,11 @@ class ServeTests(unittest.TestCase):
                 "event_id": "change-2",
                 "actor_id": "reviewer-1",
                 "hunk": {
-                    **valid_hunk,
                     "path": "tests/test_session.py",
+                    "old_start": 84,
+                    "old_count": 18,
                     "new_start": 91,
+                    "new_count": 19,
                 },
                 "links": [],
                 "unresolved": [],

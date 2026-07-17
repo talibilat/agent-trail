@@ -1054,7 +1054,7 @@ def _change_hunk(event: Event) -> dict[str, object] | None:
         return None
     hunk = {"path": path, **{key: change[key] for key in range_keys}}
     symbol = change.get("symbol")
-    if isinstance(symbol, str):
+    if isinstance(symbol, str) and symbol.strip():
         hunk["symbol"] = symbol
     return hunk
 

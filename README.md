@@ -98,7 +98,7 @@ For repository changes, emit a `change.applied` event with a Git hunk locator un
 }
 ```
 
-`path` is a non-blank string, the four range values are non-negative integers, and `symbol` is optional.
+`path` is a non-blank string, the four range values are non-negative integers, and `symbol` is an optional non-blank string.
 Valid locators are exposed in event order under `evidence_map.changes`, together with the change event and actor IDs.
 Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
 It also includes factual `coverage` for requirement, context, tool, verification, and decision evidence, plus an unresolved count for missing targets on those canonical evidence relationships, missing compacted-context sources, and missing verification-start events.
