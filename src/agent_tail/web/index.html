@@ -1542,6 +1542,8 @@
               ? `Proposal chronology undetermined · ${link.type}`
             : link.reason === 'requirement_chronology_undetermined'
               ? `Requirement chronology undetermined · ${link.type}`
+            : link.reason === 'context_chronology_undetermined'
+              ? `Context chronology undetermined · ${link.type}`
             : link.target_kind
               ? `Invalid relationship target · ${link.type}`
               : `Missing relationship target · ${link.type}`;
@@ -2013,8 +2015,10 @@
                 ? `Invalid requirement details · ${link.type}`
                  : link.reason === 'context_not_preceding_change'
                    ? `Context read after change · ${link.type}`
-                 : link.reason === 'context_follows_decision'
+                : link.reason === 'context_follows_decision'
                    ? `Context read after decision · ${link.type}`
+                 : link.reason === 'context_chronology_undetermined'
+                   ? `Context chronology undetermined · ${link.type}`
                  : link.reason === 'compaction_not_preceding_change'
                    ? `Context compacted after change · ${link.type}`
                 : link.reason === 'compaction_follows_decision'

@@ -521,6 +521,7 @@ class ServeTests(unittest.TestCase):
             event_data(
                 event_id="context-1",
                 sequence=2,
+                timestamp="2026-07-13T10:59:00Z",
                 kind="context.read",
                 attributes={"context": {"path": "src/auth/config.py"}},
             ),
@@ -1449,11 +1450,21 @@ class ServeTests(unittest.TestCase):
                 "reason": "context_follows_decision",
                 "decision_event_id": "proposal-1",
             },
+            {
+                "type": "informed_by",
+                "source_event_id": "change-1",
+                "target_event_id": "context-other-emitter",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "context.read",
+                "reason": "context_chronology_undetermined",
+                "decision_event_id": "proposal-1",
+            },
         ])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "tool", "verification"],
-            "unresolved_count": 3,
+            "unresolved_count": 4,
         })
 
     def test_context_compacted_after_decision_is_incomplete_evidence(self):
@@ -3824,6 +3835,7 @@ class ServeTests(unittest.TestCase):
                     event_data(
                         event_id="context-1",
                         sequence=2,
+                        timestamp="2026-07-13T10:59:00Z",
                         kind="context.read",
                         attributes={"context": {"path": "src/auth/config.py"}},
                     ),
@@ -4121,6 +4133,7 @@ class ServeTests(unittest.TestCase):
             event_data(
                 event_id="context-1",
                 sequence=2,
+                timestamp="2026-07-13T10:59:00Z",
                 kind="context.read",
                 attributes={"context": {"path": "src/auth/config.py"}},
             ),
@@ -4389,6 +4402,7 @@ class ServeTests(unittest.TestCase):
                     event_data(
                         event_id="context-1",
                         sequence=2,
+                        timestamp="2026-07-13T10:59:00Z",
                         kind="context.read",
                         attributes={"context": {"path": "src/auth/config.py"}},
                     ),
