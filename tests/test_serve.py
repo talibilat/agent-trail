@@ -298,6 +298,7 @@ class ServeTests(unittest.TestCase):
                 "status": "incomplete",
                 "missing": ["context", "tool", "decision"],
                 "unresolved_count": 0,
+                "same_agent_test_count": 1,
             },
         }])
         self.assertEqual(
@@ -743,6 +744,12 @@ class ServeTests(unittest.TestCase):
                 "missing": [],
                 "unresolved_count": 0,
                 "unknown_test_origin_count": 1,
+            }),
+            ("same_agent", "motivated_by", "informed_by", "preceded_by", "verified_by", "applies", True, {
+                "status": "incomplete",
+                "missing": [],
+                "unresolved_count": 0,
+                "same_agent_test_count": 1,
             }),
             ("pre_existing", "motivated_by", "informed_by", "preceded_by", "verified_by", None, True, {
                 "status": "incomplete",

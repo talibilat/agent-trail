@@ -1005,15 +1005,23 @@ def _evidence_coverage(
         if link.get("type") == "verified_by"
         and isinstance((verification := link.get("verification")), dict)
     )
+    same_agent_test_count = sum(
+        verification.get("test_origin") == "same_agent"
+        for link in links
+        if link.get("type") == "verified_by"
+        and isinstance((verification := link.get("verification")), dict)
+    )
     coverage = {
         "status": "incomplete"
-        if missing or unresolved_count or unknown_test_origin_count
+        if missing or unresolved_count or unknown_test_origin_count or same_agent_test_count
         else "complete",
         "missing": missing,
         "unresolved_count": unresolved_count,
     }
     if unknown_test_origin_count:
         coverage["unknown_test_origin_count"] = unknown_test_origin_count
+    if same_agent_test_count:
+        coverage["same_agent_test_count"] = same_agent_test_count
     return coverage
 
 
