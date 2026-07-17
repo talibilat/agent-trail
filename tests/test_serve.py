@@ -4397,7 +4397,7 @@ class ServeTests(unittest.TestCase):
             "target_actor_id": "reviewer-1",
         })
 
-    def test_correction_before_change_is_a_temporal_diagnostic(self):
+    def test_correction_before_change_uses_same_emitter_sequence_ordering(self):
         hunk = {
             "path": "src/auth/session.py",
             "old_start": 84,
@@ -4408,6 +4408,7 @@ class ServeTests(unittest.TestCase):
         store = RunStore.from_lines([
             json.dumps(event_data(
                 event_id="change-1",
+                sequence=2,
                 timestamp="2026-07-13T11:02:00Z",
                 kind="change.applied",
                 attributes={"change": hunk},
@@ -4415,17 +4416,27 @@ class ServeTests(unittest.TestCase):
             json.dumps(event_data(
                 event_id="correction-before-change",
                 span_id="span-before",
-                sequence=2,
-                timestamp="2026-07-13T11:01:00Z",
+                sequence=1,
+                timestamp="2026-07-13T11:03:00Z",
                 kind="human.corrected",
                 actor={"id": "early-maintainer"},
                 attributes={"correction": {"action": "modified"}},
                 relationships=[{"type": "corrects", "event_id": "change-1"}],
             )) + "\n",
             json.dumps(event_data(
+                event_id="correction-after-change",
+                span_id="span-after",
+                sequence=3,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="human.corrected",
+                actor={"id": "later-maintainer"},
+                attributes={"correction": {"action": "modified"}},
+                relationships=[{"type": "corrects", "event_id": "change-1"}],
+            )) + "\n",
+            json.dumps(event_data(
                 event_id="correction-same-time",
                 span_id="span-same-time",
-                sequence=3,
+                emitter_id="maintainer-feed",
                 timestamp="2026-07-13T11:02:00Z",
                 kind="human.corrected",
                 actor={"id": "current-maintainer"},
@@ -4437,16 +4448,25 @@ class ServeTests(unittest.TestCase):
         evidence = store.run_detail("trace-1")["evidence_map"]
         change = evidence["changes"][0]
 
+        corrections = {
+            correction["source_event_id"]: correction
+            for correction in change["corrections"]
+        }
+        self.assertEqual(set(corrections), {
+            "correction-before-change",
+            "correction-after-change",
+            "correction-same-time",
+        })
         self.assertEqual(
-            [correction["source_event_id"] for correction in change["corrections"]],
-            ["correction-before-change", "correction-same-time"],
+            corrections["correction-before-change"]["correction"],
+            {"action": "modified"},
         )
-        self.assertEqual(change["corrections"][0]["correction"], {"action": "modified"})
         self.assertEqual(
-            change["corrections"][0]["reason"],
+            corrections["correction-before-change"]["reason"],
             "correction_precedes_change",
         )
-        self.assertNotIn("reason", change["corrections"][1])
+        self.assertNotIn("reason", corrections["correction-after-change"])
+        self.assertNotIn("reason", corrections["correction-same-time"])
         self.assertEqual(evidence["unresolved"], [{
             "type": "corrects",
             "source_event_id": "correction-before-change",

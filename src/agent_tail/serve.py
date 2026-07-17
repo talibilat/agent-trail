@@ -950,7 +950,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                         }
                         unresolved.append(invalid)
                         source_unresolved.append(invalid)
-                    elif source.timestamp < target.timestamp:
+                    elif _event_follows(target, source):
                         resolved["reason"] = "correction_precedes_change"
                         invalid = {
                             **item,

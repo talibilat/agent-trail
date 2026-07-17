@@ -190,7 +190,7 @@ It identifies each missing verification start by relationship type and event ID 
 Other malformed optional verification metadata is omitted without rejecting the event, its relationship, or other valid verification details.
 To record a later human change, emit a `human.corrected` event with a `corrects` relationship targeting the original `change.applied` event and set `attributes.correction.action` to `modified` or `reverted`.
 Each affected hunk exposes these inbound links in event order under `corrections`, including the human actor and validated action when available.
-Corrections timestamped before their target change remain attributed and inspectable but are reported as temporal contradictions; equal timestamps remain valid because they do not establish contradictory ordering.
+Corrections ordered before their target change remain attributed and inspectable but are reported as temporal contradictions; sequence establishes correction/change order for events from the same emitter despite equal or skewed timestamps, while timestamps establish order across emitters and equal timestamps remain non-contradictory.
 Canonical corrections without a `modified` or `reverted` action remain visible but are reported as invalid correction details instead of being attributed to either outcome.
 The browser event inspector highlights each later human modification or reversion directly on the selected change hunk, showing the correction event ID and naming a non-blank correcting actor or reporting that the correcting actor is unknown.
 Wrong-kind `corrects` targets remain inspectable as generic links and are also reported as invalid targets in the run-level unresolved diagnostics.
