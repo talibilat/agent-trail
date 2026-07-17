@@ -218,6 +218,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "verified_by", "event_id": "verification-2"},
                         {"type": "verified_by", "event_id": "verification-outcome-only"},
                         {"type": "verified_by", "event_id": "verification-unknown-actors"},
+                        {"type": "verified_by", "event_id": "verification-invalid-result"},
                         {"type": "verified_by", "event_id": "context-1"},
                         {"type": "references", "event_id": "unrelated-verification"},
                         {"type": "reviewed_by", "event_id": "missing-review<img id=evidence-missing-injected>"},
@@ -386,6 +387,18 @@ class ServeEndToEndTests(unittest.TestCase):
                         "new_count": 1,
                     }},
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="verification-invalid-result",
+                    span_id="span-verification-invalid-result",
+                    sequence=23,
+                    kind="verification.finished",
+                    actor={"id": "invalid-result-reporter"},
+                    attributes={"verification": {
+                        "command": "pytest tests/test_invalid_result.py",
+                        "passed": "yes",
+                        "test_origin": "pre_existing",
+                    }},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -508,10 +521,18 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(generic_diagnostic).to_contain_text("Missing relationship target · reviewed_by")
                 expect(generic_diagnostic).not_to_contain_text("Missing evidence")
                 expect(generic_diagnostic).to_contain_text("missing-review")
-                invalid_evidence = evidence.locator(".unresolved-evidence").filter(has_text="verified_by")
+                invalid_evidence = evidence.locator(".unresolved-evidence").filter(
+                    has_text="context-1 · context.read"
+                )
                 expect(invalid_evidence).to_contain_text("Invalid evidence target · verified_by")
                 expect(invalid_evidence).to_contain_text("context-1 · context.read")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 5 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                malformed_result = evidence.locator(".unresolved-evidence").filter(
+                    has_text="verification-invalid-result"
+                )
+                expect(malformed_result).to_contain_text("Invalid verification result · verified_by")
+                expect(malformed_result).to_contain_text("verification.finished")
+                expect(evidence).not_to_contain_text("invalid-result-reporter")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 6 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)

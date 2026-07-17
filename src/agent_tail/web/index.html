@@ -1818,7 +1818,9 @@
           card.className = 'unresolved-evidence';
           const type = document.createElement('div');
           type.className = 'type';
-          type.textContent = link.target_kind
+          type.textContent = link.reason === 'invalid_verification_result'
+            ? `Invalid verification result · ${link.type}`
+            : link.target_kind
             ? `Invalid evidence target · ${link.type}`
             : evidenceRelationshipTypes.has(link.type)
               ? `Missing evidence target · ${link.type}`
