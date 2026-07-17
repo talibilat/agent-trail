@@ -1851,6 +1851,8 @@
                       ? `Invalid tool details · ${link.type}`
                       : link.reason === 'invalid_tool_command'
                         ? `Invalid tool command · ${link.type}`
+                        : link.reason === 'invalid_tool_result'
+                          ? `Invalid tool result · ${link.type}`
                         : link.reason === 'invalid_tool_operation_status'
                         ? `Invalid tool operation status · ${link.type}`
                         : link.reason === 'invalid_tool_operation_name'

@@ -236,6 +236,17 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="tool-invalid-result",
+                    span_id="span-tool-invalid-result",
+                    sequence=2,
+                    kind="tool.call.completed",
+                    operation={"status": "ok", "name": "shell"},
+                    attributes={"tool": {
+                        "command": "git status --ignored",
+                        "result": ["<img id=invalid-tool-result-injected>"],
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="proposal-1",
                     span_id="span-proposal",
                     sequence=8,
@@ -284,6 +295,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "preceded_by", "event_id": "tool-invalid-exit-code"},
                         {"type": "preceded_by", "event_id": "tool-invalid-operation-name"},
                         {"type": "preceded_by", "event_id": "tool-invalid-command"},
+                        {"type": "preceded_by", "event_id": "tool-invalid-result"},
                         {"type": "references", "event_id": "unrelated-tool"},
                         {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-1"},
@@ -758,7 +770,15 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_tool_command).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("working tree clean")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 21 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                malformed_tool_result = evidence.locator(".unresolved-evidence").filter(
+                    has_text="tool-invalid-result"
+                )
+                expect(malformed_tool_result).to_contain_text(
+                    "Invalid tool result · preceded_by"
+                )
+                expect(malformed_tool_result).to_contain_text("tool.call.completed")
+                expect(evidence).to_contain_text("git status --ignored")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 22 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
@@ -775,6 +795,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#invalid-context-injected")).to_have_count(0)
                 expect(page.locator("#invalid-compaction-injected")).to_have_count(0)
                 expect(page.locator("#invalid-tool-injected")).to_have_count(0)
+                expect(page.locator("#invalid-tool-result-injected")).to_have_count(0)
                 expect(page.locator("#unrelated-verification-injected")).to_have_count(0)
                 expect(page.locator("#unrelated-verification-reporter-injected")).to_have_count(0)
                 expect(page.locator("#correction-injected")).to_have_count(0)
