@@ -1545,6 +1545,15 @@
         const block = document.createElement('div');
         block.className = 'inspector-block change-evidence';
         block.innerHTML = `<div class="inspector-label">CHANGE EVIDENCE</div>`;
+        const formatContextLocator = (context) => {
+          if (context.line_start !== undefined) {
+            const end = context.line_end === undefined ? '' : `-${context.line_end}`;
+            return `${context.path}:${context.line_start}${end}`;
+          }
+          return context.line_end === undefined
+            ? context.path
+            : `${context.path}:?-${context.line_end}`;
+        };
 
         const hunk = changeEvidence.hunk;
         const hunkEnd = hunk.new_count ? hunk.new_start + hunk.new_count - 1 : hunk.new_start;
@@ -1610,10 +1619,7 @@
           card.className = 'context-card';
           const path = document.createElement('div');
           path.className = 'path';
-          const lineRange = link.context.line_start === undefined
-            ? ''
-            : `:${link.context.line_start}${link.context.line_end === undefined ? '' : `-${link.context.line_end}`}`;
-          path.textContent = `${link.context.path}${lineRange}`;
+          path.textContent = formatContextLocator(link.context);
           const details = [`read by ${link.target_actor_id}`];
           if (link.context.symbol) details.push(link.context.symbol);
           const meta = document.createElement('div');
@@ -1643,10 +1649,7 @@
             const sourceNode = document.createElement('div');
             sourceNode.className = 'source';
             if (source.context) {
-              const lineRange = source.context.line_start === undefined
-                ? ''
-                : `:${source.context.line_start}${source.context.line_end === undefined ? '' : `-${source.context.line_end}`}`;
-              sourceNode.textContent = `${source.context.path}${lineRange}`;
+              sourceNode.textContent = formatContextLocator(source.context);
             } else {
               sourceNode.textContent = source.kind;
             }

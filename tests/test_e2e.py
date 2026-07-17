@@ -55,6 +55,17 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="context-end-only",
+                    span_id="span-context-end-only",
+                    sequence=2,
+                    kind="context.read",
+                    actor={"id": "researcher-2"},
+                    attributes={"context": {
+                        "path": "docs/session-retention.md",
+                        "line_end": 51,
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="verification-started-1",
                     span_id="span-3",
                     sequence=3,
@@ -105,6 +116,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     actor={"id": "summarizer-1"},
                     relationships=[
                         {"type": "summarizes", "event_id": "context-1"},
+                        {"type": "summarizes", "event_id": "context-end-only"},
                         {"type": "summarizes", "event_id": "missing-context<img id=compaction-missing-injected>"},
                         {"type": "summarizes", "event_id": "tool-1"},
                         {"type": "references", "event_id": "unrelated-context"},
@@ -159,6 +171,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "motivated_by", "event_id": "requirement-1"},
                         {"type": "references", "event_id": "unrelated-requirement"},
                         {"type": "informed_by", "event_id": "context-1"},
+                        {"type": "informed_by", "event_id": "context-end-only"},
                         {"type": "references", "event_id": "unrelated-context"},
                         {"type": "informed_by", "event_id": "compaction-1"},
                         {"type": "preceded_by", "event_id": "tool-1"},
@@ -327,6 +340,9 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text(":42-47")
                 expect(evidence).to_contain_text("researcher-1")
                 expect(evidence).to_contain_text("Session expiry")
+                end_only_context = evidence.locator(".context-card").filter(has_text="docs/session-retention.md")
+                expect(end_only_context.locator(".path")).to_have_text("docs/session-retention.md:?-51")
+                expect(end_only_context).to_contain_text("researcher-2")
                 expect(evidence).not_to_contain_text("docs/unrelated.md")
                 expect(evidence).not_to_contain_text("unrelated-researcher")
                 expect(evidence).to_contain_text("Context compacted before change")
@@ -334,6 +350,8 @@ class ServeEndToEndTests(unittest.TestCase):
                 compaction = evidence.locator(".compaction-card")
                 expect(compaction).to_contain_text("source from researcher-1")
                 expect(compaction).to_contain_text("Session expiry")
+                expect(compaction.locator(".source").filter(has_text="docs/session-retention.md")).to_have_text("docs/session-retention.md:?-51")
+                expect(compaction).to_contain_text("source from researcher-2")
                 expect(evidence).to_contain_text("Missing summarizes source")
                 expect(evidence).to_contain_text("missing-context")
                 expect(compaction).to_contain_text("Invalid summarizes source target · tool-1 · tool.call.completed")
