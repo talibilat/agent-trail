@@ -51,7 +51,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         "path": "docs/session-lifecycle.md<img id=context-injected>",
                         "line_start": 42,
                         "line_end": 47,
-                        "symbol": "Session expiry",
+                        "symbol": "Session expiry<img id=context-symbol-injected>",
                     }},
                 )) + "\n",
                 json.dumps(event_data(
@@ -294,7 +294,9 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).not_to_contain_text("unrelated-researcher")
                 expect(evidence).to_contain_text("Context compacted before change")
                 expect(evidence).to_contain_text("compacted by summarizer-1")
-                expect(evidence).to_contain_text("source from researcher-1")
+                compaction = evidence.locator(".compaction-card")
+                expect(compaction).to_contain_text("source from researcher-1")
+                expect(compaction).to_contain_text("Session expiry")
                 expect(evidence).to_contain_text("Missing summarizes source")
                 expect(evidence).to_contain_text("missing-context")
                 expect(evidence).not_to_contain_text("irrelevant-missing-context")
@@ -336,6 +338,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
+                expect(page.locator("#context-symbol-injected")).to_have_count(0)
                 expect(page.locator("#unrelated-context-injected")).to_have_count(0)
                 expect(page.locator("#tool-command-injected")).to_have_count(0)
                 expect(page.locator("#tool-result-injected")).to_have_count(0)
