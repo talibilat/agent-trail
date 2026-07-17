@@ -103,7 +103,7 @@ Valid locators are exposed in event order under `evidence_map.changes`, together
 Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
 It also includes factual `coverage` for requirement, context, tool, verification, and decision evidence, plus an unresolved count that includes missing compacted-context sources and verification-start events.
 A context category is present for direct context only when an `informed_by` relationship resolves to a `context.read` event with a validated locator; other links to context reads remain visible but do not identify what informed the applied hunk.
-A context locator among a compaction's resolved sources also satisfies the category; an empty compaction does not.
+A context locator among a compaction's resolved `summarizes` sources also satisfies the category when the change references that compaction with `informed_by`; unrelated outer or source links and empty compactions do not.
 A tool category is present only when a linked tool call identifies a non-empty command or result; operation identity and status alone do not satisfy it.
 A verification category is present only when a linked finished verification identifies a non-empty command, either directly or through a resolved start event; an outcome or bare start event alone does not satisfy it.
 A requirement category is present only when a `motivated_by` relationship resolves to a `requirement.observed` event with validated requirement details; other links to requirements remain visible but do not identify the motivation behind the applied hunk.
@@ -123,7 +123,7 @@ To expose commands and tool results that preceded a change, reference the releva
 Resolved links to tool calls include the required operation status and optional non-empty operation name under `tool`.
 Producers can add non-empty `attributes.tool.command` and `attributes.tool.result` strings and an optional integer `attributes.tool.exit_code`; malformed optional fields are omitted without hiding the relationship or operation details.
 The browser event inspector presents each linked tool operation, command, result, actor, status, and optional exit code directly on the selected change hunk.
-When context is summarized before a decision, emit a `context.compacted` event with relationships to the source events it summarizes, then reference the compaction event from the change.
+When context is summarized before a decision, emit a `context.compacted` event with `summarizes` relationships to its source events, then reference the compaction event from the change with `informed_by`.
 Resolved links to that event include `compaction.sources` with source event kinds, actors, and any context-read locators, plus `compaction.unresolved` for missing source events.
 This preserves the observable compaction boundary without capturing private reasoning or summary contents.
 The browser event inspector presents the compaction actor, source kinds or repository locators, source actors, and each missing source's relationship type and event ID directly on the selected change hunk.

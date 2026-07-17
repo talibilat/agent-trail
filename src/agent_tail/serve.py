@@ -940,10 +940,15 @@ def _evidence_coverage(
                 and "context" in link
             )
             or (
-                isinstance((compaction := link.get("compaction")), dict)
+                link.get("type") == "informed_by"
+                and link.get("target_kind") == "context.compacted"
+                and isinstance((compaction := link.get("compaction")), dict)
                 and isinstance((sources := compaction.get("sources")), list)
                 and any(
-                    isinstance(source, dict) and "context" in source
+                    isinstance(source, dict)
+                    and source.get("type") == "summarizes"
+                    and source.get("kind") == "context.read"
+                    and "context" in source
                     for source in sources
                 )
             )
@@ -967,9 +972,14 @@ def _evidence_coverage(
     }
     missing = [kind for kind, is_present in present.items() if not is_present]
     unresolved_count = len(unresolved) + sum(
-        len(compaction.get("unresolved", []))
+        sum(
+            isinstance(source, dict) and source.get("type") == "summarizes"
+            for source in compaction.get("unresolved", [])
+        )
         for link in links
-        if isinstance((compaction := link.get("compaction")), dict)
+        if link.get("type") == "informed_by"
+        and link.get("target_kind") == "context.compacted"
+        and isinstance((compaction := link.get("compaction")), dict)
         and isinstance(compaction.get("unresolved"), list)
     ) + sum(
         len(verification.get("unresolved", []))
