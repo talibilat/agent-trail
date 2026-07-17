@@ -1645,6 +1645,113 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("13 unresolved references")
                 browser.close()
 
+    def test_no_proposal_chronology_ambiguity_is_visible_as_incomplete_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "no-proposal-chronology.jsonl")
+            source.write_text("".join((
+                json.dumps(event_data(
+                    event_id="requirement-undetermined",
+                    emitter_id="requirement-worker",
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="requirement.observed",
+                    actor={"id": "concurrent-observer"},
+                    attributes={"requirement": {
+                        "id": "R-concurrent",
+                        "text": "Concurrent requirement without a proposal.",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="context-undetermined",
+                    emitter_id="context-worker",
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="context.read",
+                    actor={"id": "concurrent-reader"},
+                    attributes={"context": {"path": "docs/concurrent.md"}},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="compaction-source",
+                    emitter_id="source-worker",
+                    timestamp="2026-07-13T11:00:00Z",
+                    kind="context.read",
+                    actor={"id": "source-reader"},
+                    attributes={"context": {"path": "docs/source.md"}},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="compaction-undetermined",
+                    emitter_id="compaction-worker",
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="context.compacted",
+                    actor={"id": "concurrent-summarizer"},
+                    relationships=[{"type": "summarizes", "event_id": "compaction-source"}],
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="tool-undetermined",
+                    emitter_id="tool-worker",
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="tool.call.completed",
+                    actor={"id": "concurrent-runner"},
+                    attributes={"tool": {"command": "git diff --check"}},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="change-1",
+                    emitter_id="change-worker",
+                    span_id="span-change",
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="change.applied",
+                    actor={"id": "implementer-1"},
+                    attributes={"change": {
+                        "path": "src/concurrent.py",
+                        "old_start": 1,
+                        "old_count": 1,
+                        "new_start": 1,
+                        "new_count": 2,
+                    }},
+                    relationships=[
+                        {"type": "motivated_by", "event_id": "requirement-undetermined"},
+                        {"type": "informed_by", "event_id": "context-undetermined"},
+                        {"type": "informed_by", "event_id": "compaction-undetermined"},
+                        {"type": "preceded_by", "event_id": "tool-undetermined"},
+                    ],
+                )) + "\n",
+            )), encoding="utf-8")
+            port = _free_port()
+            process = subprocess.Popen(
+                [sys.executable, "-m", "agent_tail", "serve", str(source), "--port", str(port)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(channel="chrome", headless=True)
+                page = browser.new_page()
+                page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
+                expect(page.locator(".node-wrap").filter(has_text="implementer-1")).to_be_visible()
+                page.evaluate("""() => {
+                  [...document.querySelectorAll('.node-wrap')]
+                    .find((node) => node.textContent.includes('implementer-1')).click();
+                  [...document.querySelectorAll('.event-row')]
+                    .find((row) => row.textContent.includes('span-change')).click();
+                }""")
+
+                evidence = page.locator(".change-evidence")
+                expected_diagnostics = (
+                    ("requirement-undetermined", "Requirement chronology undetermined · motivated_by"),
+                    ("context-undetermined", "Context chronology undetermined · informed_by"),
+                    ("compaction-undetermined", "Compaction chronology undetermined · informed_by"),
+                    ("tool-undetermined", "Tool chronology undetermined · preceded_by"),
+                )
+                for event_id, message in expected_diagnostics:
+                    diagnostic = evidence.locator(".unresolved-evidence").filter(has_text=event_id)
+                    expect(diagnostic).to_contain_text(message)
+                    expect(diagnostic).not_to_contain_text("decision event")
+                expect(evidence).to_contain_text("4 unresolved references")
+                expect(evidence).not_to_contain_text("decision event")
+                browser.close()
+
     def test_multi_trace_run_picker_stays_within_top_bar(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "multi-trace.jsonl")
