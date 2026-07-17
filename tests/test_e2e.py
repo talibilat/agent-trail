@@ -127,6 +127,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[
                         {"type": "summarizes", "event_id": "context-1"},
                         {"type": "summarizes", "event_id": "context-end-only"},
+                        {"type": "summarizes", "event_id": "context-invalid-detail<img id=invalid-context-injected>"},
                         {"type": "summarizes", "event_id": "missing-context<img id=compaction-missing-injected>"},
                         {"type": "summarizes", "event_id": "tool-1"},
                         {"type": "references", "event_id": "unrelated-context"},
@@ -499,7 +500,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(compaction).to_contain_text("Invalid summarizes source target · tool-1 · tool.call.completed")
                 expect(compaction).not_to_contain_text("source from shell-1")
                 expect(evidence).not_to_contain_text("irrelevant-missing-context")
-                expect(evidence).to_contain_text("2 compacted sources unresolved")
+                expect(evidence).to_contain_text("3 compacted sources unresolved")
                 unknown_compaction_actor = evidence.locator(".compaction-card").filter(has_text="docs/anonymous-research.md")
                 expect(unknown_compaction_actor).to_contain_text("compacting actor unknown")
                 expect(unknown_compaction_actor).not_to_contain_text("compacted by")
@@ -576,12 +577,17 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_context).to_contain_text("Invalid context details · informed_by")
                 expect(malformed_context).to_contain_text("context.read")
+                malformed_compacted_context = evidence.locator(".compaction-card").filter(
+                    has_text="Context compacted before change"
+                ).locator(".incomplete").filter(has_text="context-invalid-detail")
+                expect(malformed_compacted_context).to_contain_text("Invalid summarizes source details")
+                expect(malformed_compacted_context).to_contain_text("context.read")
                 malformed_tool = evidence.locator(".unresolved-evidence").filter(
                     has_text="tool-invalid-detail"
                 )
                 expect(malformed_tool).to_contain_text("Invalid tool details · preceded_by")
                 expect(malformed_tool).to_contain_text("tool.call.completed")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 10 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 11 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)

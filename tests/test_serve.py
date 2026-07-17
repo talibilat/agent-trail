@@ -1834,6 +1834,93 @@ class ServeTests(unittest.TestCase):
                     "unresolved_count": 0,
                 })
 
+    def test_invalid_compacted_context_detail_reduces_complete_coverage(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        events = [
+            event_data(
+                event_id="requirement-1",
+                kind="requirement.observed",
+                attributes={"requirement": {"id": "R3", "text": "Reject expiry."}},
+            ),
+            event_data(
+                event_id="context-1",
+                sequence=2,
+                kind="context.read",
+                attributes={"context": {"path": "src/auth/config.py"}},
+            ),
+            event_data(
+                event_id="invalid-context-1",
+                sequence=3,
+                kind="context.read",
+                attributes={"context": {"path": " \t"}},
+            ),
+            event_data(
+                event_id="compaction-1",
+                sequence=4,
+                kind="context.compacted",
+                relationships=[
+                    {"type": "summarizes", "event_id": "context-1"},
+                    {"type": "summarizes", "event_id": "invalid-context-1"},
+                ],
+            ),
+            event_data(
+                event_id="tool-1",
+                sequence=5,
+                kind="tool.call.completed",
+                attributes={"tool": {"command": "pytest"}},
+            ),
+            event_data(
+                event_id="verification-1",
+                sequence=6,
+                kind="verification.finished",
+                attributes={"verification": {
+                    "command": "pytest",
+                    "passed": True,
+                    "test_origin": "pre_existing",
+                }},
+            ),
+            event_data(event_id="proposal-1", sequence=7, kind="change.proposed"),
+            event_data(
+                event_id="change-1",
+                sequence=8,
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[
+                    {"type": "motivated_by", "event_id": "requirement-1"},
+                    {"type": "informed_by", "event_id": "compaction-1"},
+                    {"type": "preceded_by", "event_id": "tool-1"},
+                    {"type": "verified_by", "event_id": "verification-1"},
+                    {"type": "applies", "event_id": "proposal-1"},
+                ],
+            ),
+        ]
+        store = RunStore.from_lines(json.dumps(event) + "\n" for event in events)
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+        compaction = change["links"][1]["compaction"]
+
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": [],
+            "unresolved_count": 1,
+        })
+        self.assertEqual(
+            [source["event_id"] for source in compaction["sources"]],
+            ["context-1"],
+        )
+        self.assertEqual(compaction["unresolved"], [{
+            "type": "summarizes",
+            "event_id": "invalid-context-1",
+            "target_kind": "context.read",
+            "reason": "invalid_context_detail",
+        }])
+
     def test_change_hunks_include_later_human_corrections(self):
         hunk = {
             "path": "src/auth/session.py",

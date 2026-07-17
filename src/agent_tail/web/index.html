@@ -1676,7 +1676,9 @@
           unresolvedSources.forEach((source) => {
             const incomplete = document.createElement('div');
             incomplete.className = 'incomplete';
-            incomplete.textContent = source.target_kind
+            incomplete.textContent = source.reason === 'invalid_context_detail'
+              ? `Invalid ${source.type} source details · ${source.event_id} · ${source.target_kind}`
+              : source.target_kind
               ? `Invalid ${source.type} source target · ${source.event_id} · ${source.target_kind}`
               : `Missing ${source.type} source · ${source.event_id}`;
             card.append(incomplete);
