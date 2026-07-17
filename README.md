@@ -112,9 +112,9 @@ Each change record groups the resolved and unresolved relationships originating 
 It also includes factual `coverage` for requirement, context, tool, verification, and decision evidence, plus an unresolved count for missing targets on those canonical evidence relationships, targets of the wrong event kind, missing compacted-context sources, and missing verification-start events.
 Unresolved generic relationships remain inspectable but do not reduce factual evidence coverage.
 A context category is present for direct context only when an `informed_by` relationship resolves to a `context.read` event with a validated locator; other links to context reads remain visible but do not identify what informed the applied hunk.
-A direct `informed_by` context read timestamped after its change remains inspectable but is reported as read after the change and keeps coverage incomplete; equal timestamps remain valid because they do not establish contradictory ordering.
+A direct `informed_by` context read ordered after its change remains inspectable but is reported as read after the change and keeps coverage incomplete.
 A direct `informed_by` context read ordered after the earliest attributable `change.proposed` decision remains inspectable but is reported as read after that decision and keeps coverage incomplete.
-For a direct context read and decision from the same emitter, sequence establishes their order despite equal or skewed timestamps; otherwise equal timestamps remain valid because they do not establish contradictory ordering.
+For a direct context read and either boundary event from the same emitter, sequence establishes their order despite equal or skewed timestamps; otherwise timestamps establish order and equal timestamps remain non-contradictory.
 Canonical context-read events without a valid non-blank path remain inspectable as generic links but are reported as invalid context details and keep coverage incomplete.
 A supplied `line_start` that is not a positive integer is omitted, reported as an invalid context line start, and keeps coverage incomplete while the valid path remains visible.
 A supplied `line_end` that is not a positive integer or precedes a valid `line_start` is omitted, reported as an invalid context line end, and keeps coverage incomplete while the rest of the valid locator remains visible.

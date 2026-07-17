@@ -983,26 +983,44 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 3,
         })
 
-    def test_context_read_after_change_cannot_be_informing_evidence(self):
+    def test_context_read_after_change_uses_same_emitter_sequence_ordering(self):
         store = RunStore.from_lines([
             json.dumps(event_data(
                 event_id="context-after-change",
+                emitter_id="worker-2",
                 timestamp="2026-07-13T11:03:00Z",
                 kind="context.read",
                 attributes={"context": {"path": "docs/late-context.md"}},
             )) + "\n",
             json.dumps(event_data(
-                event_id="context-same-time",
-                span_id="span-same-time",
-                sequence=2,
+                event_id="context-same-time-after-change",
+                span_id="span-same-time-context",
+                sequence=3,
                 timestamp="2026-07-13T11:02:00Z",
                 kind="context.read",
                 attributes={"context": {"path": "docs/current-context.md"}},
             )) + "\n",
             json.dumps(event_data(
+                event_id="context-clock-skew-after-change",
+                span_id="span-skewed-context",
+                sequence=4,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/skewed-context.md"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-same-time-other-emitter",
+                emitter_id="worker-2",
+                span_id="span-other-emitter-context",
+                sequence=2,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/concurrent-context.md"}},
+            )) + "\n",
+            json.dumps(event_data(
                 event_id="change-1",
                 span_id="span-2",
-                sequence=3,
+                sequence=2,
                 timestamp="2026-07-13T11:02:00Z",
                 kind="change.applied",
                 attributes={"change": {
@@ -1014,7 +1032,18 @@ class ServeTests(unittest.TestCase):
                 }},
                 relationships=[
                     {"type": "informed_by", "event_id": "context-after-change"},
-                    {"type": "informed_by", "event_id": "context-same-time"},
+                    {
+                        "type": "informed_by",
+                        "event_id": "context-same-time-after-change",
+                    },
+                    {
+                        "type": "informed_by",
+                        "event_id": "context-clock-skew-after-change",
+                    },
+                    {
+                        "type": "informed_by",
+                        "event_id": "context-same-time-other-emitter",
+                    },
                 ],
             )) + "\n",
         ])
@@ -1023,21 +1052,29 @@ class ServeTests(unittest.TestCase):
 
         self.assertEqual(
             [link["context"]["path"] for link in change["links"]],
-            ["docs/late-context.md", "docs/current-context.md"],
+            [
+                "docs/late-context.md",
+                "docs/current-context.md",
+                "docs/skewed-context.md",
+                "docs/concurrent-context.md",
+            ],
         )
-        self.assertEqual(change["unresolved"], [{
-            "type": "informed_by",
-            "source_event_id": "change-1",
-            "target_event_id": "context-after-change",
-            "source_kind": "change.applied",
-            "source_actor_id": "reviewer-1",
-            "target_kind": "context.read",
-            "reason": "context_not_preceding_change",
-        }])
+        self.assertEqual(
+            [item["target_event_id"] for item in change["unresolved"]],
+            [
+                "context-after-change",
+                "context-same-time-after-change",
+                "context-clock-skew-after-change",
+            ],
+        )
+        self.assertTrue(all(
+            item["reason"] == "context_not_preceding_change"
+            for item in change["unresolved"]
+        ))
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "tool", "verification", "decision"],
-            "unresolved_count": 1,
+            "unresolved_count": 3,
         })
 
     def test_context_compacted_after_change_cannot_be_informing_evidence(self):
