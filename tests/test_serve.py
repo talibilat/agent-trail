@@ -675,6 +675,60 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 1,
         })
 
+    def test_conflicting_verification_outcomes_are_diagnostics(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        for passed, exit_code in ((True, 1), (False, 0)):
+            with self.subTest(passed=passed, exit_code=exit_code):
+                store = RunStore.from_lines([
+                    json.dumps(event_data(
+                        event_id="change-1",
+                        kind="change.applied",
+                        attributes={"change": hunk},
+                        relationships=[{
+                            "type": "verified_by",
+                            "event_id": "verification-finished-1",
+                        }],
+                    )) + "\n",
+                    json.dumps(event_data(
+                        event_id="verification-finished-1",
+                        span_id="span-2",
+                        sequence=2,
+                        kind="verification.finished",
+                        attributes={"verification": {
+                            "command": "pytest tests/test_session.py",
+                            "passed": passed,
+                            "exit_code": exit_code,
+                            "test_origin": "pre_existing",
+                        }},
+                    )) + "\n",
+                ])
+
+                change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+                self.assertEqual(change["links"][0]["verification"], {
+                    "passed": passed,
+                    "command": "pytest tests/test_session.py",
+                    "exit_code": exit_code,
+                    "test_origin": "pre_existing",
+                })
+                self.assertEqual(change["unresolved"], [{
+                    "type": "verified_by",
+                    "source_event_id": "change-1",
+                    "target_event_id": "verification-finished-1",
+                    "source_kind": "change.applied",
+                    "source_actor_id": "reviewer-1",
+                    "target_kind": "verification.finished",
+                    "reason": "conflicting_verification_outcome",
+                }])
+                self.assertEqual(change["coverage"]["status"], "incomplete")
+                self.assertEqual(change["coverage"]["unresolved_count"], 1)
+
     def test_evidence_ignores_malformed_or_blank_requirement_details(self):
         hunk = {
             "path": "src/auth/session.py",

@@ -255,6 +255,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "verified_by", "event_id": "verification-outcome-only"},
                         {"type": "verified_by", "event_id": "verification-unknown-actors"},
                         {"type": "verified_by", "event_id": "verification-invalid-result"},
+                        {"type": "verified_by", "event_id": "verification-conflicting-outcome"},
                         {"type": "verified_by", "event_id": "context-1"},
                         {"type": "references", "event_id": "unrelated-verification"},
                         {"type": "reviewed_by", "event_id": "missing-review<img id=evidence-missing-injected>"},
@@ -462,6 +463,19 @@ class ServeEndToEndTests(unittest.TestCase):
                     kind="context.read",
                     attributes={"context": {"path": " \t"}},
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="verification-conflicting-outcome",
+                    span_id="span-verification-conflicting-outcome",
+                    sequence=26,
+                    kind="verification.finished",
+                    actor={"id": "conflicting-outcome-reporter"},
+                    attributes={"verification": {
+                        "command": "pytest tests/test_conflicting_outcome.py",
+                        "passed": True,
+                        "exit_code": 7,
+                        "test_origin": "pre_existing",
+                    }},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -612,6 +626,18 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(commandless_result).to_contain_text("Invalid verification command · verified_by")
                 expect(commandless_result).to_contain_text("verification.finished")
+                conflicting_outcome = evidence.locator(".verification-card").filter(
+                    has_text="conflicting-outcome-reporter"
+                )
+                expect(conflicting_outcome).to_contain_text("PASS")
+                expect(conflicting_outcome).to_contain_text("exit 7")
+                conflicting_outcome_diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="verification-conflicting-outcome"
+                )
+                expect(conflicting_outcome_diagnostic).to_contain_text(
+                    "Conflicting verification outcome · verified_by"
+                )
+                expect(conflicting_outcome_diagnostic).to_contain_text("verification.finished")
                 malformed_requirement = evidence.locator(".unresolved-evidence").filter(
                     has_text="requirement-invalid-detail"
                 )
@@ -638,7 +664,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_tool).to_contain_text("Invalid tool details · preceded_by")
                 expect(malformed_tool).to_contain_text("tool.call.completed")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 15 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 16 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
