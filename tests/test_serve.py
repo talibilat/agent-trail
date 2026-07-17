@@ -589,6 +589,43 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(link["context"], {"path": "src/auth/config.py"})
         self.assertEqual(link["target_kind"], "context.read")
 
+    def test_evidence_ignores_blank_context_read_paths(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[{
+                    "type": "informed_by",
+                    "event_id": "context-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-1",
+                span_id="span-2",
+                sequence=2,
+                kind="context.read",
+                attributes={"context": {
+                    "path": " \t\n",
+                    "symbol": "SessionConfig",
+                }},
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+        link = change["links"][0]
+
+        self.assertNotIn("context", link)
+        self.assertEqual(link["target_kind"], "context.read")
+        self.assertIn("context", change["coverage"]["missing"])
+
     def test_change_hunks_include_preceding_tool_commands_and_results(self):
         hunk = {
             "path": "src/auth/session.py",

@@ -1135,7 +1135,7 @@ def _context_read_detail(event: Event) -> dict[str, object] | None:
     if not isinstance(context, dict):
         return None
     path = context.get("path")
-    if not isinstance(path, str) or not path:
+    if not isinstance(path, str) or not path.strip():
         return None
     detail: dict[str, object] = {"path": path}
     for key in ("line_start", "line_end"):
