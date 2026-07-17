@@ -1265,21 +1265,30 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     unresolved.append({**item, "target_kind": target.kind})
         hunk = _change_hunk(source)
         if hunk is not None:
-            changes.append({
+            integrity = _change_hunk_integrity(source)
+            change = {
                 "event_id": source.event_id,
                 "actor_id": source.actor["id"],
                 "hunk": hunk,
                 "links": source_links,
                 "unresolved": source_unresolved,
                 "corrections": corrections_by_change.setdefault(source.event_id, []),
-                "coverage": _evidence_coverage(source_links, source_unresolved),
-            })
+                "coverage": _evidence_coverage(
+                    source_links,
+                    source_unresolved,
+                    integrity,
+                ),
+            }
+            if integrity:
+                change["integrity"] = integrity
+            changes.append(change)
     return {"changes": changes, "links": links, "unresolved": unresolved}
 
 
 def _evidence_coverage(
     links: list[dict[str, object]],
     unresolved: list[dict[str, object]],
+    integrity: list[dict[str, str]],
 ) -> dict[str, object]:
     present = {
         "requirement": any(
@@ -1381,6 +1390,7 @@ def _evidence_coverage(
         or unknown_test_origin_count
         or same_agent_test_count
         or failed_verification_count
+        or integrity
         else "complete",
         "missing": missing,
         "unresolved_count": unresolved_count,
@@ -1391,6 +1401,8 @@ def _evidence_coverage(
         coverage["same_agent_test_count"] = same_agent_test_count
     if failed_verification_count:
         coverage["failed_verification_count"] = failed_verification_count
+    if integrity:
+        coverage["integrity_issue_count"] = len(integrity)
     return coverage
 
 
@@ -1417,6 +1429,16 @@ def _change_hunk(event: Event) -> dict[str, object] | None:
     if isinstance(symbol, str) and symbol.strip():
         hunk["symbol"] = symbol
     return hunk
+
+
+def _change_hunk_integrity(event: Event) -> list[dict[str, str]]:
+    change = _attributes(event).get("change")
+    if not isinstance(change, dict) or "symbol" not in change:
+        return []
+    symbol = change["symbol"]
+    if isinstance(symbol, str) and symbol.strip():
+        return []
+    return [{"field": "symbol", "reason": "invalid_change_symbol"}]
 
 
 def _verification_result(

@@ -618,6 +618,21 @@ class ServeEndToEndTests(unittest.TestCase):
                         "test_origin": "generated<img id=invalid-test-origin-injected>",
                     }},
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="change-invalid-symbol",
+                    span_id="span-change-invalid-symbol",
+                    sequence=29,
+                    kind="change.applied",
+                    actor={"id": "implementer-1"},
+                    attributes={"change": {
+                        "path": "src/auth/invalid-symbol.py",
+                        "old_start": 1,
+                        "old_count": 1,
+                        "new_start": 1,
+                        "new_count": 1,
+                        "symbol": ["<img id=invalid-change-symbol-injected>"],
+                    }},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -639,7 +654,7 @@ class ServeEndToEndTests(unittest.TestCase):
                   [...document.querySelectorAll('.node-wrap')]
                     .find((node) => node.textContent.includes('implementer-1')).click();
                   [...document.querySelectorAll('.event-row')]
-                    .find((row) => row.textContent.includes('change.applied')).click();
+                    .find((row) => row.textContent.includes('span-5')).click();
                 }""")
 
                 evidence = page.locator(".change-evidence")
@@ -942,7 +957,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_tool_result).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("git status --ignored")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 29 unresolved references · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 29 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
@@ -969,6 +984,19 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#unrelated-proposal-injected")).to_have_count(0)
                 expect(page.locator("#compaction-missing-injected")).to_have_count(0)
                 expect(page.locator("#evidence-missing-injected")).to_have_count(0)
+                page.locator(".back-btn").click()
+                page.evaluate("""() => {
+                  [...document.querySelectorAll('.node-wrap')]
+                    .find((node) => node.textContent.includes('implementer-1')).click();
+                  [...document.querySelectorAll('.event-row')]
+                    .find((row) => row.textContent.includes('span-change-invalid-symbol')).click();
+                }""")
+                invalid_symbol_evidence = page.locator(".change-evidence")
+                expect(invalid_symbol_evidence).to_contain_text("src/auth/invalid-symbol.py:1-1")
+                expect(invalid_symbol_evidence).to_contain_text("Invalid change symbol")
+                expect(invalid_symbol_evidence).to_contain_text("1 change integrity issue")
+                expect(page.locator("#invalid-change-symbol-injected")).to_have_count(0)
+                page.locator(".back-btn").click()
                 page.evaluate("""() => {
                   [...document.querySelectorAll('.node-wrap')]
                     .find((node) => !node.querySelector('.node-label .id').textContent.trim()).click();

@@ -1574,6 +1574,14 @@
           symbol.textContent = `symbol ${hunk.symbol}`;
           block.append(symbol);
         }
+        (changeEvidence.integrity || []).forEach((issue) => {
+          const warning = document.createElement('div');
+          warning.className = 'hunk-integrity incomplete';
+          warning.textContent = issue.reason === 'invalid_change_symbol'
+            ? 'Invalid change symbol'
+            : `Invalid change metadata · ${issue.field}`;
+          block.append(warning);
+        });
         const actor = document.createElement('div');
         actor.className = 'actor';
         actor.textContent = typeof changeEvidence.actor_id === 'string' && changeEvidence.actor_id.trim()
@@ -1926,11 +1934,12 @@
         const unknownTestOriginCount = coverage.unknown_test_origin_count || 0;
         const sameAgentTestCount = coverage.same_agent_test_count || 0;
         const failedVerificationCount = coverage.failed_verification_count || 0;
+        const integrityIssueCount = coverage.integrity_issue_count || 0;
         const completeness = document.createElement('div');
-        const incomplete = missing.length || unresolvedCount || unknownTestOriginCount || sameAgentTestCount || failedVerificationCount;
+        const incomplete = missing.length || unresolvedCount || unknownTestOriginCount || sameAgentTestCount || failedVerificationCount || integrityIssueCount;
         completeness.className = `evidence-completeness${incomplete ? ' incomplete' : ''}`;
         completeness.textContent = incomplete
-          ? `Evidence incomplete · ${missing.length} missing categor${missing.length === 1 ? 'y' : 'ies'} · ${unresolvedCount} unresolved reference${unresolvedCount === 1 ? '' : 's'} · ${unknownTestOriginCount} test${unknownTestOriginCount === 1 ? '' : 's'} with unknown provenance · ${sameAgentTestCount} same-agent test${sameAgentTestCount === 1 ? '' : 's'} · ${failedVerificationCount} failed verification${failedVerificationCount === 1 ? '' : 's'}`
+          ? `Evidence incomplete · ${missing.length} missing categor${missing.length === 1 ? 'y' : 'ies'} · ${unresolvedCount} unresolved reference${unresolvedCount === 1 ? '' : 's'} · ${integrityIssueCount} change integrity issue${integrityIssueCount === 1 ? '' : 's'} · ${unknownTestOriginCount} test${unknownTestOriginCount === 1 ? '' : 's'} with unknown provenance · ${sameAgentTestCount} same-agent test${sameAgentTestCount === 1 ? '' : 's'} · ${failedVerificationCount} failed verification${failedVerificationCount === 1 ? '' : 's'}`
           : 'Core evidence complete';
         block.append(completeness);
         wrap.append(block);
