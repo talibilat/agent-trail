@@ -91,6 +91,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     event_id="context-unknown-actor",
                     span_id="span-context-unknown-actor",
                     sequence=2,
+                    timestamp="2026-07-13T11:02:44.911Z",
                     kind="context.read",
                     actor={"id": " \t"},
                     attributes={"context": {
@@ -282,6 +283,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     span_id="span-compaction-unknown-actor",
                     emitter_id="unknown-compaction-worker",
                     sequence=1,
+                    timestamp="2026-07-13T11:02:44.911Z",
                     kind="context.compacted",
                     actor={"id": " \t"},
                     relationships=[
@@ -324,6 +326,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     span_id="span-tool-unknown-actor",
                     emitter_id="unknown-tool-worker",
                     sequence=1,
+                    timestamp="2026-07-13T11:02:44.911Z",
                     kind="tool.call.completed",
                     actor={"id": " \t"},
                     operation={"status": "ok", "name": "shell"},
@@ -396,13 +399,15 @@ class ServeEndToEndTests(unittest.TestCase):
                 json.dumps(event_data(
                     event_id="proposal-1",
                     span_id="span-proposal",
-                    sequence=8,
+                    sequence=100,
+                    timestamp="2026-07-13T11:02:44.911Z",
                     kind="change.proposed",
                     actor={"id": "planner-1<img id=proposal-injected>"},
                 )) + "\n",
                 json.dumps(event_data(
                     event_id="anonymous-proposal",
                     span_id="span-anonymous-proposal",
+                    emitter_id="change-worker",
                     sequence=8,
                     kind="change.proposed",
                     actor={"id": " \t"},
@@ -703,6 +708,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     span_id="span-requirement-invalid-detail",
                     emitter_id="invalid-requirement-worker",
                     sequence=24,
+                    timestamp="2026-07-13T11:02:44.911Z",
                     kind="requirement.observed",
                     attributes={"requirement": {
                         "id": "R-BAD<img id=invalid-requirement-injected>",
@@ -714,6 +720,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     span_id="span-context-invalid-detail",
                     emitter_id="invalid-context-worker",
                     sequence=25,
+                    timestamp="2026-07-13T11:02:44.911Z",
                     kind="context.read",
                     attributes={"context": {"path": " \t"}},
                 )) + "\n",
@@ -1490,6 +1497,13 @@ class ServeEndToEndTests(unittest.TestCase):
                     has_text="concurrent-planner"
                 )
                 expect(undetermined_proposal).to_contain_text("proposal chronology undetermined")
+                undetermined_proposal_diagnostic = evidence.locator(
+                    ".unresolved-evidence"
+                ).filter(has_text="proposal-undetermined")
+                expect(undetermined_proposal_diagnostic).to_contain_text(
+                    "Proposal chronology undetermined · applies"
+                )
+                expect(undetermined_proposal_diagnostic).to_contain_text("change.proposed")
                 early = evidence.locator(".compaction-card").filter(has_text="early-summarizer")
                 late = evidence.locator(".compaction-card").filter(has_text="late-summarizer")
                 expect(early).to_contain_text("Compaction chronology undetermined")
@@ -1589,7 +1603,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(diagnostic).to_contain_text("Context compacted after decision · informed_by")
                 expect(diagnostic).to_contain_text("context.compacted")
                 expect(diagnostic).to_contain_text("decision event proposal-1")
-                expect(evidence).to_contain_text("7 unresolved references")
+                expect(evidence).to_contain_text("8 unresolved references")
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):

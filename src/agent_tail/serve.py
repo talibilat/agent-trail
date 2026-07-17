@@ -893,7 +893,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
             and (target := events_by_id.get(relationship.event_id)) is not None
             and target.kind == "change.proposed"
             and target.actor["id"].strip()
-            and not _event_follows(target, source)
+            and _event_follows(source, target)
         ] if source.kind == "change.applied" else []
         earliest_decision = None
         for decision_event in decision_events:
@@ -1523,6 +1523,20 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                         **item,
                         "target_kind": target.kind,
                         "reason": "invalid_decision_actor",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "applies"
+                    and target.kind == "change.proposed"
+                    and not _event_follows(source, target)
+                    and not _event_follows(target, source)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "proposal_chronology_undetermined",
                     }
                     unresolved.append(invalid)
                     source_unresolved.append(invalid)

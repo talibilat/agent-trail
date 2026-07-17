@@ -1538,6 +1538,8 @@
             ? `Invalid correction details · ${link.type}`
             : link.reason === 'verification_chronology_undetermined'
               ? `Verification chronology undetermined · ${link.type}`
+            : link.reason === 'proposal_chronology_undetermined'
+              ? `Proposal chronology undetermined · ${link.type}`
             : link.target_kind
               ? `Invalid relationship target · ${link.type}`
               : `Missing relationship target · ${link.type}`;
@@ -1732,7 +1734,11 @@
               && item.target_actor_id.trim()
               && !(changeEvidence.unresolved || []).some(
                 (diagnostic) => diagnostic.target_event_id === item.target_event_id
-                  && ['proposal_not_preceding_change', 'invalid_decision_actor'].includes(diagnostic.reason)
+                  && [
+                    'proposal_not_preceding_change',
+                    'invalid_decision_actor',
+                    'proposal_chronology_undetermined',
+                  ].includes(diagnostic.reason)
               )
           );
           title.textContent = compactionOccurredAfterChange
@@ -2037,6 +2043,8 @@
                           ? `Tool occurred after decision · ${link.type}`
                           : link.reason === 'proposal_not_preceding_change'
                             ? `Change proposed after application · ${link.type}`
+                          : link.reason === 'proposal_chronology_undetermined'
+                            ? `Proposal chronology undetermined · ${link.type}`
                           : link.reason === 'invalid_decision_actor'
                             ? `Invalid decision actor · ${link.type}`
                             : link.target_kind

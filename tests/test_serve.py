@@ -540,7 +540,12 @@ class ServeTests(unittest.TestCase):
                     "test_origin": "pre_existing",
                 }},
             ),
-            event_data(event_id="proposal-1", sequence=5, kind="change.proposed"),
+            event_data(
+                event_id="proposal-1",
+                emitter_id="change-worker",
+                sequence=5,
+                kind="change.proposed",
+            ),
             event_data(
                 event_id="change-1",
                 emitter_id="change-worker",
@@ -1813,16 +1818,22 @@ class ServeTests(unittest.TestCase):
                 "proposal-after-change",
                 "proposal-same-time-after",
                 "proposal-clock-skewed-after",
+                "proposal-same-time-independent",
             ],
         )
-        self.assertTrue(all(
-            item["reason"] == "proposal_not_preceding_change"
-            for item in change["unresolved"]
-        ))
+        self.assertEqual(
+            [item["reason"] for item in change["unresolved"]],
+            [
+                "proposal_not_preceding_change",
+                "proposal_not_preceding_change",
+                "proposal_not_preceding_change",
+                "proposal_chronology_undetermined",
+            ],
+        )
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "verification"],
-            "unresolved_count": 3,
+            "unresolved_count": 4,
         })
 
     def test_change_hunks_group_their_relationship_evidence(self):
@@ -3821,6 +3832,7 @@ class ServeTests(unittest.TestCase):
                     ),
                     event_data(
                         event_id="proposal-1",
+                        emitter_id="change-worker",
                         sequence=5,
                         kind="change.proposed",
                         actor={"id": "planner-1"},
@@ -4116,7 +4128,12 @@ class ServeTests(unittest.TestCase):
                     "test_origin": "pre_existing",
                 }},
             ),
-            event_data(event_id="proposal-1", sequence=5, kind="change.proposed"),
+            event_data(
+                event_id="proposal-1",
+                emitter_id="change-worker",
+                sequence=5,
+                kind="change.proposed",
+            ),
             event_data(
                 event_id="wrong-verification-1",
                 sequence=6,
@@ -4382,6 +4399,7 @@ class ServeTests(unittest.TestCase):
                     ),
                     event_data(
                         event_id="proposal-1",
+                        emitter_id="change-worker",
                         sequence=6,
                         kind="change.proposed",
                     ),
@@ -4513,6 +4531,7 @@ class ServeTests(unittest.TestCase):
                     ),
                     event_data(
                         event_id="proposal-1",
+                        emitter_id="change-worker",
                         sequence=6,
                         kind="change.proposed",
                     ),
@@ -4595,7 +4614,12 @@ class ServeTests(unittest.TestCase):
                     "test_origin": "pre_existing",
                 }},
             ),
-            event_data(event_id="proposal-1", sequence=7, kind="change.proposed"),
+            event_data(
+                event_id="proposal-1",
+                emitter_id="change-worker",
+                sequence=7,
+                kind="change.proposed",
+            ),
             event_data(
                 event_id="change-1",
                 emitter_id="change-worker",
