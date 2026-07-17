@@ -1647,7 +1647,9 @@
           title.textContent = 'Context compacted before change';
           const meta = document.createElement('div');
           meta.className = 'meta';
-          meta.textContent = `compacted by ${link.target_actor_id}`;
+          meta.textContent = typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+            ? `compacted by ${link.target_actor_id}`
+            : 'compacting actor unknown';
           card.append(title, meta);
           (link.compaction.sources || []).filter(
             (source) => source.type === 'summarizes'

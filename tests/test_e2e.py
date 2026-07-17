@@ -134,6 +134,17 @@ class ServeEndToEndTests(unittest.TestCase):
                     ],
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="compaction-unknown-actor",
+                    span_id="span-compaction-unknown-actor",
+                    emitter_id="unknown-compaction-worker",
+                    sequence=1,
+                    kind="context.compacted",
+                    actor={"id": " \t"},
+                    relationships=[
+                        {"type": "summarizes", "event_id": "context-unknown-actor"},
+                    ],
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="tool-1",
                     span_id="span-4",
                     sequence=7,
@@ -185,6 +196,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "informed_by", "event_id": "context-unknown-actor"},
                         {"type": "references", "event_id": "unrelated-context"},
                         {"type": "informed_by", "event_id": "compaction-1"},
+                        {"type": "informed_by", "event_id": "compaction-unknown-actor"},
                         {"type": "preceded_by", "event_id": "tool-1"},
                         {"type": "references", "event_id": "unrelated-tool"},
                         {"type": "verified_by", "event_id": "verification-1"},
@@ -386,7 +398,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).not_to_contain_text("unrelated-researcher")
                 expect(evidence).to_contain_text("Context compacted before change")
                 expect(evidence).to_contain_text("compacted by summarizer-1")
-                compaction = evidence.locator(".compaction-card")
+                compaction = evidence.locator(".compaction-card").filter(has_text="summarizer-1")
                 expect(compaction).to_contain_text("source from researcher-1")
                 expect(compaction).to_contain_text("Session expiry")
                 expect(compaction.locator(".source").filter(has_text="docs/session-retention.md")).to_have_text("docs/session-retention.md:?-51")
@@ -397,6 +409,9 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(compaction).not_to_contain_text("source from shell-1")
                 expect(evidence).not_to_contain_text("irrelevant-missing-context")
                 expect(evidence).to_contain_text("2 compacted sources unresolved")
+                unknown_compaction_actor = evidence.locator(".compaction-card").filter(has_text="docs/anonymous-research.md")
+                expect(unknown_compaction_actor).to_contain_text("compacting actor unknown")
+                expect(unknown_compaction_actor).not_to_contain_text("compacted by")
                 expect(evidence).to_contain_text("Tool · shell")
                 expect(evidence).to_contain_text("git diff -- src/auth/session.py")
                 expect(evidence).to_contain_text("1 file changed")
