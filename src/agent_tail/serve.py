@@ -1940,7 +1940,7 @@ def _context_compaction_detail(
         if context is not None:
             item["context"] = context
         sources.append(item)
-        if relationship.type == "summarizes" and source.timestamp > event.timestamp:
+        if relationship.type == "summarizes" and _event_follows(source, event):
             unresolved.append({
                 "type": relationship.type,
                 "event_id": relationship.event_id,

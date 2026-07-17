@@ -1428,10 +1428,40 @@ class ServeTests(unittest.TestCase):
             json.dumps(event_data(
                 event_id="context-after-compaction",
                 span_id="span-late-context",
-                sequence=3,
+                sequence=5,
                 timestamp="2026-07-13T11:03:00Z",
                 kind="context.read",
                 attributes={"context": {"path": "docs/late.md"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-clock-skewed-before",
+                span_id="span-clock-skewed-before-context",
+                sequence=3,
+                timestamp="2026-07-13T11:03:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/clock-skewed-before.md"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-clock-skewed-after",
+                span_id="span-clock-skewed-after-context",
+                sequence=6,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/clock-skewed-after.md"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-after-compaction-independent",
+                emitter_id="independent-reader",
+                timestamp="2026-07-13T11:03:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/independent-late.md"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-same-time-independent",
+                emitter_id="current-reader",
+                timestamp="2026-07-13T11:02:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/independent-current.md"}},
             )) + "\n",
             json.dumps(event_data(
                 event_id="compaction-1",
@@ -1443,12 +1473,16 @@ class ServeTests(unittest.TestCase):
                     {"type": "summarizes", "event_id": "context-before-compaction"},
                     {"type": "summarizes", "event_id": "context-same-time"},
                     {"type": "summarizes", "event_id": "context-after-compaction"},
+                    {"type": "summarizes", "event_id": "context-clock-skewed-before"},
+                    {"type": "summarizes", "event_id": "context-clock-skewed-after"},
+                    {"type": "summarizes", "event_id": "context-after-compaction-independent"},
+                    {"type": "summarizes", "event_id": "context-same-time-independent"},
                 ],
             )) + "\n",
             json.dumps(event_data(
                 event_id="change-1",
                 span_id="span-change",
-                sequence=5,
+                sequence=7,
                 timestamp="2026-07-13T11:03:00Z",
                 kind="change.applied",
                 attributes={"change": {
@@ -1467,18 +1501,40 @@ class ServeTests(unittest.TestCase):
 
         self.assertEqual(
             [source["context"]["path"] for source in compaction["sources"]],
-            ["docs/before.md", "docs/current.md", "docs/late.md"],
+            [
+                "docs/before.md",
+                "docs/current.md",
+                "docs/late.md",
+                "docs/clock-skewed-before.md",
+                "docs/clock-skewed-after.md",
+                "docs/independent-late.md",
+                "docs/independent-current.md",
+            ],
         )
-        self.assertEqual(compaction["unresolved"], [{
-            "type": "summarizes",
-            "event_id": "context-after-compaction",
-            "target_kind": "context.read",
-            "reason": "context_not_preceding_compaction",
-        }])
+        self.assertEqual(compaction["unresolved"], [
+            {
+                "type": "summarizes",
+                "event_id": "context-after-compaction",
+                "target_kind": "context.read",
+                "reason": "context_not_preceding_compaction",
+            },
+            {
+                "type": "summarizes",
+                "event_id": "context-clock-skewed-after",
+                "target_kind": "context.read",
+                "reason": "context_not_preceding_compaction",
+            },
+            {
+                "type": "summarizes",
+                "event_id": "context-after-compaction-independent",
+                "target_kind": "context.read",
+                "reason": "context_not_preceding_compaction",
+            },
+        ])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "tool", "verification", "decision"],
-            "unresolved_count": 1,
+            "unresolved_count": 3,
         })
 
     def test_proposal_after_change_cannot_be_decision_evidence(self):
