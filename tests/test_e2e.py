@@ -1310,6 +1310,19 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="requirement-undetermined",
+                    emitter_id="requirement-worker",
+                    span_id="span-undetermined-requirement",
+                    sequence=1,
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="requirement.observed",
+                    actor={"id": "concurrent-observer"},
+                    attributes={"requirement": {
+                        "id": "R-concurrent",
+                        "text": "Requirement observed concurrently with the decision.",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="tool-after-decision",
                     span_id="span-late-tool",
                     sequence=6,
@@ -1354,6 +1367,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[
                         {"type": "applies", "event_id": "proposal-1"},
                         {"type": "motivated_by", "event_id": "requirement-after-decision"},
+                        {"type": "motivated_by", "event_id": "requirement-undetermined"},
                         {"type": "informed_by", "event_id": "context-same-time"},
                         {"type": "informed_by", "event_id": "context-after-decision"},
                         {"type": "informed_by", "event_id": "context-undetermined"},
@@ -1412,6 +1426,13 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(late_context_diagnostic).to_contain_text("context.read")
                 late_requirement = evidence.locator(".requirement-card").filter(has_text="R-late")
                 expect(late_requirement).to_contain_text("Requirement observed after the decision.")
+                undetermined_requirement = evidence.locator(".requirement-card").filter(
+                    has_text="R-concurrent"
+                )
+                expect(undetermined_requirement).to_contain_text("concurrent-observer")
+                expect(undetermined_requirement).to_contain_text(
+                    "requirement chronology undetermined"
+                )
                 late_requirement_diagnostic = evidence.locator(".unresolved-evidence").filter(
                     has_text="requirement-after-decision"
                 )

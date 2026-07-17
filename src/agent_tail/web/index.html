@@ -1656,9 +1656,13 @@
           requirementId.textContent = `Requirement ${link.requirement.id} · event ${link.target_event_id}`;
           const observer = document.createElement('div');
           observer.className = 'meta';
-          observer.textContent = typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+          const observerDetails = [typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
             ? `observed by ${link.target_actor_id}`
-            : 'observing actor unknown';
+            : 'observing actor unknown'];
+          if (link.chronology === 'undetermined') {
+            observerDetails.push('requirement chronology undetermined');
+          }
+          observer.textContent = observerDetails.join(' · ');
           const requirementText = document.createElement('div');
           requirementText.className = 'text';
           requirementText.textContent = link.requirement.text;

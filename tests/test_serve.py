@@ -108,6 +108,7 @@ class ServeTests(unittest.TestCase):
             **unresolved_requirement,
             "target_kind": "requirement.observed",
             "target_actor_id": "user",
+            "chronology": "undetermined",
             "requirement": {
                 "id": "R1",
                 "text": "Resolve the forward requirement.",
@@ -911,6 +912,19 @@ class ServeTests(unittest.TestCase):
             ["R-late", "R-equal", "R-skewed", "R-other-emitter"],
         )
         self.assertEqual(
+            {
+                link["target_event_id"]: link["chronology"]
+                for link in change["links"]
+                if link["target_kind"] == "requirement.observed"
+            },
+            {
+                "requirement-after-change": "after_change",
+                "requirement-same-time-after-change": "after_change",
+                "requirement-clock-skew-after-change": "after_change",
+                "requirement-same-time-other-emitter": "undetermined",
+            },
+        )
+        self.assertEqual(
             [item["target_event_id"] for item in change["unresolved"]],
             [
                 "requirement-after-change",
@@ -1006,6 +1020,19 @@ class ServeTests(unittest.TestCase):
 
         change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
+        self.assertEqual(
+            {
+                link["target_event_id"]: link["chronology"]
+                for link in change["links"]
+                if link["target_kind"] == "requirement.observed"
+            },
+            {
+                "requirement-same-time": "after_decision",
+                "requirement-after-decision": "after_decision",
+                "requirement-clock-skew": "after_decision",
+                "requirement-other-emitter": "undetermined",
+            },
+        )
         self.assertEqual(change["unresolved"], [
             {
                 "type": "motivated_by",
@@ -1775,6 +1802,7 @@ class ServeTests(unittest.TestCase):
             "source_actor_id": "reviewer-1",
             "target_kind": "requirement.observed",
             "target_actor_id": "user",
+            "chronology": "before_change",
             "requirement": {
                 "id": "R3",
                 "text": "Expired sessions must be rejected.",

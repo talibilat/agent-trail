@@ -863,6 +863,18 @@ def _event_follows(candidate: Event, reference: Event) -> bool:
     return candidate.timestamp > reference.timestamp
 
 
+def _evidence_chronology(
+    evidence: Event,
+    boundary: Event,
+    boundary_name: str,
+) -> str:
+    if _event_follows(evidence, boundary):
+        return f"after_{boundary_name}"
+    if _event_follows(boundary, evidence):
+        return f"before_{boundary_name}"
+    return "undetermined"
+
+
 def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
     event_list = list(events)
     events_by_id = {event.event_id: event for event in event_list}
@@ -925,6 +937,18 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     resolved["verification"] = verification
                 requirement = _requirement_detail(target)
                 if requirement is not None:
+                    if (
+                        source.kind == "change.applied"
+                        and relationship.type == "motivated_by"
+                        and target.kind == "requirement.observed"
+                    ):
+                        boundary = earliest_decision or source
+                        boundary_name = "decision" if earliest_decision else "change"
+                        resolved["chronology"] = _evidence_chronology(
+                            target,
+                            boundary,
+                            boundary_name,
+                        )
                     resolved["requirement"] = requirement
                 context = _context_read_detail(target)
                 if context is not None:
@@ -935,13 +959,11 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     ):
                         boundary = earliest_decision or source
                         boundary_name = "decision" if earliest_decision else "change"
-                        if _event_follows(target, boundary):
-                            chronology = f"after_{boundary_name}"
-                        elif _event_follows(boundary, target):
-                            chronology = f"before_{boundary_name}"
-                        else:
-                            chronology = "undetermined"
-                        resolved["chronology"] = chronology
+                        resolved["chronology"] = _evidence_chronology(
+                            target,
+                            boundary,
+                            boundary_name,
+                        )
                     resolved["context"] = context
                 tool = _tool_call_detail(target)
                 if tool is not None:
@@ -955,13 +977,11 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     ):
                         boundary = earliest_decision or source
                         boundary_name = "decision" if earliest_decision else "change"
-                        if _event_follows(target, boundary):
-                            chronology = f"after_{boundary_name}"
-                        elif _event_follows(boundary, target):
-                            chronology = f"before_{boundary_name}"
-                        else:
-                            chronology = "undetermined"
-                        resolved["chronology"] = chronology
+                        resolved["chronology"] = _evidence_chronology(
+                            target,
+                            boundary,
+                            boundary_name,
+                        )
                     resolved["compaction"] = compaction
                 correction = _human_correction(source)
                 if relationship.type == "corrects" and correction is not None:
