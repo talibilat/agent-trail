@@ -1541,7 +1541,9 @@
         actor.textContent = `applied by ${changeEvidence.actor_id}`;
         block.append(actor);
 
-        (changeEvidence.links || []).filter((link) => link.target_kind === 'change.proposed').forEach((link) => {
+        (changeEvidence.links || []).filter(
+          (link) => link.type === 'applies' && link.target_kind === 'change.proposed'
+        ).forEach((link) => {
           const card = document.createElement('div');
           card.className = 'proposal-card';
           const title = document.createElement('div');

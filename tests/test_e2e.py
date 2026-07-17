@@ -139,6 +139,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                     relationships=[
                         {"type": "applies", "event_id": "proposal-1"},
+                        {"type": "references", "event_id": "unrelated-proposal"},
                         {"type": "motivated_by", "event_id": "requirement-1"},
                         {"type": "informed_by", "event_id": "context-1"},
                         {"type": "informed_by", "event_id": "compaction-1"},
@@ -165,6 +166,13 @@ class ServeEndToEndTests(unittest.TestCase):
                     actor={"id": "maintainer-2"},
                     attributes={"correction": {"action": "reverted"}},
                     relationships=[{"type": "corrects", "event_id": "change-1"}],
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="unrelated-proposal",
+                    span_id="span-unrelated-proposal",
+                    sequence=12,
+                    kind="change.proposed",
+                    actor={"id": "unrelated-planner<img id=unrelated-proposal-injected>"},
                 )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
@@ -193,6 +201,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("implementer-1")
                 expect(evidence).to_contain_text("Change proposed")
                 expect(evidence).to_contain_text("proposed by planner-1")
+                expect(evidence).not_to_contain_text("unrelated-planner")
                 expect(evidence).to_contain_text("R3")
                 expect(evidence).to_contain_text("Expired sessions must be rejected.")
                 expect(evidence).to_contain_text("docs/session-lifecycle.md")
@@ -238,6 +247,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#verification-missing-injected")).to_have_count(0)
                 expect(page.locator("#correction-injected")).to_have_count(0)
                 expect(page.locator("#proposal-injected")).to_have_count(0)
+                expect(page.locator("#unrelated-proposal-injected")).to_have_count(0)
                 expect(page.locator("#compaction-missing-injected")).to_have_count(0)
                 expect(page.locator("#evidence-missing-injected")).to_have_count(0)
                 browser.close()
