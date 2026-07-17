@@ -217,6 +217,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-2"},
                         {"type": "verified_by", "event_id": "verification-outcome-only"},
+                        {"type": "verified_by", "event_id": "verification-unknown-actors"},
                         {"type": "verified_by", "event_id": "context-1"},
                         {"type": "references", "event_id": "unrelated-verification"},
                         {"type": "reviewed_by", "event_id": "missing-review<img id=evidence-missing-injected>"},
@@ -346,6 +347,31 @@ class ServeEndToEndTests(unittest.TestCase):
                     attributes={"context": {"path": "docs/not-a-change.md"}},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="verification-started-unknown-actor",
+                    span_id="span-verification-started-unknown-actor",
+                    sequence=21,
+                    kind="verification.started",
+                    actor={"id": " \t"},
+                    attributes={"verification": {
+                        "command": "pytest tests/test_anonymous_verifier.py",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="verification-unknown-actors",
+                    span_id="span-verification-unknown-actors",
+                    sequence=22,
+                    kind="verification.finished",
+                    actor={"id": " \t"},
+                    attributes={"verification": {
+                        "passed": True,
+                        "test_origin": "pre_existing",
+                    }},
+                    relationships=[{
+                        "type": "completes",
+                        "event_id": "verification-started-unknown-actor",
+                    }],
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="anonymous-change",
                     span_id="span-anonymous-change",
                     emitter_id="anonymous-change-worker",
@@ -456,6 +482,11 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(outcome_only).to_contain_text("FAIL")
                 expect(outcome_only).to_contain_text("exit 2")
                 expect(outcome_only).to_contain_text("Test existed before this change")
+                unknown_verification_actors = evidence.locator(".verification-card").filter(has_text="test_anonymous_verifier.py")
+                expect(unknown_verification_actors).to_contain_text("starting actor unknown")
+                expect(unknown_verification_actors).to_contain_text("reporting actor unknown")
+                expect(unknown_verification_actors).not_to_contain_text("started by")
+                expect(unknown_verification_actors).not_to_contain_text("result reported by")
                 expect(evidence).not_to_contain_text("undefined")
                 expect(evidence).not_to_contain_text("pytest unrelated_test.py")
                 expect(evidence).not_to_contain_text("unrelated-reporter")

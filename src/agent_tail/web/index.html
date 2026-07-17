@@ -1747,7 +1747,9 @@
             }
             const startMeta = document.createElement('div');
             startMeta.className = 'meta';
-            startMeta.textContent = `started by ${start.actor_id}`;
+            startMeta.textContent = typeof start.actor_id === 'string' && start.actor_id.trim()
+              ? `started by ${start.actor_id}`
+              : 'starting actor unknown';
             card.append(startMeta);
           });
           if (!starts.some((start) => start.command) && verification.command) {
@@ -1758,7 +1760,9 @@
           }
           const meta = document.createElement('div');
           meta.className = 'meta';
-          const metaParts = [`result reported by ${link.target_actor_id}`];
+          const metaParts = [typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+            ? `result reported by ${link.target_actor_id}`
+            : 'reporting actor unknown'];
           if (verification.exit_code !== undefined) metaParts.push(`exit ${verification.exit_code}`);
           meta.textContent = metaParts.join(' · ');
           card.append(meta);
