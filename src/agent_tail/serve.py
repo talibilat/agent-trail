@@ -914,7 +914,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 verification = _verification_result(
                     target,
                     events_by_id,
-                    source.timestamp
+                    source
                     if source.kind == "change.applied"
                     and relationship.type == "verified_by"
                     else None,
@@ -1698,7 +1698,7 @@ def _change_hunk_integrity(event: Event) -> list[dict[str, str]]:
 def _verification_result(
     event: Event,
     events_by_id: dict[str, Event],
-    change_timestamp: datetime | None = None,
+    change_event: Event | None = None,
 ) -> dict[str, object] | None:
     if event.kind != "verification.finished":
         return None
@@ -1748,7 +1748,7 @@ def _verification_result(
         }
         start_after_finish = _event_follows(started, event)
         start_before_change = (
-            change_timestamp is not None and started.timestamp < change_timestamp
+            change_event is not None and _event_follows(change_event, started)
         )
         if start_after_finish:
             unresolved.append({
