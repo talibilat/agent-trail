@@ -1785,6 +1785,13 @@
         });
 
         const unresolved = changeEvidence.unresolved || [];
+        const evidenceRelationshipTypes = new Set([
+          'applies',
+          'informed_by',
+          'motivated_by',
+          'preceded_by',
+          'verified_by',
+        ]);
         unresolved.forEach((link) => {
           const card = document.createElement('div');
           card.className = 'unresolved-evidence';
@@ -1792,10 +1799,14 @@
           type.className = 'type';
           type.textContent = link.target_kind
             ? `Invalid evidence target · ${link.type}`
-            : `Missing evidence · ${link.type}`;
+            : evidenceRelationshipTypes.has(link.type)
+              ? `Missing evidence target · ${link.type}`
+              : `Missing relationship target · ${link.type}`;
           const eventId = document.createElement('div');
           eventId.className = 'event-id';
-          eventId.textContent = link.target_event_id;
+          eventId.textContent = link.target_kind
+            ? `${link.target_event_id} · ${link.target_kind}`
+            : link.target_event_id;
           card.append(type, eventId);
           block.append(card);
         });
