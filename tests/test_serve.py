@@ -528,6 +528,7 @@ class ServeTests(unittest.TestCase):
             event_data(
                 event_id="tool-1",
                 sequence=3,
+                timestamp="2026-07-13T11:02:00Z",
                 kind="tool.call.completed",
                 attributes={"tool": {"command": "git diff --check"}},
             ),
@@ -783,6 +784,16 @@ class ServeTests(unittest.TestCase):
             {
                 "type": "preceded_by",
                 "source_event_id": "change-1",
+                "target_event_id": "tool-other-emitter",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "tool.call.completed",
+                "reason": "tool_chronology_undetermined",
+                "decision_event_id": "proposal-1",
+            },
+            {
+                "type": "preceded_by",
+                "source_event_id": "change-1",
                 "target_event_id": "tool-after-decision",
                 "source_kind": "change.applied",
                 "source_actor_id": "reviewer-1",
@@ -794,7 +805,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "verification"],
-            "unresolved_count": 3,
+            "unresolved_count": 4,
         })
 
     def test_earliest_decision_uses_same_emitter_sequence_ordering(self):
@@ -3852,6 +3863,7 @@ class ServeTests(unittest.TestCase):
                     event_data(
                         event_id="tool-1",
                         sequence=3,
+                        timestamp="2026-07-13T11:02:00Z",
                         kind="tool.call.completed",
                         operation={"status": "ok", "name": "shell"},
                         attributes={"tool": {"command": "pytest"}}
@@ -4150,6 +4162,7 @@ class ServeTests(unittest.TestCase):
             event_data(
                 event_id="tool-1",
                 sequence=3,
+                timestamp="2026-07-13T11:02:00Z",
                 kind="tool.call.completed",
                 attributes={"tool": {"command": "pytest"}},
             ),
@@ -4419,6 +4432,7 @@ class ServeTests(unittest.TestCase):
                     event_data(
                         event_id="tool-1",
                         sequence=3,
+                        timestamp="2026-07-13T11:02:00Z",
                         kind="tool.call.completed",
                         operation={"status": "ok", "name": "shell"},
                         attributes={"tool": {"command": "pytest"}},
@@ -4555,6 +4569,7 @@ class ServeTests(unittest.TestCase):
                     event_data(
                         event_id="tool-1",
                         sequence=4,
+                        timestamp="2026-07-13T11:02:00Z",
                         kind="tool.call.completed",
                         operation={"status": "ok", "name": "shell"},
                         attributes={"tool": {"command": "pytest"}},
@@ -4645,6 +4660,7 @@ class ServeTests(unittest.TestCase):
             event_data(
                 event_id="tool-1",
                 sequence=5,
+                timestamp="2026-07-13T11:02:00Z",
                 kind="tool.call.completed",
                 attributes={"tool": {"command": "pytest"}},
             ),

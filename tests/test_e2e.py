@@ -1183,7 +1183,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(later_tool).to_contain_text("Tool occurred after change · preceded_by")
                 expect(later_tool).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("git diff --stat")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 43 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 44 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
@@ -1590,6 +1590,15 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(undetermined_tool).to_contain_text("concurrent-runner")
                 expect(undetermined_tool).to_contain_text("decision event proposal-1")
                 expect(undetermined_tool).to_contain_text("tool chronology undetermined")
+                undetermined_tool_diagnostic = evidence.locator(
+                    ".unresolved-evidence"
+                ).filter(has_text="tool-undetermined")
+                expect(undetermined_tool_diagnostic).to_contain_text(
+                    "Tool chronology undetermined · preceded_by"
+                )
+                expect(undetermined_tool_diagnostic).to_contain_text(
+                    "decision event proposal-1"
+                )
                 undetermined_verification = evidence.locator(".verification-card").filter(
                     has_text="pytest tests/test_decision.py"
                 )
@@ -1630,7 +1639,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(diagnostic).to_contain_text("Context compacted after decision · informed_by")
                 expect(diagnostic).to_contain_text("context.compacted")
                 expect(diagnostic).to_contain_text("decision event proposal-1")
-                expect(evidence).to_contain_text("11 unresolved references")
+                expect(evidence).to_contain_text("12 unresolved references")
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):

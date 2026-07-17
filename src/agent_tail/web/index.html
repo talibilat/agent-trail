@@ -1546,6 +1546,8 @@
               ? `Context chronology undetermined · ${link.type}`
             : link.reason === 'compaction_chronology_undetermined'
               ? `Compaction chronology undetermined · ${link.type}`
+            : link.reason === 'tool_chronology_undetermined'
+              ? `Tool chronology undetermined · ${link.type}`
             : link.target_kind
               ? `Invalid relationship target · ${link.type}`
               : `Missing relationship target · ${link.type}`;
@@ -2027,6 +2029,8 @@
                   ? `Context compacted after decision · ${link.type}`
                 : link.reason === 'compaction_chronology_undetermined'
                   ? `Compaction chronology undetermined · ${link.type}`
+                : link.reason === 'tool_chronology_undetermined'
+                  ? `Tool chronology undetermined · ${link.type}`
                 : link.reason === 'invalid_context_detail'
                   ? `Invalid context details · ${link.type}`
                   : link.reason === 'invalid_context_line_start'
