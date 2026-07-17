@@ -1423,6 +1423,22 @@ class ServeTests(unittest.TestCase):
                 attributes={"verification": {"command": "pytest tests/test_session.py"}},
             )) + "\n",
             json.dumps(event_data(
+                event_id="verification-started-before-change",
+                span_id="span-before-change",
+                sequence=2,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="verification.started",
+                attributes={"verification": {"command": "pytest tests/test_session.py"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-started-with-change",
+                span_id="span-with-change",
+                sequence=2,
+                timestamp="2026-07-13T11:01:30Z",
+                kind="verification.started",
+                attributes={"verification": {"command": "pytest tests/test_session.py"}},
+            )) + "\n",
+            json.dumps(event_data(
                 event_id="verification-finished-1",
                 span_id="span-finished",
                 sequence=3,
@@ -1435,6 +1451,8 @@ class ServeTests(unittest.TestCase):
                 relationships=[
                     {"type": "completes", "event_id": "verification-started-after-finish"},
                     {"type": "completes", "event_id": "verification-started-same-time"},
+                    {"type": "completes", "event_id": "verification-started-before-change"},
+                    {"type": "completes", "event_id": "verification-started-with-change"},
                 ],
             )) + "\n",
             json.dumps(event_data(
@@ -1456,18 +1474,31 @@ class ServeTests(unittest.TestCase):
 
         self.assertEqual(
             [start["event_id"] for start in verification["starts"]],
-            ["verification-started-after-finish", "verification-started-same-time"],
+            [
+                "verification-started-after-finish",
+                "verification-started-same-time",
+                "verification-started-before-change",
+                "verification-started-with-change",
+            ],
         )
-        self.assertEqual(verification["unresolved"], [{
-            "type": "completes",
-            "event_id": "verification-started-after-finish",
-            "target_kind": "verification.started",
-            "reason": "verification_start_after_finish",
-        }])
+        self.assertEqual(verification["unresolved"], [
+            {
+                "type": "completes",
+                "event_id": "verification-started-after-finish",
+                "target_kind": "verification.started",
+                "reason": "verification_start_after_finish",
+            },
+            {
+                "type": "completes",
+                "event_id": "verification-started-before-change",
+                "target_kind": "verification.started",
+                "reason": "verification_start_precedes_change",
+            },
+        ])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "decision"],
-            "unresolved_count": 1,
+            "unresolved_count": 2,
         })
 
     def test_verification_before_change_is_a_temporal_diagnostic(self):

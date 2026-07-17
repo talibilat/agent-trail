@@ -1858,6 +1858,8 @@
               ? `Invalid ${start.type} start command · ${start.event_id} · ${start.target_kind}`
               : start.reason === 'verification_start_after_finish'
                 ? `Verification start occurred after finish · ${start.event_id} · ${start.target_kind}`
+              : start.reason === 'verification_start_precedes_change'
+                ? `Verification started before change · ${start.event_id} · ${start.target_kind}`
               : start.reason === 'conflicting_verification_command'
                 ? `Conflicting ${start.type} start command · ${start.event_id} · ${start.target_kind}`
               : start.target_kind

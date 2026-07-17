@@ -172,6 +172,7 @@ A supplied `test_origin` outside those values is omitted, reported as invalid ve
 Resolved links to the finished event include the validated result under `verification`, including each distinct resolved start event and its actor, so each linked hunk exposes every known test command and outcome directly.
 Resolved start events without a non-blank command remain available for actor attribution but are reported as invalid start commands and keep coverage incomplete even when another lifecycle event supplies a valid command.
 Resolved start events timestamped after their finished event remain visible but are reported as verification lifecycle contradictions and keep coverage incomplete; equal timestamps remain valid because they do not establish contradictory ordering.
+Resolved start events timestamped before the applied change also remain visible but are reported as temporal contradictions because the test lifecycle straddles the change; a start timestamp equal to the change remains valid.
 When a resolved start command conflicts with the command on the finished event or another resolved start, both commands remain visible and a conflicting-command lifecycle diagnostic keeps coverage incomplete.
 The browser falls back to the command reported by the finished event when resolved start events do not identify a command, while retaining their starter attribution.
 An outcome-only finished event remains visible in the API and browser but leaves the verification coverage category missing because no test command is known.

@@ -888,7 +888,14 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     "target_kind": target.kind,
                     "target_actor_id": target.actor["id"],
                 }
-                verification = _verification_result(target, events_by_id)
+                verification = _verification_result(
+                    target,
+                    events_by_id,
+                    source.timestamp
+                    if source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    else None,
+                )
                 if verification is not None:
                     resolved["verification"] = verification
                 requirement = _requirement_detail(target)
@@ -1608,6 +1615,7 @@ def _change_hunk_integrity(event: Event) -> list[dict[str, str]]:
 def _verification_result(
     event: Event,
     events_by_id: dict[str, Event],
+    change_timestamp: datetime | None = None,
 ) -> dict[str, object] | None:
     if event.kind != "verification.finished":
         return None
@@ -1656,12 +1664,22 @@ def _verification_result(
             "actor_id": started.actor["id"],
         }
         start_after_finish = started.timestamp > event.timestamp
+        start_before_change = (
+            change_timestamp is not None and started.timestamp < change_timestamp
+        )
         if start_after_finish:
             unresolved.append({
                 "type": relationship.type,
                 "event_id": relationship.event_id,
                 "target_kind": started.kind,
                 "reason": "verification_start_after_finish",
+            })
+        elif start_before_change:
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": started.kind,
+                "reason": "verification_start_precedes_change",
             })
         started_verification = _attributes(started).get("verification")
         has_command = False
@@ -1671,7 +1689,11 @@ def _verification_result(
                 has_command = True
                 detail["command"] = started_command
                 result.setdefault("command", started_command)
-                if not start_after_finish and result["command"] != started_command:
+                if (
+                    not start_after_finish
+                    and not start_before_change
+                    and result["command"] != started_command
+                ):
                     unresolved.append({
                         "type": relationship.type,
                         "event_id": relationship.event_id,
@@ -1679,7 +1701,7 @@ def _verification_result(
                         "reason": "conflicting_verification_command",
                     })
         starts.append(detail)
-        if not has_command and not start_after_finish:
+        if not has_command and not start_after_finish and not start_before_change:
             unresolved.append({
                 "type": relationship.type,
                 "event_id": relationship.event_id,
