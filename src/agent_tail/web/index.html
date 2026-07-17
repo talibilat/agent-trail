@@ -1579,7 +1579,10 @@
         actor.textContent = typeof changeEvidence.actor_id === 'string' && changeEvidence.actor_id.trim()
           ? `applied by ${changeEvidence.actor_id}`
           : 'applying actor unknown';
-        block.append(actor);
+        const eventId = document.createElement('div');
+        eventId.className = 'actor';
+        eventId.textContent = `event ${changeEvidence.event_id}`;
+        block.append(actor, eventId);
 
         (changeEvidence.links || []).filter(
           (link) => link.type === 'applies'

@@ -648,6 +648,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("@@ -84,18 +84,19 @@")
                 expect(evidence).to_contain_text("symbol reject_expired_session")
                 expect(evidence).to_contain_text("implementer-1")
+                expect(evidence).to_contain_text("event change-1")
                 expect(evidence).to_contain_text("Change proposed")
                 expect(evidence.locator(".proposal-card")).to_have_count(2)
                 named_proposal = evidence.locator(".proposal-card").filter(
@@ -977,6 +978,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 anonymous_evidence = page.locator(".change-evidence")
                 expect(anonymous_evidence).to_contain_text("src/anonymous.py:1-1")
                 expect(anonymous_evidence).to_contain_text("applying actor unknown")
+                expect(anonymous_evidence).to_contain_text("event anonymous-change")
                 expect(anonymous_evidence).not_to_contain_text("applied by")
                 page.locator(".back-btn").click()
                 page.evaluate("""() => {
