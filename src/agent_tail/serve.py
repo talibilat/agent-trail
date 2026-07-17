@@ -1154,7 +1154,7 @@ def _tool_call_detail(event: Event) -> dict[str, object] | None:
     operation = event.operation
     detail: dict[str, object] = {"status": operation["status"]}
     name = operation.get("name")
-    if isinstance(name, str) and name:
+    if isinstance(name, str) and name.strip():
         detail["name"] = name
     tool = _attributes(event).get("tool")
     if not isinstance(tool, dict):

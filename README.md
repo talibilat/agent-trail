@@ -121,7 +121,7 @@ To identify repository or documentation evidence, emit a `context.read` event wi
 Resolved links to that event include the validated locator under `context`; malformed optional locator fields are omitted without hiding the relationship.
 The browser event inspector presents each context path, line range, symbol, and reading actor linked by `informed_by` directly on the selected change hunk; it does not attribute unrelated context links as informing evidence.
 To expose commands and tool results that preceded a change, reference the relevant `tool.call.*` events from the change event with a `preceded_by` relationship.
-Resolved links to tool calls include the required operation status and optional non-empty operation name under `tool`.
+Resolved links to tool calls include the required operation status and optional non-blank operation name under `tool`.
 Producers can add non-blank `attributes.tool.command` and `attributes.tool.result` strings and an optional integer `attributes.tool.exit_code`; malformed or blank optional fields are omitted without hiding the relationship or operation details.
 The browser event inspector presents each tool operation, command, result, actor, status, and optional exit code linked by `preceded_by` directly on the selected change hunk; it does not attribute unrelated tool links as preceding evidence.
 When context is summarized before a decision, emit a `context.compacted` event with `summarizes` relationships to its source events, then reference the compaction event from the change with `informed_by`.

@@ -701,11 +701,14 @@ class ServeTests(unittest.TestCase):
             "new_start": 84,
             "new_count": 19,
         }
-        for tool_attributes in (
-            {"command": 17, "result": "", "exit_code": True},
-            {"command": " \t", "result": "\n ", "exit_code": True},
+        for operation_name, tool_attributes in (
+            (["shell"], {"command": 17, "result": "", "exit_code": True}),
+            (" \t\n", {"command": " \t", "result": "\n ", "exit_code": True}),
         ):
-            with self.subTest(tool_attributes=tool_attributes):
+            with self.subTest(
+                operation_name=operation_name,
+                tool_attributes=tool_attributes,
+            ):
                 store = RunStore.from_lines([
                     json.dumps(event_data(
                         event_id="change-1",
@@ -721,7 +724,7 @@ class ServeTests(unittest.TestCase):
                         span_id="span-2",
                         sequence=2,
                         kind="tool.call.completed",
-                        operation={"status": "failed", "name": ""},
+                        operation={"status": "failed", "name": operation_name},
                         attributes={"tool": tool_attributes},
                     )) + "\n",
                 ])
