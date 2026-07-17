@@ -977,6 +977,19 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 elif (
                     source.kind == "change.applied"
                     and relationship.type == "informed_by"
+                    and target.kind == "context.read"
+                    and _has_invalid_context_symbol(target)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_context_symbol",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
                     and target.kind == "context.compacted"
                     and not any(
                         candidate.type == "summarizes"
@@ -1553,6 +1566,14 @@ def _has_invalid_context_line_end(event: Event) -> bool:
     )
 
 
+def _has_invalid_context_symbol(event: Event) -> bool:
+    context = _attributes(event).get("context")
+    if not isinstance(context, dict) or "symbol" not in context:
+        return False
+    symbol = context["symbol"]
+    return not isinstance(symbol, str) or not symbol.strip()
+
+
 def _tool_call_detail(event: Event) -> dict[str, object] | None:
     if not event.kind.startswith("tool.call."):
         return None
@@ -1630,6 +1651,13 @@ def _context_compaction_detail(
                 "event_id": relationship.event_id,
                 "target_kind": source.kind,
                 "reason": "invalid_context_line_end",
+            })
+        elif relationship.type == "summarizes" and _has_invalid_context_symbol(source):
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": source.kind,
+                "reason": "invalid_context_symbol",
             })
     return {"sources": sources, "unresolved": unresolved}
 

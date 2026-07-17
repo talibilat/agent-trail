@@ -108,6 +108,7 @@ A context category is present for direct context only when an `informed_by` rela
 Canonical context-read events without a valid non-blank path remain inspectable as generic links but are reported as invalid context details and keep coverage incomplete.
 A supplied `line_start` that is not a positive integer is omitted, reported as an invalid context line start, and keeps coverage incomplete while the valid path remains visible.
 A supplied `line_end` that is not a positive integer or precedes a valid `line_start` is omitted, reported as an invalid context line end, and keeps coverage incomplete while the rest of the valid locator remains visible.
+A supplied `symbol` that is not a non-blank string is omitted, reported as an invalid context symbol, and keeps coverage incomplete while the rest of the valid locator remains visible.
 A context locator among a compaction's resolved `summarizes` sources also satisfies the category when the change references that compaction with `informed_by`; unrelated outer or source links do not.
 An `informed_by` compaction without any `summarizes` relationship remains visible but is reported as invalid compaction details and keeps coverage incomplete even when other context evidence satisfies the category.
 A tool category is present only when a `preceded_by` relationship resolves to a tool call with a non-blank command or result; other links to tool calls remain visible, while operation identity and status alone do not satisfy it.
@@ -128,7 +129,7 @@ Missing canonical relationships are labeled as evidence targets, while missing g
 Resolved `motivated_by`, `informed_by`, `preceded_by`, `verified_by`, and `applies` targets of the wrong event kind remain inspectable as generic links and are also identified as invalid evidence targets with their actual event kind.
 Valid `informed_by` targets are `context.read` and `context.compacted` events.
 To identify repository or documentation evidence, emit a `context.read` event with a non-blank `attributes.context.path`, optional positive integer `line_start` and `line_end` fields where `line_end` is not before `line_start` when both are present, and an optional non-blank string `symbol`, then reference it from the change event with an `informed_by` relationship.
-Resolved links to that event include the validated locator under `context`; malformed optional locator fields are omitted without hiding the relationship.
+Resolved links to that event include the validated locator under `context`; malformed optional locator fields are omitted without hiding the relationship and are reported as typed integrity diagnostics for canonical direct or compacted context evidence.
 The browser event inspector presents each context path, line range, symbol, and reading actor linked by `informed_by` directly on the selected change hunk; a blank reading actor is identified as unknown, an end-only range is displayed as `path:?-end`, and unrelated context links are not attributed as informing evidence.
 To expose commands and tool results that preceded a change, reference the relevant `tool.call.*` events from the change event with a `preceded_by` relationship.
 Other event kinds linked by `preceded_by` remain inspectable but are reported as invalid evidence targets and keep coverage incomplete.
