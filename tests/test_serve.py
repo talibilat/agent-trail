@@ -334,6 +334,45 @@ class ServeTests(unittest.TestCase):
             }],
         }])
 
+    def test_invalid_change_detail_remains_traceable(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="missing-change-detail",
+                kind="change.applied",
+                actor={"id": "implementer-1"},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="non-object-change-detail",
+                span_id="span-2",
+                sequence=2,
+                kind="change.applied",
+                actor={"id": "implementer-2"},
+                attributes={"change": ["src/auth/session.py"]},
+            )) + "\n",
+        ])
+
+        evidence = store.run_detail("trace-1")["evidence_map"]
+
+        self.assertEqual(evidence["changes"], [])
+        self.assertEqual(evidence["invalid_changes"], [
+            {
+                "event_id": "missing-change-detail",
+                "actor_id": "implementer-1",
+                "integrity": [{
+                    "field": "change",
+                    "reason": "invalid_change_detail",
+                }],
+            },
+            {
+                "event_id": "non-object-change-detail",
+                "actor_id": "implementer-2",
+                "integrity": [{
+                    "field": "change",
+                    "reason": "invalid_change_detail",
+                }],
+            },
+        ])
+
     def test_invalid_change_old_count_remains_traceable(self):
         valid_hunk = {
             "path": "src/auth/session.py",
