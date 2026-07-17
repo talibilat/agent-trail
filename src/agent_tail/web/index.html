@@ -1541,9 +1541,12 @@
               : `Missing relationship target · ${link.type}`;
           const eventId = document.createElement('div');
           eventId.className = 'event-id';
-          eventId.textContent = link.target_kind
+          const eventDetails = link.target_kind
             ? `${link.target_event_id} · ${link.target_kind}`
             : link.target_event_id;
+          eventId.textContent = link.decision_event_id
+            ? `${eventDetails} · decision event ${link.decision_event_id}`
+            : eventDetails;
           card.append(type, eventId);
           block.append(card);
         });
@@ -2037,9 +2040,12 @@
                                 : `Missing relationship target · ${link.type}`;
           const eventId = document.createElement('div');
           eventId.className = 'event-id';
-          eventId.textContent = link.target_kind
+          const eventDetails = link.target_kind
             ? `${link.target_event_id} · ${link.target_kind}`
             : link.target_event_id;
+          eventId.textContent = link.decision_event_id
+            ? `${eventDetails} · decision event ${link.decision_event_id}`
+            : eventDetails;
           card.append(type, eventId);
           block.append(card);
         });

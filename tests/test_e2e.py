@@ -1514,11 +1514,13 @@ class ServeEndToEndTests(unittest.TestCase):
                     "Context read after decision · informed_by"
                 )
                 expect(current_context_diagnostic).to_contain_text("context.read")
+                expect(current_context_diagnostic).to_contain_text("decision event proposal-1")
                 late_context_diagnostic = evidence.locator(".unresolved-evidence").filter(
                     has_text="context-after-decision"
                 )
                 expect(late_context_diagnostic).to_contain_text("Context read after decision · informed_by")
                 expect(late_context_diagnostic).to_contain_text("context.read")
+                expect(late_context_diagnostic).to_contain_text("decision event proposal-1")
                 late_requirement = evidence.locator(".requirement-card").filter(has_text="R-late")
                 expect(late_requirement).to_contain_text("Requirement observed after the decision.")
                 expect(late_requirement).to_contain_text("decision event proposal-1")
@@ -1537,6 +1539,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     "Requirement observed after decision · motivated_by"
                 )
                 expect(late_requirement_diagnostic).to_contain_text("requirement.observed")
+                expect(late_requirement_diagnostic).to_contain_text("decision event proposal-1")
                 late_tool = evidence.locator(".tool-card").filter(has_text="git diff --check")
                 expect(late_tool).to_contain_text("late-runner")
                 expect(late_tool).to_contain_text("decision event proposal-1")
@@ -1567,11 +1570,13 @@ class ServeEndToEndTests(unittest.TestCase):
                     "Tool occurred after decision · preceded_by"
                 )
                 expect(late_tool_diagnostic).to_contain_text("tool.call.completed")
+                expect(late_tool_diagnostic).to_contain_text("decision event proposal-1")
                 diagnostic = evidence.locator(".unresolved-evidence").filter(
                     has_text="compaction-after-decision"
                 )
                 expect(diagnostic).to_contain_text("Context compacted after decision · informed_by")
                 expect(diagnostic).to_contain_text("context.compacted")
+                expect(diagnostic).to_contain_text("decision event proposal-1")
                 expect(evidence).to_contain_text("5 unresolved references")
                 browser.close()
 
