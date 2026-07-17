@@ -341,6 +341,87 @@ class ServeTests(unittest.TestCase):
             "passed": True,
         })
 
+    def test_verification_evidence_pairs_finished_with_started_event(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[{
+                    "type": "verified_by",
+                    "event_id": "verification-finished-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-finished-1",
+                span_id="span-2",
+                sequence=2,
+                kind="verification.finished",
+                actor={"id": "result-reporter"},
+                attributes={"verification": {
+                    "passed": True,
+                    "exit_code": 0,
+                    "test_origin": "pre_existing",
+                }},
+                relationships=[{
+                    "type": "completes",
+                    "event_id": "verification-started-1",
+                }],
+            )) + "\n",
+        ])
+
+        before_start = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+        self.assertEqual(before_start["links"][0]["verification"], {
+            "passed": True,
+            "exit_code": 0,
+            "test_origin": "pre_existing",
+            "unresolved": [{
+                "type": "completes",
+                "event_id": "verification-started-1",
+            }],
+        })
+        self.assertEqual(before_start["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "context", "tool"],
+            "unresolved_count": 1,
+        })
+
+        store.feed_line(json.dumps(event_data(
+            event_id="verification-started-1",
+            span_id="span-3",
+            sequence=3,
+            kind="verification.started",
+            actor={"id": "test-runner"},
+            attributes={"verification": {
+                "command": "pytest tests/test_session.py",
+            }},
+        )) + "\n")
+
+        after_start = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+        self.assertEqual(after_start["links"][0]["verification"], {
+            "passed": True,
+            "command": "pytest tests/test_session.py",
+            "exit_code": 0,
+            "test_origin": "pre_existing",
+            "starts": [{
+                "event_id": "verification-started-1",
+                "actor_id": "test-runner",
+                "command": "pytest tests/test_session.py",
+            }],
+        })
+        self.assertEqual(after_start["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "context", "tool"],
+            "unresolved_count": 0,
+        })
+
     def test_evidence_ignores_malformed_optional_requirement_details(self):
         store = RunStore.from_lines([
             json.dumps(event_data(

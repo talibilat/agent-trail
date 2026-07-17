@@ -101,8 +101,8 @@ For repository changes, emit a `change.applied` event with a Git hunk locator un
 The four range values are non-negative integers and `symbol` is optional.
 Valid locators are exposed in event order under `evidence_map.changes`, together with the change event and actor IDs.
 Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
-It also includes factual `coverage` for requirement, context, tool, and verification evidence, plus an unresolved count that includes missing compacted-context sources.
-Coverage is `complete` only when all four core categories are linked and every direct or compacted reference resolves; otherwise `missing` identifies absent categories without assigning a subjective confidence score.
+It also includes factual `coverage` for requirement, context, tool, and verification evidence, plus an unresolved count that includes missing compacted-context sources and verification-start events.
+Coverage is `complete` only when all four core categories are linked and every direct, compacted, or verification-lifecycle reference resolves; otherwise `missing` identifies absent categories without assigning a subjective confidence score.
 The run-level arrays remain available for all relationships, including those originating from events without valid change locators.
 To identify a motivating requirement, emit a `requirement.observed` event with non-empty `attributes.requirement.id` and `attributes.requirement.text` strings, then reference it from the change event.
 Resolved links to that event include the validated ID and text under `requirement`, while malformed optional requirement metadata is omitted without hiding the relationship.
@@ -120,9 +120,12 @@ When context is summarized before a decision, emit a `context.compacted` event w
 Resolved links to that event include `compaction.sources` with source event kinds, actors, and any context-read locators, plus `compaction.unresolved` for missing source events.
 This preserves the observable compaction boundary without capturing private reasoning or summary contents.
 The browser event inspector presents the compaction actor, source kinds or repository locators, source actors, and each missing source's relationship type and event ID directly on the selected change hunk.
-To attach a test result, emit a `verification.finished` event with `attributes.verification.command` and boolean `attributes.verification.passed` fields, plus an optional integer `exit_code`.
+To attach a test result, emit a `verification.finished` event with a boolean `attributes.verification.passed` field and optional integer `exit_code`.
+For lifecycle attribution, emit the command as non-empty `attributes.verification.command` on a `verification.started` event and reference it from `verification.finished` with a `completes` relationship.
+Finished-only events can instead include the command directly for producers that do not emit a separate start event.
 Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
-Resolved links to that event include the validated result under `verification`, so each linked hunk exposes its test command and outcome directly.
+Resolved links to the finished event include the validated result under `verification`, including each resolved start event and its actor, so each linked hunk exposes its test command and outcome directly.
+Missing start events remain visible under `verification.unresolved` and contribute to incomplete hunk coverage until they arrive.
 The browser event inspector presents the command, pass or fail outcome, verifier, optional exit code, and whether the test predates the change or was written by the same agent.
 Malformed optional verification metadata is omitted without rejecting the event, its relationship, or other valid verification details.
 To record a later human change, emit a `human.corrected` event with a `corrects` relationship targeting the original `change.applied` event and set `attributes.correction.action` to `modified` or `reverted`.

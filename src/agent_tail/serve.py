@@ -882,7 +882,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     "target_kind": target.kind,
                     "target_actor_id": target.actor["id"],
                 }
-                verification = _verification_result(target)
+                verification = _verification_result(target, events_by_id)
                 if verification is not None:
                     resolved["verification"] = verification
                 requirement = _requirement_detail(target)
@@ -938,6 +938,11 @@ def _evidence_coverage(
         for link in links
         if isinstance((compaction := link.get("compaction")), dict)
         and isinstance(compaction.get("unresolved"), list)
+    ) + sum(
+        len(verification.get("unresolved", []))
+        for link in links
+        if isinstance((verification := link.get("verification")), dict)
+        and isinstance(verification.get("unresolved"), list)
     )
     return {
         "status": "incomplete" if missing or unresolved_count else "complete",
@@ -968,7 +973,10 @@ def _change_hunk(event: Event) -> dict[str, object] | None:
     return hunk
 
 
-def _verification_result(event: Event) -> dict[str, object] | None:
+def _verification_result(
+    event: Event,
+    events_by_id: dict[str, Event],
+) -> dict[str, object] | None:
     if event.kind != "verification.finished":
         return None
     verification = _attributes(event).get("verification")
@@ -976,15 +984,48 @@ def _verification_result(event: Event) -> dict[str, object] | None:
         return None
     command = verification.get("command")
     passed = verification.get("passed")
-    if not isinstance(command, str) or not command or not isinstance(passed, bool):
+    if not isinstance(passed, bool):
         return None
-    result: dict[str, object] = {"command": command, "passed": passed}
+    result: dict[str, object] = {"passed": passed}
+    if isinstance(command, str) and command:
+        result["command"] = command
     exit_code = verification.get("exit_code")
     if isinstance(exit_code, int) and not isinstance(exit_code, bool):
         result["exit_code"] = exit_code
     test_origin = verification.get("test_origin")
     if test_origin in {"pre_existing", "same_agent"}:
         result["test_origin"] = test_origin
+    starts = []
+    unresolved = []
+    for relationship in event.relationships:
+        if relationship.type != "completes":
+            continue
+        started = events_by_id.get(relationship.event_id)
+        if started is None:
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+            })
+            continue
+        if started.kind != "verification.started":
+            continue
+        detail: dict[str, object] = {
+            "event_id": started.event_id,
+            "actor_id": started.actor["id"],
+        }
+        started_verification = _attributes(started).get("verification")
+        if isinstance(started_verification, dict):
+            started_command = started_verification.get("command")
+            if isinstance(started_command, str) and started_command:
+                detail["command"] = started_command
+                result.setdefault("command", started_command)
+        starts.append(detail)
+    if starts:
+        result["starts"] = starts
+    if unresolved:
+        result["unresolved"] = unresolved
+    if "command" not in result and not starts and not unresolved:
+        return None
     return result
 
 
