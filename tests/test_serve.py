@@ -1596,11 +1596,21 @@ class ServeTests(unittest.TestCase):
                 "reason": "compaction_follows_decision",
                 "decision_event_id": "proposal-1",
             },
+            {
+                "type": "informed_by",
+                "source_event_id": "change-1",
+                "target_event_id": "compaction-other-emitter",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "context.compacted",
+                "reason": "compaction_chronology_undetermined",
+                "decision_event_id": "proposal-1",
+            },
         ])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "tool", "verification"],
-            "unresolved_count": 3,
+            "unresolved_count": 4,
         })
 
     def test_context_read_after_compaction_cannot_be_summarized_evidence(self):
@@ -4528,12 +4538,14 @@ class ServeTests(unittest.TestCase):
                     event_data(
                         event_id="context-1",
                         sequence=2,
+                        timestamp="2026-07-13T11:00:00Z",
                         kind="context.read",
                         attributes={"context": {"path": "src/auth/config.py"}},
                     ),
                     event_data(
                         event_id="compaction-1",
                         sequence=3,
+                        timestamp="2026-07-13T11:01:00Z",
                         kind="context.compacted",
                         relationships=[
                             {"type": inner_type, "event_id": "context-1"},
@@ -4609,18 +4621,21 @@ class ServeTests(unittest.TestCase):
             event_data(
                 event_id="context-1",
                 sequence=2,
+                timestamp="2026-07-13T11:00:00Z",
                 kind="context.read",
                 attributes={"context": {"path": "src/auth/config.py"}},
             ),
             event_data(
                 event_id="invalid-context-1",
                 sequence=3,
+                timestamp="2026-07-13T11:00:00Z",
                 kind="context.read",
                 attributes={"context": {"path": " \t"}},
             ),
             event_data(
                 event_id="compaction-1",
                 sequence=4,
+                timestamp="2026-07-13T11:01:00Z",
                 kind="context.compacted",
                 relationships=[
                     {"type": "summarizes", "event_id": "context-1"},

@@ -1256,6 +1256,22 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     source_unresolved.append(invalid)
                 elif (
                     source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.compacted"
+                    and earliest_decision is not None
+                    and not _event_follows(target, earliest_decision)
+                    and not _event_follows(earliest_decision, target)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "compaction_chronology_undetermined",
+                        "decision_event_id": earliest_decision.event_id,
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
                     and relationship.type == "preceded_by"
                     and target.kind.startswith("tool.call.")
                     and _event_follows(target, source)
