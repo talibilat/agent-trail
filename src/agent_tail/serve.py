@@ -1746,7 +1746,7 @@ def _verification_result(
             "event_id": started.event_id,
             "actor_id": started.actor["id"],
         }
-        start_after_finish = started.timestamp > event.timestamp
+        start_after_finish = _event_follows(started, event)
         start_before_change = (
             change_timestamp is not None and started.timestamp < change_timestamp
         )

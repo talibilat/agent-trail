@@ -1838,6 +1838,7 @@ class ServeTests(unittest.TestCase):
             )) + "\n",
             json.dumps(event_data(
                 event_id="verification-started-without-command",
+                emitter_id="commandless-start-worker",
                 span_id="span-4",
                 sequence=4,
                 kind="verification.started",
@@ -1883,6 +1884,7 @@ class ServeTests(unittest.TestCase):
 
         store.feed_line(json.dumps(event_data(
             event_id="verification-started-1",
+            emitter_id="resolved-start-worker",
             span_id="span-3",
             sequence=4,
             kind="verification.started",
@@ -2039,7 +2041,7 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 1,
         })
 
-    def test_verification_start_after_finish_is_a_lifecycle_diagnostic(self):
+    def test_verification_start_after_finish_uses_same_emitter_sequence_ordering(self):
         hunk = {
             "path": "src/auth/session.py",
             "old_start": 84,
@@ -2050,12 +2052,14 @@ class ServeTests(unittest.TestCase):
         store = RunStore.from_lines([
             json.dumps(event_data(
                 event_id="verification-started-after-finish",
+                emitter_id="later-start-worker",
                 timestamp="2026-07-13T11:03:00Z",
                 kind="verification.started",
                 attributes={"verification": {"command": "pytest tests/test_session.py"}},
             )) + "\n",
             json.dumps(event_data(
                 event_id="verification-started-same-time",
+                emitter_id="same-time-worker",
                 span_id="span-same-time",
                 sequence=2,
                 timestamp="2026-07-13T11:02:00Z",
@@ -2064,6 +2068,7 @@ class ServeTests(unittest.TestCase):
             )) + "\n",
             json.dumps(event_data(
                 event_id="verification-started-before-change",
+                emitter_id="before-change-worker",
                 span_id="span-before-change",
                 sequence=2,
                 timestamp="2026-07-13T11:01:00Z",
@@ -2072,9 +2077,26 @@ class ServeTests(unittest.TestCase):
             )) + "\n",
             json.dumps(event_data(
                 event_id="verification-started-with-change",
+                emitter_id="with-change-worker",
                 span_id="span-with-change",
                 sequence=2,
                 timestamp="2026-07-13T11:01:30Z",
+                kind="verification.started",
+                attributes={"verification": {"command": "pytest tests/test_session.py"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-started-clock-skew-after-finish",
+                span_id="span-clock-skew-after-finish",
+                sequence=4,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="verification.started",
+                attributes={"verification": {"command": "pytest tests/test_session.py"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-started-clock-skew-before-finish",
+                span_id="span-clock-skew-before-finish",
+                sequence=1,
+                timestamp="2026-07-13T11:03:00Z",
                 kind="verification.started",
                 attributes={"verification": {"command": "pytest tests/test_session.py"}},
             )) + "\n",
@@ -2093,6 +2115,14 @@ class ServeTests(unittest.TestCase):
                     {"type": "completes", "event_id": "verification-started-same-time"},
                     {"type": "completes", "event_id": "verification-started-before-change"},
                     {"type": "completes", "event_id": "verification-started-with-change"},
+                    {
+                        "type": "completes",
+                        "event_id": "verification-started-clock-skew-after-finish",
+                    },
+                    {
+                        "type": "completes",
+                        "event_id": "verification-started-clock-skew-before-finish",
+                    },
                 ],
             )) + "\n",
             json.dumps(event_data(
@@ -2120,6 +2150,8 @@ class ServeTests(unittest.TestCase):
                 "verification-started-same-time",
                 "verification-started-before-change",
                 "verification-started-with-change",
+                "verification-started-clock-skew-after-finish",
+                "verification-started-clock-skew-before-finish",
             ],
         )
         self.assertEqual(verification["unresolved"], [
@@ -2135,11 +2167,17 @@ class ServeTests(unittest.TestCase):
                 "target_kind": "verification.started",
                 "reason": "verification_start_precedes_change",
             },
+            {
+                "type": "completes",
+                "event_id": "verification-started-clock-skew-after-finish",
+                "target_kind": "verification.started",
+                "reason": "verification_start_after_finish",
+            },
         ])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "decision"],
-            "unresolved_count": 2,
+            "unresolved_count": 3,
         })
 
     def test_verification_before_change_uses_same_emitter_sequence_ordering(self):

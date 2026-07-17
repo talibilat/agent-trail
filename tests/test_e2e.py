@@ -173,6 +173,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )) + "\n",
                 json.dumps(event_data(
                     event_id="verification-started-after-finish",
+                    emitter_id="late-test-worker",
                     span_id="span-verification-started-after-finish",
                     sequence=3,
                     timestamp="2026-07-13T11:03:00Z",
@@ -184,6 +185,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )) + "\n",
                 json.dumps(event_data(
                     event_id="verification-started-before-change",
+                    emitter_id="premature-test-worker",
                     span_id="span-verification-started-before-change",
                     sequence=3,
                     timestamp="2026-07-13T11:01:00Z",
