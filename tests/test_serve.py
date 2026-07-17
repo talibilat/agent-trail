@@ -219,6 +219,11 @@ class ServeTests(unittest.TestCase):
             span_id="span-4",
             sequence=4,
             kind="verification.finished",
+            attributes={"verification": {
+                "command": "pytest tests/test_session.py",
+                "passed": True,
+                "exit_code": 0,
+            }},
         )) + "\n")
         after_verification = store.run_detail("trace-1")["evidence_map"]
 
@@ -253,6 +258,11 @@ class ServeTests(unittest.TestCase):
                 **verified_by_unresolved,
                 "target_kind": "verification.finished",
                 "target_actor_id": "reviewer-1",
+                "verification": {
+                    "command": "pytest tests/test_session.py",
+                    "passed": True,
+                    "exit_code": 0,
+                },
             }],
             "unresolved": [],
         }])
@@ -265,6 +275,33 @@ class ServeTests(unittest.TestCase):
             before_verification["unresolved"],
         )
         self.assertEqual(len(before_verification["unresolved"]), 2)
+
+    def test_evidence_ignores_malformed_optional_verification_results(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                relationships=[{
+                    "type": "verified_by",
+                    "event_id": "verification-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-1",
+                span_id="span-2",
+                sequence=2,
+                kind="verification.finished",
+                attributes={"verification": {
+                    "command": "pytest",
+                    "passed": "yes",
+                    "exit_code": True,
+                }},
+            )) + "\n",
+        ])
+
+        link = store.run_detail("trace-1")["evidence_map"]["links"][0]
+
+        self.assertNotIn("verification", link)
 
     def test_http_server_serves_offline_shell_and_versioned_api(self):
         store = RunStore.from_lines([

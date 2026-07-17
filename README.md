@@ -102,6 +102,9 @@ The four range values are non-negative integers and `symbol` is optional.
 Valid locators are exposed in event order under `evidence_map.changes`, together with the change event and actor IDs.
 Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
 The run-level arrays remain available for all relationships, including those originating from events without valid change locators.
+To attach a test result, emit a `verification.finished` event with `attributes.verification.command` and boolean `attributes.verification.passed` fields, plus an optional integer `exit_code`.
+Resolved links to that event include the validated result under `verification`, so each linked hunk exposes its test command and outcome directly.
+Malformed optional verification metadata is omitted without rejecting the event or its relationship.
 Unknown kinds, fields, and supported minor schema versions are retained so the canonical envelope can evolve.
 
 Harnesses other than the v1 runtime need an adapter that emits this envelope.

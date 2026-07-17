@@ -881,6 +881,9 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     "target_kind": target.kind,
                     "target_actor_id": target.actor["id"],
                 }
+                verification = _verification_result(target)
+                if verification is not None:
+                    resolved["verification"] = verification
                 links.append(resolved)
                 source_links.append(resolved)
         hunk = _change_hunk(source)
@@ -915,6 +918,23 @@ def _change_hunk(event: Event) -> dict[str, object] | None:
     if isinstance(symbol, str):
         hunk["symbol"] = symbol
     return hunk
+
+
+def _verification_result(event: Event) -> dict[str, object] | None:
+    if event.kind != "verification.finished":
+        return None
+    verification = _attributes(event).get("verification")
+    if not isinstance(verification, dict):
+        return None
+    command = verification.get("command")
+    passed = verification.get("passed")
+    if not isinstance(command, str) or not command or not isinstance(passed, bool):
+        return None
+    result: dict[str, object] = {"command": command, "passed": passed}
+    exit_code = verification.get("exit_code")
+    if isinstance(exit_code, int) and not isinstance(exit_code, bool):
+        result["exit_code"] = exit_code
+    return result
 
 
 def _actor_role(events: Iterable[Event], actor_id: str) -> object:
