@@ -3506,6 +3506,67 @@ class ServeTests(unittest.TestCase):
             "target_actor_id": "reviewer-1",
         })
 
+    def test_correction_before_change_is_a_temporal_diagnostic(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                timestamp="2026-07-13T11:02:00Z",
+                kind="change.applied",
+                attributes={"change": hunk},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="correction-before-change",
+                span_id="span-before",
+                sequence=2,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="human.corrected",
+                actor={"id": "early-maintainer"},
+                attributes={"correction": {"action": "modified"}},
+                relationships=[{"type": "corrects", "event_id": "change-1"}],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="correction-same-time",
+                span_id="span-same-time",
+                sequence=3,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="human.corrected",
+                actor={"id": "current-maintainer"},
+                attributes={"correction": {"action": "reverted"}},
+                relationships=[{"type": "corrects", "event_id": "change-1"}],
+            )) + "\n",
+        ])
+
+        evidence = store.run_detail("trace-1")["evidence_map"]
+        change = evidence["changes"][0]
+
+        self.assertEqual(
+            [correction["source_event_id"] for correction in change["corrections"]],
+            ["correction-before-change", "correction-same-time"],
+        )
+        self.assertEqual(change["corrections"][0]["correction"], {"action": "modified"})
+        self.assertEqual(
+            change["corrections"][0]["reason"],
+            "correction_precedes_change",
+        )
+        self.assertNotIn("reason", change["corrections"][1])
+        self.assertEqual(evidence["unresolved"], [{
+            "type": "corrects",
+            "source_event_id": "correction-before-change",
+            "target_event_id": "change-1",
+            "source_kind": "human.corrected",
+            "source_actor_id": "early-maintainer",
+            "target_kind": "change.applied",
+            "reason": "correction_precedes_change",
+        }])
+        self.assertEqual(change["coverage"]["unresolved_count"], 0)
+
     def test_wrong_kind_human_correction_target_is_an_unresolved_diagnostic(self):
         store = RunStore.from_lines([
             json.dumps(event_data(

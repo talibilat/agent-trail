@@ -920,6 +920,15 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                         }
                         unresolved.append(invalid)
                         source_unresolved.append(invalid)
+                    elif source.timestamp < target.timestamp:
+                        resolved["reason"] = "correction_precedes_change"
+                        invalid = {
+                            **item,
+                            "target_kind": target.kind,
+                            "reason": "correction_precedes_change",
+                        }
+                        unresolved.append(invalid)
+                        source_unresolved.append(invalid)
                     corrections_by_change.setdefault(target.event_id, []).append(resolved)
                 links.append(resolved)
                 source_links.append(resolved)

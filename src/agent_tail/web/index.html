@@ -1894,6 +1894,12 @@
             : 'correcting actor unknown';
           meta.textContent = `event ${link.source_event_id} · ${actor}`;
           card.append(actionNode, meta);
+          if (link.reason === 'correction_precedes_change') {
+            const incomplete = document.createElement('div');
+            incomplete.className = 'incomplete';
+            incomplete.textContent = 'Correction occurred before change';
+            card.append(incomplete);
+          }
           block.append(card);
         });
 
