@@ -945,7 +945,11 @@ def _evidence_coverage(
             and ("command" in tool or "result" in tool)
             for link in links
         ),
-        "verification": any("verification" in link for link in links),
+        "verification": any(
+            isinstance((verification := link.get("verification")), dict)
+            and "command" in verification
+            for link in links
+        ),
         "decision": any(link.get("target_kind") == "change.proposed" for link in links),
     }
     missing = [kind for kind, is_present in present.items() if not is_present]
