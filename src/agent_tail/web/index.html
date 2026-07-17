@@ -1526,13 +1526,15 @@
         const locator = document.createElement('div');
         locator.className = 'hunk';
         locator.textContent = `${hunk.path}:${hunk.new_start}-${hunkEnd}`;
+        const diffRange = document.createElement('div');
+        diffRange.className = 'actor';
+        diffRange.textContent = `@@ -${hunk.old_start},${hunk.old_count} +${hunk.new_start},${hunk.new_count} @@`;
+        block.append(locator, diffRange);
         if (hunk.symbol) {
           const symbol = document.createElement('div');
           symbol.className = 'actor';
           symbol.textContent = `symbol ${hunk.symbol}`;
-          block.append(locator, symbol);
-        } else {
-          block.append(locator);
+          block.append(symbol);
         }
         const actor = document.createElement('div');
         actor.className = 'actor';

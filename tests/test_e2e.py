@@ -188,6 +188,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 evidence = page.locator(".change-evidence")
                 expect(evidence).to_contain_text("CHANGE EVIDENCE")
                 expect(evidence).to_contain_text("src/auth/session.py:84-102")
+                expect(evidence).to_contain_text("@@ -84,18 +84,19 @@")
                 expect(evidence).to_contain_text("symbol reject_expired_session")
                 expect(evidence).to_contain_text("implementer-1")
                 expect(evidence).to_contain_text("Change proposed")
