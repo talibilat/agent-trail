@@ -320,9 +320,9 @@
     .tool-card .result { color: var(--dim); }
     .tool-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
     .verification-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--ok); background: rgba(73,209,125,.06); }
-    .verification-card.failed, .verification-card.same-agent { border-left-color: var(--warn); background: rgba(255,190,92,.06); }
+    .verification-card.failed, .verification-card.same-agent, .verification-card.unknown-origin { border-left-color: var(--warn); background: rgba(255,190,92,.06); }
     .verification-card .outcome { font: 600 10px "IBM Plex Mono", monospace; color: var(--ok); }
-    .verification-card.failed .outcome, .verification-card.same-agent .provenance { color: var(--warn); }
+    .verification-card.failed .outcome, .verification-card.same-agent .provenance, .verification-card.unknown-origin .provenance { color: var(--warn); }
     .verification-card .command { margin-top: 4px; font: 500 10.5px "IBM Plex Mono", monospace; color: var(--text); word-break: break-word; }
     .verification-card .meta, .verification-card .provenance { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
     .verification-card .incomplete { margin-top: 5px; font: 500 9.5px "IBM Plex Mono", monospace; color: var(--warn); word-break: break-all; }
@@ -1660,8 +1660,9 @@
         (changeEvidence.links || []).filter((link) => link.verification).forEach((link) => {
           const verification = link.verification;
           const sameAgent = verification.test_origin === 'same_agent';
+          const unknownOrigin = !verification.test_origin;
           const card = document.createElement('div');
-          card.className = `verification-card${verification.passed ? '' : ' failed'}${sameAgent ? ' same-agent' : ''}`;
+          card.className = `verification-card${verification.passed ? '' : ' failed'}${sameAgent ? ' same-agent' : ''}${unknownOrigin ? ' unknown-origin' : ''}`;
           const outcome = document.createElement('div');
           outcome.className = 'outcome';
           outcome.textContent = verification.passed ? 'PASS' : 'FAIL';
@@ -1697,14 +1698,14 @@
             incomplete.textContent = `Missing ${start.type} start · ${start.event_id}`;
             card.append(incomplete);
           });
-          if (verification.test_origin) {
-            const provenance = document.createElement('div');
-            provenance.className = 'provenance';
-            provenance.textContent = sameAgent
+          const provenance = document.createElement('div');
+          provenance.className = 'provenance';
+          provenance.textContent = unknownOrigin
+            ? 'Test provenance unknown'
+            : sameAgent
               ? 'Warning: implementation and test written by the same agent'
               : 'Test existed before this change';
-            card.append(provenance);
-          }
+          card.append(provenance);
           block.append(card);
         });
 
@@ -1750,11 +1751,12 @@
         const unresolvedCount = coverage.unresolved_count === undefined
           ? unresolved.length
           : coverage.unresolved_count;
+        const unknownTestOriginCount = coverage.unknown_test_origin_count || 0;
         const completeness = document.createElement('div');
-        const incomplete = missing.length || unresolvedCount;
+        const incomplete = missing.length || unresolvedCount || unknownTestOriginCount;
         completeness.className = `evidence-completeness${incomplete ? ' incomplete' : ''}`;
         completeness.textContent = incomplete
-          ? `Evidence incomplete · ${missing.length} missing categor${missing.length === 1 ? 'y' : 'ies'} · ${unresolvedCount} unresolved reference${unresolvedCount === 1 ? '' : 's'}`
+          ? `Evidence incomplete · ${missing.length} missing categor${missing.length === 1 ? 'y' : 'ies'} · ${unresolvedCount} unresolved reference${unresolvedCount === 1 ? '' : 's'} · ${unknownTestOriginCount} test${unknownTestOriginCount === 1 ? '' : 's'} with unknown provenance`
           : 'Core evidence complete';
         block.append(completeness);
         wrap.append(block);

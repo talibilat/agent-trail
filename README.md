@@ -102,7 +102,8 @@ The four range values are non-negative integers and `symbol` is optional.
 Valid locators are exposed in event order under `evidence_map.changes`, together with the change event and actor IDs.
 Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
 It also includes factual `coverage` for requirement, context, tool, and verification evidence, plus an unresolved count that includes missing compacted-context sources and verification-start events.
-Coverage is `complete` only when all four core categories are linked and every direct, compacted, or verification-lifecycle reference resolves; otherwise `missing` identifies absent categories without assigning a subjective confidence score.
+Coverage is `complete` only when all four core categories are linked, every direct, compacted, or verification-lifecycle reference resolves, and every verification has known test provenance.
+Otherwise `missing` identifies absent categories and `unknown_test_origin_count` identifies verifications without valid provenance, without assigning a subjective confidence score.
 The run-level arrays remain available for all relationships, including those originating from events without valid change locators.
 To identify a motivating requirement, emit a `requirement.observed` event with non-empty `attributes.requirement.id` and `attributes.requirement.text` strings, then reference it from the change event.
 Resolved links to that event include the validated ID and text under `requirement`, while malformed optional requirement metadata is omitted without hiding the relationship.
@@ -126,7 +127,7 @@ Finished-only events can instead include the command directly for producers that
 Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
 Resolved links to the finished event include the validated result under `verification`, including each resolved start event and its actor, so each linked hunk exposes its test command and outcome directly.
 Missing start events remain visible under `verification.unresolved` and contribute to incomplete hunk coverage until they arrive.
-The browser event inspector presents each test starter and command separately from the result reporter, together with the pass or fail outcome, optional exit code, and whether the test predates the change or was written by the same agent.
+The browser event inspector presents each test starter and command separately from the result reporter, together with the pass or fail outcome, optional exit code, and whether the test predates the change, was written by the same agent, or has unknown provenance.
 It identifies each missing verification start by relationship type and event ID rather than hiding lifecycle gaps behind the aggregate incomplete-coverage status.
 Malformed optional verification metadata is omitted without rejecting the event, its relationship, or other valid verification details.
 To record a later human change, emit a `human.corrected` event with a `corrects` relationship targeting the original `change.applied` event and set `attributes.correction.action` to `modified` or `reverted`.

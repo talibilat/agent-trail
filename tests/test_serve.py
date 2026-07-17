@@ -693,52 +693,70 @@ class ServeTests(unittest.TestCase):
             "new_start": 84,
             "new_count": 19,
         }
-        targets = [
-            event_data(
-                event_id="requirement-1",
-                kind="requirement.observed",
-                attributes={"requirement": {"id": "R3", "text": "Reject expiry."}},
-            ),
-            event_data(
-                event_id="context-1",
-                sequence=2,
-                kind="context.read",
-                attributes={"context": {"path": "src/auth/config.py"}},
-            ),
-            event_data(
-                event_id="tool-1",
-                sequence=3,
-                kind="tool.call.completed",
-                operation={"status": "ok", "name": "shell"},
-            ),
-            event_data(
-                event_id="verification-1",
-                sequence=4,
-                kind="verification.finished",
-                attributes={"verification": {"command": "pytest", "passed": True}},
-            ),
-            event_data(
-                event_id="change-1",
-                sequence=5,
-                kind="change.applied",
-                attributes={"change": hunk},
-                relationships=[
-                    {"type": "motivated_by", "event_id": "requirement-1"},
-                    {"type": "informed_by", "event_id": "context-1"},
-                    {"type": "preceded_by", "event_id": "tool-1"},
-                    {"type": "verified_by", "event_id": "verification-1"},
-                ],
-            ),
-        ]
-        store = RunStore.from_lines(json.dumps(event) + "\n" for event in targets)
+        for test_origin, expected in (
+            (None, {
+                "status": "incomplete",
+                "missing": [],
+                "unresolved_count": 0,
+                "unknown_test_origin_count": 1,
+            }),
+            ("pre_existing", {
+                "status": "complete",
+                "missing": [],
+                "unresolved_count": 0,
+            }),
+        ):
+            with self.subTest(test_origin=test_origin):
+                verification = {"command": "pytest", "passed": True}
+                if test_origin is not None:
+                    verification["test_origin"] = test_origin
+                targets = [
+                    event_data(
+                        event_id="requirement-1",
+                        kind="requirement.observed",
+                        attributes={"requirement": {
+                            "id": "R3",
+                            "text": "Reject expiry.",
+                        }},
+                    ),
+                    event_data(
+                        event_id="context-1",
+                        sequence=2,
+                        kind="context.read",
+                        attributes={"context": {"path": "src/auth/config.py"}},
+                    ),
+                    event_data(
+                        event_id="tool-1",
+                        sequence=3,
+                        kind="tool.call.completed",
+                        operation={"status": "ok", "name": "shell"},
+                    ),
+                    event_data(
+                        event_id="verification-1",
+                        sequence=4,
+                        kind="verification.finished",
+                        attributes={"verification": verification},
+                    ),
+                    event_data(
+                        event_id="change-1",
+                        sequence=5,
+                        kind="change.applied",
+                        attributes={"change": hunk},
+                        relationships=[
+                            {"type": "motivated_by", "event_id": "requirement-1"},
+                            {"type": "informed_by", "event_id": "context-1"},
+                            {"type": "preceded_by", "event_id": "tool-1"},
+                            {"type": "verified_by", "event_id": "verification-1"},
+                        ],
+                    ),
+                ]
+                store = RunStore.from_lines(
+                    json.dumps(event) + "\n" for event in targets
+                )
 
-        coverage = store.run_detail("trace-1")["evidence_map"]["changes"][0]["coverage"]
+                coverage = store.run_detail("trace-1")["evidence_map"]["changes"][0]["coverage"]
 
-        self.assertEqual(coverage, {
-            "status": "complete",
-            "missing": [],
-            "unresolved_count": 0,
-        })
+                self.assertEqual(coverage, expected)
 
     def test_change_hunks_include_later_human_corrections(self):
         hunk = {

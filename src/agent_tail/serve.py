@@ -944,11 +944,21 @@ def _evidence_coverage(
         if isinstance((verification := link.get("verification")), dict)
         and isinstance(verification.get("unresolved"), list)
     )
-    return {
-        "status": "incomplete" if missing or unresolved_count else "complete",
+    unknown_test_origin_count = sum(
+        "test_origin" not in verification
+        for link in links
+        if isinstance((verification := link.get("verification")), dict)
+    )
+    coverage = {
+        "status": "incomplete"
+        if missing or unresolved_count or unknown_test_origin_count
+        else "complete",
         "missing": missing,
         "unresolved_count": unresolved_count,
     }
+    if unknown_test_origin_count:
+        coverage["unknown_test_origin_count"] = unknown_test_origin_count
+    return coverage
 
 
 def _change_hunk(event: Event) -> dict[str, object] | None:
