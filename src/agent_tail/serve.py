@@ -917,8 +917,33 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 "links": source_links,
                 "unresolved": source_unresolved,
                 "corrections": corrections_by_change.setdefault(source.event_id, []),
+                "coverage": _evidence_coverage(source_links, source_unresolved),
             })
     return {"changes": changes, "links": links, "unresolved": unresolved}
+
+
+def _evidence_coverage(
+    links: list[dict[str, object]],
+    unresolved: list[dict[str, object]],
+) -> dict[str, object]:
+    present = {
+        "requirement": any("requirement" in link for link in links),
+        "context": any("context" in link or "compaction" in link for link in links),
+        "tool": any("tool" in link for link in links),
+        "verification": any("verification" in link for link in links),
+    }
+    missing = [kind for kind, is_present in present.items() if not is_present]
+    unresolved_count = len(unresolved) + sum(
+        len(compaction.get("unresolved", []))
+        for link in links
+        if isinstance((compaction := link.get("compaction")), dict)
+        and isinstance(compaction.get("unresolved"), list)
+    )
+    return {
+        "status": "incomplete" if missing or unresolved_count else "complete",
+        "missing": missing,
+        "unresolved_count": unresolved_count,
+    }
 
 
 def _change_hunk(event: Event) -> dict[str, object] | None:

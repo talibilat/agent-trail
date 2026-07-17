@@ -101,6 +101,8 @@ For repository changes, emit a `change.applied` event with a Git hunk locator un
 The four range values are non-negative integers and `symbol` is optional.
 Valid locators are exposed in event order under `evidence_map.changes`, together with the change event and actor IDs.
 Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
+It also includes factual `coverage` for requirement, context, tool, and verification evidence, plus an unresolved count that includes missing compacted-context sources.
+Coverage is `complete` only when all four core categories are linked and every direct or compacted reference resolves; otherwise `missing` identifies absent categories without assigning a subjective confidence score.
 The run-level arrays remain available for all relationships, including those originating from events without valid change locators.
 To identify a motivating requirement, emit a `requirement.observed` event with non-empty `attributes.requirement.id` and `attributes.requirement.text` strings, then reference it from the change event.
 Resolved links to that event include the validated ID and text under `requirement`, while malformed optional requirement metadata is omitted without hiding the relationship.

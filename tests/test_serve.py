@@ -162,6 +162,11 @@ class ServeTests(unittest.TestCase):
                 "links": [],
                 "unresolved": [],
                 "corrections": [],
+                "coverage": {
+                    "status": "incomplete",
+                    "missing": ["requirement", "context", "tool", "verification"],
+                    "unresolved_count": 0,
+                },
             },
             {
                 "event_id": "change-2",
@@ -174,6 +179,11 @@ class ServeTests(unittest.TestCase):
                 "links": [],
                 "unresolved": [],
                 "corrections": [],
+                "coverage": {
+                    "status": "incomplete",
+                    "missing": ["requirement", "context", "tool", "verification"],
+                    "unresolved_count": 0,
+                },
             },
         ])
         self.assertEqual(evidence["links"], [])
@@ -261,6 +271,11 @@ class ServeTests(unittest.TestCase):
             "links": [motivated_by],
             "unresolved": [verified_by_unresolved],
             "corrections": [],
+            "coverage": {
+                "status": "incomplete",
+                "missing": ["context", "tool", "verification"],
+                "unresolved_count": 1,
+            },
         }])
         self.assertEqual(after_verification["changes"], [{
             "event_id": "change-1",
@@ -279,6 +294,11 @@ class ServeTests(unittest.TestCase):
             }],
             "unresolved": [],
             "corrections": [],
+            "coverage": {
+                "status": "incomplete",
+                "missing": ["context", "tool"],
+                "unresolved_count": 0,
+            },
         }])
         self.assertEqual(
             before_verification["links"],
@@ -574,6 +594,69 @@ class ServeTests(unittest.TestCase):
                 "type": "summarizes",
                 "event_id": "missing-context",
             }],
+        })
+        self.assertEqual(
+            store.run_detail("trace-1")["evidence_map"]["changes"][0]["coverage"],
+            {
+                "status": "incomplete",
+                "missing": ["requirement", "tool", "verification"],
+                "unresolved_count": 1,
+            },
+        )
+
+    def test_change_hunk_coverage_reports_complete_core_evidence(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        targets = [
+            event_data(
+                event_id="requirement-1",
+                kind="requirement.observed",
+                attributes={"requirement": {"id": "R3", "text": "Reject expiry."}},
+            ),
+            event_data(
+                event_id="context-1",
+                sequence=2,
+                kind="context.read",
+                attributes={"context": {"path": "src/auth/config.py"}},
+            ),
+            event_data(
+                event_id="tool-1",
+                sequence=3,
+                kind="tool.call.completed",
+                operation={"status": "ok", "name": "shell"},
+            ),
+            event_data(
+                event_id="verification-1",
+                sequence=4,
+                kind="verification.finished",
+                attributes={"verification": {"command": "pytest", "passed": True}},
+            ),
+            event_data(
+                event_id="change-1",
+                sequence=5,
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[
+                    {"type": "motivated_by", "event_id": "requirement-1"},
+                    {"type": "informed_by", "event_id": "context-1"},
+                    {"type": "preceded_by", "event_id": "tool-1"},
+                    {"type": "verified_by", "event_id": "verification-1"},
+                ],
+            ),
+        ]
+        store = RunStore.from_lines(json.dumps(event) + "\n" for event in targets)
+
+        coverage = store.run_detail("trace-1")["evidence_map"]["changes"][0]["coverage"]
+
+        self.assertEqual(coverage, {
+            "status": "complete",
+            "missing": [],
+            "unresolved_count": 0,
         })
 
     def test_change_hunks_include_later_human_corrections(self):

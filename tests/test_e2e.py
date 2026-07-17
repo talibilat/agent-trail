@@ -181,7 +181,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("corrected by maintainer-2")
                 expect(evidence).to_contain_text("Missing evidence · reviewed_by")
                 expect(evidence).to_contain_text("missing-review")
-                expect(evidence).to_contain_text("1 unresolved evidence reference")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 2 unresolved references")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
                 expect(page.locator("#tool-command-injected")).to_have_count(0)

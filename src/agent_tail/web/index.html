@@ -329,6 +329,7 @@
     .correction-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
     .evidence-completeness { margin-top: 9px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--faint); }
     .evidence-completeness.incomplete { color: var(--warn); }
+    .evidence-missing { margin-top: 5px; font: 500 9.5px "IBM Plex Mono", monospace; color: var(--warn); }
     .usage-inline-row { display: flex; gap: 16px; }
     .usage-inline-row .k { font: 400 9px "IBM Plex Mono", monospace; color: var(--dim); }
     .usage-inline-row .v { font: 600 15px "IBM Plex Mono", monospace; }
@@ -1688,12 +1689,23 @@
           card.append(type, eventId);
           block.append(card);
         });
-        const unresolvedCount = unresolved.length;
+        const coverage = changeEvidence.coverage || {};
+        const missing = coverage.missing || [];
+        missing.forEach((kind) => {
+          const warning = document.createElement('div');
+          warning.className = 'evidence-missing';
+          warning.textContent = `Missing ${kind} evidence`;
+          block.append(warning);
+        });
+        const unresolvedCount = coverage.unresolved_count === undefined
+          ? unresolved.length
+          : coverage.unresolved_count;
         const completeness = document.createElement('div');
-        completeness.className = `evidence-completeness${unresolvedCount ? ' incomplete' : ''}`;
-        completeness.textContent = unresolvedCount
-          ? `${unresolvedCount} unresolved evidence reference${unresolvedCount === 1 ? '' : 's'}`
-          : 'All evidence references resolved';
+        const incomplete = missing.length || unresolvedCount;
+        completeness.className = `evidence-completeness${incomplete ? ' incomplete' : ''}`;
+        completeness.textContent = incomplete
+          ? `Evidence incomplete · ${missing.length} missing categor${missing.length === 1 ? 'y' : 'ies'} · ${unresolvedCount} unresolved reference${unresolvedCount === 1 ? '' : 's'}`
+          : 'Core evidence complete';
         block.append(completeness);
         wrap.append(block);
       }
