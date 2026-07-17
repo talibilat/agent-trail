@@ -92,9 +92,16 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="proposal-1",
+                    span_id="span-proposal",
+                    sequence=6,
+                    kind="change.proposed",
+                    actor={"id": "planner-1<img id=proposal-injected>"},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="change-1",
                     span_id="span-5",
-                    sequence=6,
+                    sequence=7,
                     kind="change.applied",
                     actor={"id": "implementer-1"},
                     attributes={"change": {
@@ -105,6 +112,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         "new_count": 19,
                     }},
                     relationships=[
+                        {"type": "applies", "event_id": "proposal-1"},
                         {"type": "motivated_by", "event_id": "requirement-1"},
                         {"type": "informed_by", "event_id": "context-1"},
                         {"type": "informed_by", "event_id": "compaction-1"},
@@ -116,7 +124,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 json.dumps(event_data(
                     event_id="correction-1",
                     span_id="span-6",
-                    sequence=7,
+                    sequence=8,
                     kind="human.corrected",
                     actor={"id": "maintainer-1<img id=correction-injected>"},
                     attributes={"correction": {"action": "modified"}},
@@ -125,7 +133,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 json.dumps(event_data(
                     event_id="correction-2",
                     span_id="span-7",
-                    sequence=8,
+                    sequence=9,
                     kind="human.corrected",
                     actor={"id": "maintainer-2"},
                     attributes={"correction": {"action": "reverted"}},
@@ -154,6 +162,8 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("CHANGE EVIDENCE")
                 expect(evidence).to_contain_text("src/auth/session.py:84-102")
                 expect(evidence).to_contain_text("implementer-1")
+                expect(evidence).to_contain_text("Change proposed")
+                expect(evidence).to_contain_text("proposed by planner-1")
                 expect(evidence).to_contain_text("R3")
                 expect(evidence).to_contain_text("Expired sessions must be rejected.")
                 expect(evidence).to_contain_text("docs/session-lifecycle.md")
@@ -188,6 +198,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#tool-result-injected")).to_have_count(0)
                 expect(page.locator("#verification-injected")).to_have_count(0)
                 expect(page.locator("#correction-injected")).to_have_count(0)
+                expect(page.locator("#proposal-injected")).to_have_count(0)
                 expect(page.locator("#compaction-missing-injected")).to_have_count(0)
                 expect(page.locator("#evidence-missing-injected")).to_have_count(0)
                 browser.close()

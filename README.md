@@ -107,6 +107,7 @@ The run-level arrays remain available for all relationships, including those ori
 To identify a motivating requirement, emit a `requirement.observed` event with non-empty `attributes.requirement.id` and `attributes.requirement.text` strings, then reference it from the change event.
 Resolved links to that event include the validated ID and text under `requirement`, while malformed optional requirement metadata is omitted without hiding the relationship.
 The browser event inspector presents this motivating requirement with the selected change hunk and applying agent.
+To distinguish the agent that made the change decision from the agent that applied it, reference the relevant `change.proposed` event from `change.applied`; the browser presents both actors separately on the selected hunk.
 Each unresolved hunk relationship is identified by its relationship type and target event ID, followed by an aggregate unresolved-reference status.
 To identify repository or documentation evidence, emit a `context.read` event with a non-empty `attributes.context.path`, optional non-negative integer `line_start` and `line_end` fields, and an optional string `symbol`, then reference it from the change event.
 Resolved links to that event include the validated locator under `context`; malformed optional locator fields are omitted without hiding the relationship.

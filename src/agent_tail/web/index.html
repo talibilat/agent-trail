@@ -300,6 +300,9 @@
     .requirement-card { margin-top: 10px; padding: 10px; border: 1px solid rgba(122,162,255,.35); border-radius: 8px; background: rgba(122,162,255,.08); }
     .requirement-card .id { font: 600 10px "IBM Plex Mono", monospace; color: var(--accent); }
     .requirement-card .text { margin-top: 4px; font: 400 11.5px/1.5 "IBM Plex Sans", sans-serif; color: var(--text); }
+    .proposal-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--orch); background: rgba(177,140,255,.06); }
+    .proposal-card .title { font: 600 10px "IBM Plex Mono", monospace; color: var(--orch); }
+    .proposal-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
     .context-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--run); background: rgba(51,201,255,.06); }
     .context-card .path { font: 600 10.5px "IBM Plex Mono", monospace; color: var(--run); word-break: break-word; }
     .context-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
@@ -1526,6 +1529,19 @@
         actor.className = 'actor';
         actor.textContent = `applied by ${changeEvidence.actor_id}`;
         block.append(locator, actor);
+
+        (changeEvidence.links || []).filter((link) => link.target_kind === 'change.proposed').forEach((link) => {
+          const card = document.createElement('div');
+          card.className = 'proposal-card';
+          const title = document.createElement('div');
+          title.className = 'title';
+          title.textContent = 'Change proposed';
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          meta.textContent = `proposed by ${link.target_actor_id}`;
+          card.append(title, meta);
+          block.append(card);
+        });
 
         (changeEvidence.links || []).filter((link) => link.requirement).forEach((link) => {
           const card = document.createElement('div');
