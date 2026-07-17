@@ -928,7 +928,18 @@ def _evidence_coverage(
 ) -> dict[str, object]:
     present = {
         "requirement": any("requirement" in link for link in links),
-        "context": any("context" in link or "compaction" in link for link in links),
+        "context": any(
+            "context" in link
+            or (
+                isinstance((compaction := link.get("compaction")), dict)
+                and isinstance((sources := compaction.get("sources")), list)
+                and any(
+                    isinstance(source, dict) and "context" in source
+                    for source in sources
+                )
+            )
+            for link in links
+        ),
         "tool": any("tool" in link for link in links),
         "verification": any("verification" in link for link in links),
         "decision": any(link.get("target_kind") == "change.proposed" for link in links),
