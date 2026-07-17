@@ -687,6 +687,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 json.dumps(event_data(
                     event_id="requirement-invalid-detail",
                     span_id="span-requirement-invalid-detail",
+                    emitter_id="invalid-requirement-worker",
                     sequence=24,
                     kind="requirement.observed",
                     attributes={"requirement": {
