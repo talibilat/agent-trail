@@ -621,6 +621,69 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 1,
         })
 
+    def test_tool_after_decision_is_incomplete_evidence(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="proposal-1",
+                timestamp="2026-07-13T11:01:00Z",
+                kind="change.proposed",
+                actor={"id": "planner-1"},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="tool-same-time",
+                span_id="span-current-tool",
+                sequence=2,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="tool.call.completed",
+                attributes={"tool": {"command": "git status --short"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="tool-after-decision",
+                span_id="span-late-tool",
+                sequence=3,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="tool.call.completed",
+                attributes={"tool": {"command": "git diff --check"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                span_id="span-change",
+                sequence=4,
+                timestamp="2026-07-13T11:03:00Z",
+                kind="change.applied",
+                attributes={"change": {
+                    "path": "src/auth/session.py",
+                    "old_start": 84,
+                    "old_count": 18,
+                    "new_start": 84,
+                    "new_count": 19,
+                }},
+                relationships=[
+                    {"type": "applies", "event_id": "proposal-1"},
+                    {"type": "preceded_by", "event_id": "tool-same-time"},
+                    {"type": "preceded_by", "event_id": "tool-after-decision"},
+                ],
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(change["unresolved"], [{
+            "type": "preceded_by",
+            "source_event_id": "change-1",
+            "target_event_id": "tool-after-decision",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+            "target_kind": "tool.call.completed",
+            "reason": "tool_follows_decision",
+            "decision_event_id": "proposal-1",
+        }])
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "context", "verification"],
+            "unresolved_count": 1,
+        })
+
     def test_requirement_observed_after_change_cannot_be_motivation(self):
         store = RunStore.from_lines([
             json.dumps(event_data(

@@ -1294,6 +1294,15 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="tool-after-decision",
+                    span_id="span-late-tool",
+                    sequence=6,
+                    timestamp="2026-07-13T11:02:00Z",
+                    kind="tool.call.completed",
+                    actor={"id": "late-runner"},
+                    attributes={"tool": {"command": "git diff --check"}},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="compaction-before-decision",
                     span_id="span-early-compaction",
                     sequence=5,
@@ -1332,6 +1341,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "informed_by", "event_id": "context-after-decision"},
                         {"type": "informed_by", "event_id": "compaction-before-decision"},
                         {"type": "informed_by", "event_id": "compaction-after-decision"},
+                        {"type": "preceded_by", "event_id": "tool-after-decision"},
                     ],
                 )) + "\n",
             )), encoding="utf-8")
@@ -1379,12 +1389,21 @@ class ServeEndToEndTests(unittest.TestCase):
                     "Requirement observed after decision · motivated_by"
                 )
                 expect(late_requirement_diagnostic).to_contain_text("requirement.observed")
+                late_tool = evidence.locator(".tool-card").filter(has_text="git diff --check")
+                expect(late_tool).to_contain_text("late-runner")
+                late_tool_diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="tool-after-decision"
+                )
+                expect(late_tool_diagnostic).to_contain_text(
+                    "Tool occurred after decision · preceded_by"
+                )
+                expect(late_tool_diagnostic).to_contain_text("tool.call.completed")
                 diagnostic = evidence.locator(".unresolved-evidence").filter(
                     has_text="compaction-after-decision"
                 )
                 expect(diagnostic).to_contain_text("Context compacted after decision · informed_by")
                 expect(diagnostic).to_contain_text("context.compacted")
-                expect(evidence).to_contain_text("3 unresolved references")
+                expect(evidence).to_contain_text("4 unresolved references")
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):

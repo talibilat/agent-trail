@@ -1988,6 +1988,8 @@
                           ? `Invalid tool exit code · ${link.type}`
                         : link.reason === 'tool_not_preceding_change'
                           ? `Tool occurred after change · ${link.type}`
+                        : link.reason === 'tool_follows_decision'
+                          ? `Tool occurred after decision · ${link.type}`
                           : link.reason === 'proposal_not_preceding_change'
                             ? `Change proposed after application · ${link.type}`
                           : link.reason === 'invalid_decision_actor'
