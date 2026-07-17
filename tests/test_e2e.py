@@ -204,6 +204,16 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[{"type": "corrects", "event_id": "change-1"}],
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="correction-unknown-actor",
+                    span_id="span-correction-unknown-actor",
+                    emitter_id="unknown-correction-worker",
+                    sequence=1,
+                    kind="human.corrected",
+                    actor={"id": " \t"},
+                    attributes={"correction": {"action": "modified"}},
+                    relationships=[{"type": "corrects", "event_id": "change-1"}],
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="unrelated-proposal",
                     span_id="span-unrelated-proposal",
                     sequence=12,
@@ -391,6 +401,9 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("corrected by maintainer-1")
                 expect(evidence).to_contain_text("Human reverted this change")
                 expect(evidence).to_contain_text("corrected by maintainer-2")
+                unknown_correction = evidence.locator(".correction-card").filter(has_text="correcting actor unknown")
+                expect(unknown_correction).to_contain_text("Human modified this change")
+                expect(unknown_correction).not_to_contain_text("corrected by")
                 expect(evidence).not_to_contain_text("unrelated-maintainer")
                 generic_diagnostic = evidence.locator(".unresolved-evidence").filter(has_text="reviewed_by")
                 expect(generic_diagnostic).to_contain_text("Missing relationship target · reviewed_by")
