@@ -1607,7 +1607,7 @@
           card.className = 'requirement-card';
           const requirementId = document.createElement('div');
           requirementId.className = 'id';
-          requirementId.textContent = `Requirement ${link.requirement.id}`;
+          requirementId.textContent = `Requirement ${link.requirement.id} · event ${link.target_event_id}`;
           const requirementText = document.createElement('div');
           requirementText.className = 'text';
           requirementText.textContent = link.requirement.text;
