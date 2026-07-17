@@ -104,7 +104,7 @@ Each change record groups the resolved and unresolved relationships originating 
 It also includes factual `coverage` for requirement, context, tool, verification, and decision evidence, plus an unresolved count that includes missing compacted-context sources and verification-start events.
 A context category is present for direct context only when an `informed_by` relationship resolves to a `context.read` event with a validated locator; other links to context reads remain visible but do not identify what informed the applied hunk.
 A context locator among a compaction's resolved `summarizes` sources also satisfies the category when the change references that compaction with `informed_by`; unrelated outer or source links and empty compactions do not.
-A tool category is present only when a linked tool call identifies a non-empty command or result; operation identity and status alone do not satisfy it.
+A tool category is present only when a `preceded_by` relationship resolves to a tool call with a non-empty command or result; other links to tool calls remain visible, while operation identity and status alone do not satisfy it.
 A verification category is present only when a linked finished verification identifies a non-empty command, either directly or through a resolved start event; an outcome or bare start event alone does not satisfy it.
 A requirement category is present only when a `motivated_by` relationship resolves to a `requirement.observed` event with validated requirement details; other links to requirements remain visible but do not identify the motivation behind the applied hunk.
 A decision category is present only when an `applies` relationship resolves to a `change.proposed` event; other links to proposals remain visible but do not identify the decision behind the applied hunk.
@@ -119,7 +119,7 @@ Each unresolved hunk relationship is identified by its relationship type and tar
 To identify repository or documentation evidence, emit a `context.read` event with a non-empty `attributes.context.path`, optional non-negative integer `line_start` and `line_end` fields, and an optional string `symbol`, then reference it from the change event with an `informed_by` relationship.
 Resolved links to that event include the validated locator under `context`; malformed optional locator fields are omitted without hiding the relationship.
 The browser event inspector presents each context path, line range, symbol, and reading actor linked by `informed_by` directly on the selected change hunk; it does not attribute unrelated context links as informing evidence.
-To expose commands and tool results that preceded a change, reference the relevant `tool.call.*` events from the change event.
+To expose commands and tool results that preceded a change, reference the relevant `tool.call.*` events from the change event with a `preceded_by` relationship.
 Resolved links to tool calls include the required operation status and optional non-empty operation name under `tool`.
 Producers can add non-empty `attributes.tool.command` and `attributes.tool.result` strings and an optional integer `attributes.tool.exit_code`; malformed optional fields are omitted without hiding the relationship or operation details.
 The browser event inspector presents each linked tool operation, command, result, actor, status, and optional exit code directly on the selected change hunk.

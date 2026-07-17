@@ -955,7 +955,8 @@ def _evidence_coverage(
             for link in links
         ),
         "tool": any(
-            isinstance((tool := link.get("tool")), dict)
+            link.get("type") == "preceded_by"
+            and isinstance((tool := link.get("tool")), dict)
             and ("command" in tool or "result" in tool)
             for link in links
         ),
