@@ -684,6 +684,75 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 1,
         })
 
+    def test_requirement_observed_after_decision_is_incomplete_evidence(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="proposal-1",
+                timestamp="2026-07-13T11:01:00Z",
+                kind="change.proposed",
+                actor={"id": "planner-1"},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="requirement-same-time",
+                span_id="span-current-requirement",
+                sequence=2,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="requirement.observed",
+                attributes={"requirement": {
+                    "id": "R-current",
+                    "text": "Requirement observed at decision time.",
+                }},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="requirement-after-decision",
+                span_id="span-late-requirement",
+                sequence=3,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="requirement.observed",
+                attributes={"requirement": {
+                    "id": "R-late",
+                    "text": "Requirement observed after the decision.",
+                }},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                span_id="span-change",
+                sequence=4,
+                timestamp="2026-07-13T11:03:00Z",
+                kind="change.applied",
+                attributes={"change": {
+                    "path": "src/auth/session.py",
+                    "old_start": 84,
+                    "old_count": 18,
+                    "new_start": 84,
+                    "new_count": 19,
+                }},
+                relationships=[
+                    {"type": "applies", "event_id": "proposal-1"},
+                    {"type": "motivated_by", "event_id": "requirement-same-time"},
+                    {"type": "motivated_by", "event_id": "requirement-after-decision"},
+                ],
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(change["unresolved"], [{
+            "type": "motivated_by",
+            "source_event_id": "change-1",
+            "target_event_id": "requirement-after-decision",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+            "target_kind": "requirement.observed",
+            "reason": "requirement_follows_decision",
+            "decision_event_id": "proposal-1",
+        }])
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["context", "tool", "verification"],
+            "unresolved_count": 1,
+        })
+
     def test_context_read_after_change_cannot_be_informing_evidence(self):
         store = RunStore.from_lines([
             json.dumps(event_data(

@@ -1282,6 +1282,18 @@ class ServeEndToEndTests(unittest.TestCase):
                     attributes={"context": {"path": "docs/late.md"}},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="requirement-after-decision",
+                    span_id="span-late-requirement",
+                    sequence=5,
+                    timestamp="2026-07-13T11:02:00Z",
+                    kind="requirement.observed",
+                    actor={"id": "late-observer"},
+                    attributes={"requirement": {
+                        "id": "R-late",
+                        "text": "Requirement observed after the decision.",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="compaction-before-decision",
                     span_id="span-early-compaction",
                     sequence=5,
@@ -1315,6 +1327,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                     relationships=[
                         {"type": "applies", "event_id": "proposal-1"},
+                        {"type": "motivated_by", "event_id": "requirement-after-decision"},
                         {"type": "informed_by", "event_id": "context-same-time"},
                         {"type": "informed_by", "event_id": "context-after-decision"},
                         {"type": "informed_by", "event_id": "compaction-before-decision"},
@@ -1357,12 +1370,21 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(late_context_diagnostic).to_contain_text("Context read after decision · informed_by")
                 expect(late_context_diagnostic).to_contain_text("context.read")
+                late_requirement = evidence.locator(".requirement-card").filter(has_text="R-late")
+                expect(late_requirement).to_contain_text("Requirement observed after the decision.")
+                late_requirement_diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="requirement-after-decision"
+                )
+                expect(late_requirement_diagnostic).to_contain_text(
+                    "Requirement observed after decision · motivated_by"
+                )
+                expect(late_requirement_diagnostic).to_contain_text("requirement.observed")
                 diagnostic = evidence.locator(".unresolved-evidence").filter(
                     has_text="compaction-after-decision"
                 )
                 expect(diagnostic).to_contain_text("Context compacted after decision · informed_by")
                 expect(diagnostic).to_contain_text("context.compacted")
-                expect(evidence).to_contain_text("2 unresolved references")
+                expect(evidence).to_contain_text("3 unresolved references")
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):

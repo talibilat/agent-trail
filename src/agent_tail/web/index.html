@@ -1952,6 +1952,8 @@
                   ? `Invalid verification test provenance · ${link.type}`
                 : link.reason === 'requirement_not_preceding_change'
                   ? `Requirement observed after change · ${link.type}`
+                : link.reason === 'requirement_follows_decision'
+                  ? `Requirement observed after decision · ${link.type}`
                 : link.reason === 'invalid_requirement_detail'
                 ? `Invalid requirement details · ${link.type}`
                  : link.reason === 'context_not_preceding_change'
