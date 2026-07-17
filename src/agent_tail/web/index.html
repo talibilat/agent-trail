@@ -1936,13 +1936,15 @@
                           ? `Invalid tool operation name · ${link.type}`
                         : link.reason === 'invalid_tool_exit_code'
                           ? `Invalid tool exit code · ${link.type}`
-                      : link.reason === 'invalid_decision_actor'
-                        ? `Invalid decision actor · ${link.type}`
-                        : link.target_kind
-                          ? `Invalid evidence target · ${link.type}`
-                          : evidenceRelationshipTypes.has(link.type)
-                            ? `Missing evidence target · ${link.type}`
-                            : `Missing relationship target · ${link.type}`;
+                        : link.reason === 'tool_not_preceding_change'
+                          ? `Tool occurred after change · ${link.type}`
+                          : link.reason === 'invalid_decision_actor'
+                            ? `Invalid decision actor · ${link.type}`
+                            : link.target_kind
+                              ? `Invalid evidence target · ${link.type}`
+                              : evidenceRelationshipTypes.has(link.type)
+                                ? `Missing evidence target · ${link.type}`
+                                : `Missing relationship target · ${link.type}`;
           const eventId = document.createElement('div');
           eventId.className = 'event-id';
           eventId.textContent = link.target_kind

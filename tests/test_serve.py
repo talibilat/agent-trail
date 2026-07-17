@@ -575,6 +575,52 @@ class ServeTests(unittest.TestCase):
             "integrity_issue_count": 1,
         })
 
+    def test_tool_after_change_cannot_be_masked_as_preceding_evidence(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="tool-after-change",
+                timestamp="2026-07-13T11:03:00Z",
+                kind="tool.call.completed",
+                attributes={"tool": {"command": "git diff --check"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                span_id="span-2",
+                sequence=2,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="change.applied",
+                attributes={"change": {
+                    "path": "src/auth/session.py",
+                    "old_start": 84,
+                    "old_count": 18,
+                    "new_start": 84,
+                    "new_count": 19,
+                }},
+                relationships=[{
+                    "type": "preceded_by",
+                    "event_id": "tool-after-change",
+                }],
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(change["links"][0]["tool"]["command"], "git diff --check")
+        self.assertEqual(change["unresolved"], [{
+            "type": "preceded_by",
+            "source_event_id": "change-1",
+            "target_event_id": "tool-after-change",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+            "target_kind": "tool.call.completed",
+            "reason": "tool_not_preceding_change",
+        }])
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "context", "verification", "decision"],
+            "unresolved_count": 1,
+        })
+
     def test_change_hunks_group_their_relationship_evidence(self):
         hunk = {
             "path": "src/auth/session.py",

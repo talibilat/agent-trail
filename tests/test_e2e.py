@@ -294,6 +294,15 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="tool-after-change",
+                    span_id="span-tool-after-change",
+                    sequence=10,
+                    timestamp="2026-07-13T11:03:00Z",
+                    kind="tool.call.completed",
+                    operation={"status": "ok", "name": "shell"},
+                    attributes={"tool": {"command": "git diff --stat"}},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="proposal-1",
                     span_id="span-proposal",
                     sequence=8,
@@ -347,6 +356,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "preceded_by", "event_id": "tool-invalid-operation-name"},
                         {"type": "preceded_by", "event_id": "tool-invalid-command"},
                         {"type": "preceded_by", "event_id": "tool-invalid-result"},
+                        {"type": "preceded_by", "event_id": "tool-after-change"},
                         {"type": "references", "event_id": "unrelated-tool"},
                         {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-1"},
@@ -965,7 +975,13 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_tool_result).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("git status --ignored")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 29 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
+                later_tool = evidence.locator(".unresolved-evidence").filter(
+                    has_text="tool-after-change"
+                )
+                expect(later_tool).to_contain_text("Tool occurred after change · preceded_by")
+                expect(later_tool).to_contain_text("tool.call.completed")
+                expect(evidence).to_contain_text("git diff --stat")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 30 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
