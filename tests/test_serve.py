@@ -1192,6 +1192,52 @@ class ServeTests(unittest.TestCase):
                 self.assertEqual(change["coverage"]["status"], "incomplete")
                 self.assertEqual(change["coverage"]["unresolved_count"], 1)
 
+    def test_blank_tool_operation_status_is_a_diagnostic(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[{
+                    "type": "preceded_by",
+                    "event_id": "tool-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="tool-1",
+                span_id="span-2",
+                sequence=2,
+                kind="tool.call.completed",
+                operation={"status": " \t\n", "name": "shell"},
+                attributes={"tool": {"command": "git diff --check"}},
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(change["links"][0]["tool"], {
+            "name": "shell",
+            "command": "git diff --check",
+        })
+        self.assertEqual(change["unresolved"], [{
+            "type": "preceded_by",
+            "source_event_id": "change-1",
+            "target_event_id": "tool-1",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+            "target_kind": "tool.call.completed",
+            "reason": "invalid_tool_operation_status",
+        }])
+        self.assertEqual(change["coverage"]["status"], "incomplete")
+        self.assertEqual(change["coverage"]["unresolved_count"], 1)
+
     def test_malformed_tool_exit_codes_are_diagnostics(self):
         hunk = {
             "path": "src/auth/session.py",
