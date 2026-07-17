@@ -1849,7 +1849,9 @@
                     ? `Invalid compaction details · ${link.type}`
                     : link.reason === 'invalid_tool_detail'
                       ? `Invalid tool details · ${link.type}`
-                      : link.reason === 'invalid_tool_operation_status'
+                      : link.reason === 'invalid_tool_command'
+                        ? `Invalid tool command · ${link.type}`
+                        : link.reason === 'invalid_tool_operation_status'
                         ? `Invalid tool operation status · ${link.type}`
                         : link.reason === 'invalid_tool_operation_name'
                           ? `Invalid tool operation name · ${link.type}`
