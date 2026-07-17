@@ -76,6 +76,8 @@ Every event must be a JSON object containing these fields:
 - `operation`: an object with a string `status` and optional `name`.
 
 `parent_span_id` is optional and links an event to a parent span in the same trace.
+`relationships` is an optional array of event references with string `type` and `event_id` fields.
+Relationship types are extensible, and referenced events may arrive later in a stream.
 Unknown kinds, fields, and supported minor schema versions are retained so the canonical envelope can evolve.
 
 Harnesses other than the v1 runtime need an adapter that emits this envelope.

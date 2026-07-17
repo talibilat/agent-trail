@@ -55,6 +55,21 @@ class ServeTests(unittest.TestCase):
         self.assertNotIn(secret, encoded)
         self.assertNotIn("payload-secret", encoded)
 
+    def test_store_exposes_relationships_in_snapshots_and_live_events(self):
+        store = RunStore()
+        store.feed_line(json.dumps(event_data(relationships=[{
+            "type": "motivated_by",
+            "event_id": "requirement-1",
+        }])) + "\n")
+
+        detail = store.run_detail("trace-1")
+        update = next(store.stream_updates(after=0))
+        expected = [{"type": "motivated_by", "event_id": "requirement-1"}]
+
+        self.assertEqual(detail["events"][0]["relationships"], expected)
+        self.assertEqual(update["type"], "event")
+        self.assertEqual(update["data"]["relationships"], expected)
+
     def test_http_server_serves_offline_shell_and_versioned_api(self):
         store = RunStore.from_lines([
             json.dumps(event_data(trace_id="trace/1", kind="<script>kind</script>")) + "\n"

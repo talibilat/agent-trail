@@ -414,6 +414,10 @@ class RunStore:
             "kind": event.kind,
             "actor": event.actor,
             "operation": event.operation,
+            "relationships": [
+                {"type": relationship.type, "event_id": relationship.event_id}
+                for relationship in event.relationships
+            ],
             "attributes": _attributes(event),
             "usage": _usage_summary((event,)),
             "payload": _payload_preview(event),
