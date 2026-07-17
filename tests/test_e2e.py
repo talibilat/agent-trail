@@ -308,6 +308,21 @@ class ServeEndToEndTests(unittest.TestCase):
                     actor={"id": "invalid-correction-target"},
                     attributes={"context": {"path": "docs/not-a-change.md"}},
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="anonymous-change",
+                    span_id="span-anonymous-change",
+                    emitter_id="anonymous-change-worker",
+                    sequence=1,
+                    kind="change.applied",
+                    actor={"id": " \t"},
+                    attributes={"change": {
+                        "path": "src/anonymous.py",
+                        "old_start": 1,
+                        "old_count": 1,
+                        "new_start": 1,
+                        "new_count": 1,
+                    }},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -432,6 +447,16 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#unrelated-proposal-injected")).to_have_count(0)
                 expect(page.locator("#compaction-missing-injected")).to_have_count(0)
                 expect(page.locator("#evidence-missing-injected")).to_have_count(0)
+                page.evaluate("""() => {
+                  [...document.querySelectorAll('.node-wrap')]
+                    .find((node) => !node.querySelector('.node-label .id').textContent.trim()).click();
+                  [...document.querySelectorAll('.event-row')]
+                    .find((row) => row.textContent.includes('change.applied')).click();
+                }""")
+                anonymous_evidence = page.locator(".change-evidence")
+                expect(anonymous_evidence).to_contain_text("src/anonymous.py:1-1")
+                expect(anonymous_evidence).to_contain_text("applying actor unknown")
+                expect(anonymous_evidence).not_to_contain_text("applied by")
                 page.locator(".back-btn").click()
                 page.evaluate("""() => {
                   [...document.querySelectorAll('.node-wrap')]

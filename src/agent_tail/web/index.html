@@ -1572,7 +1572,9 @@
         }
         const actor = document.createElement('div');
         actor.className = 'actor';
-        actor.textContent = `applied by ${changeEvidence.actor_id}`;
+        actor.textContent = typeof changeEvidence.actor_id === 'string' && changeEvidence.actor_id.trim()
+          ? `applied by ${changeEvidence.actor_id}`
+          : 'applying actor unknown';
         block.append(actor);
 
         (changeEvidence.links || []).filter(
