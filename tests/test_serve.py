@@ -1431,6 +1431,17 @@ class ServeTests(unittest.TestCase):
 
         change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
+        chronology_by_event = {
+            link["target_event_id"]: link["chronology"]
+            for link in change["links"]
+            if link["target_kind"] == "context.compacted"
+        }
+        self.assertEqual(chronology_by_event, {
+            "compaction-same-time": "after_decision",
+            "compaction-after-decision": "after_decision",
+            "compaction-clock-skew": "after_decision",
+            "compaction-other-emitter": "undetermined",
+        })
         self.assertEqual(change["unresolved"], [
             {
                 "type": "informed_by",

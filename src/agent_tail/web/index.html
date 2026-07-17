@@ -1721,6 +1721,8 @@
             ? 'Context compacted after change'
             : compactionOccurredAfterDecision
               ? 'Context compacted after decision'
+              : link.chronology === 'undetermined'
+                ? 'Compaction chronology undetermined'
               : hasValidDecision
                 ? 'Context compacted before decision'
                 : 'Context compacted before change';

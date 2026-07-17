@@ -1378,7 +1378,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 evidence = page.locator(".change-evidence")
                 early = evidence.locator(".compaction-card").filter(has_text="early-summarizer")
                 late = evidence.locator(".compaction-card").filter(has_text="late-summarizer")
-                expect(early).to_contain_text("Context compacted before decision")
+                expect(early).to_contain_text("Compaction chronology undetermined")
                 expect(late).to_contain_text("Context compacted after decision")
                 expect(evidence.locator(".context-card").filter(has_text="docs/current.md")).to_be_visible()
                 expect(evidence.locator(".context-card").filter(has_text="docs/late.md")).to_be_visible()
