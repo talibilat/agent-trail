@@ -1143,7 +1143,7 @@ def _context_read_detail(event: Event) -> dict[str, object] | None:
         if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
             detail[key] = value
     symbol = context.get("symbol")
-    if isinstance(symbol, str):
+    if isinstance(symbol, str) and symbol.strip():
         detail["symbol"] = symbol
     return detail
 

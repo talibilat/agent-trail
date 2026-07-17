@@ -570,34 +570,36 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(evidence["changes"][0]["links"], [expected_link])
         self.assertEqual(evidence["links"], [expected_link])
 
-    def test_evidence_omits_malformed_optional_context_read_fields(self):
-        store = RunStore.from_lines([
-            json.dumps(event_data(
-                event_id="change-1",
-                kind="change.applied",
-                relationships=[{
-                    "type": "informed_by",
-                    "event_id": "context-1",
-                }],
-            )) + "\n",
-            json.dumps(event_data(
-                event_id="context-1",
-                span_id="span-2",
-                sequence=2,
-                kind="context.read",
-                attributes={"context": {
-                    "path": "src/auth/config.py",
-                    "line_start": True,
-                    "line_end": -1,
-                    "symbol": 17,
-                }},
-            )) + "\n",
-        ])
+    def test_evidence_omits_malformed_or_blank_optional_context_read_fields(self):
+        for symbol in (17, " \t\n"):
+            with self.subTest(symbol=symbol):
+                store = RunStore.from_lines([
+                    json.dumps(event_data(
+                        event_id="change-1",
+                        kind="change.applied",
+                        relationships=[{
+                            "type": "informed_by",
+                            "event_id": "context-1",
+                        }],
+                    )) + "\n",
+                    json.dumps(event_data(
+                        event_id="context-1",
+                        span_id="span-2",
+                        sequence=2,
+                        kind="context.read",
+                        attributes={"context": {
+                            "path": "src/auth/config.py",
+                            "line_start": True,
+                            "line_end": -1,
+                            "symbol": symbol,
+                        }},
+                    )) + "\n",
+                ])
 
-        link = store.run_detail("trace-1")["evidence_map"]["links"][0]
+                link = store.run_detail("trace-1")["evidence_map"]["links"][0]
 
-        self.assertEqual(link["context"], {"path": "src/auth/config.py"})
-        self.assertEqual(link["target_kind"], "context.read")
+                self.assertEqual(link["context"], {"path": "src/auth/config.py"})
+                self.assertEqual(link["target_kind"], "context.read")
 
     def test_evidence_ignores_blank_context_read_paths(self):
         hunk = {
