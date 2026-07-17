@@ -920,6 +920,8 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                         and target.kind != "verification.finished"
                         or relationship.type == "motivated_by"
                         and target.kind != "requirement.observed"
+                        or relationship.type == "informed_by"
+                        and target.kind not in {"context.read", "context.compacted"}
                     )
                 ):
                     invalid = {**item, "target_kind": target.kind}

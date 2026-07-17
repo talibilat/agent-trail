@@ -1251,6 +1251,48 @@ class ServeTests(unittest.TestCase):
         }])
         self.assertEqual(change["links"][0]["target_event_id"], "wrong-requirement-1")
 
+    def test_wrong_kind_context_target_is_an_unresolved_diagnostic(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="wrong-context-1",
+                kind="tool.call.completed",
+                attributes={"tool": {"command": "pytest"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                sequence=2,
+                kind="change.applied",
+                attributes={"change": {
+                    "path": "src/auth/session.py",
+                    "old_start": 84,
+                    "old_count": 18,
+                    "new_start": 84,
+                    "new_count": 19,
+                }},
+                relationships=[{
+                    "type": "informed_by",
+                    "event_id": "wrong-context-1",
+                }],
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "context", "tool", "verification", "decision"],
+            "unresolved_count": 1,
+        })
+        self.assertEqual(change["unresolved"], [{
+            "type": "informed_by",
+            "source_event_id": "change-1",
+            "target_event_id": "wrong-context-1",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+            "target_kind": "tool.call.completed",
+        }])
+        self.assertEqual(change["links"][0]["target_event_id"], "wrong-context-1")
+
     def test_wrong_kind_verification_target_reduces_complete_coverage(self):
         hunk = {
             "path": "src/auth/session.py",
