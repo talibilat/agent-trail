@@ -203,6 +203,20 @@ class ServeTests(unittest.TestCase):
                 kind="change.applied",
                 attributes={"change": {**valid_hunk, "path": " \t\n"}},
             )) + "\n",
+            json.dumps(event_data(
+                event_id="invalid-zero-new-start-change",
+                span_id="span-6",
+                sequence=6,
+                kind="change.applied",
+                attributes={"change": {**valid_hunk, "new_start": 0}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="invalid-zero-old-start-change",
+                span_id="span-7",
+                sequence=7,
+                kind="change.applied",
+                attributes={"change": {**valid_hunk, "old_start": 0}},
+            )) + "\n",
         ])
 
         evidence = store.run_detail("trace-1")["evidence_map"]

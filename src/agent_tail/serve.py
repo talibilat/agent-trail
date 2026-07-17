@@ -1055,6 +1055,9 @@ def _change_hunk(event: Event) -> dict[str, object] | None:
         or isinstance(change.get(key), bool)
         or change[key] < 0
         for key in range_keys
+    ) or any(
+        change[start_key] == 0 and change[count_key] > 0
+        for start_key, count_key in (("old_start", "old_count"), ("new_start", "new_count"))
     ):
         return None
     hunk = {"path": path, **{key: change[key] for key in range_keys}}
