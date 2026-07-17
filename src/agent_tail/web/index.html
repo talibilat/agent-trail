@@ -1745,6 +1745,9 @@
               ? `compacted by ${link.target_actor_id}`
               : 'compacting actor unknown'
           );
+          if (link.decision_event_id) {
+            compactionDetails.push(`decision event ${link.decision_event_id}`);
+          }
           meta.textContent = compactionDetails.join(' · ');
           card.append(title, meta);
           (link.compaction.sources || []).filter(

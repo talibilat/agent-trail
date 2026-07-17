@@ -1491,6 +1491,19 @@ class ServeTests(unittest.TestCase):
             "compaction-clock-skew": "after_decision",
             "compaction-other-emitter": "undetermined",
         })
+        self.assertEqual(
+            {
+                link["target_event_id"]: link["decision_event_id"]
+                for link in change["links"]
+                if link["target_kind"] == "context.compacted"
+            },
+            {
+                "compaction-same-time": "proposal-1",
+                "compaction-after-decision": "proposal-1",
+                "compaction-clock-skew": "proposal-1",
+                "compaction-other-emitter": "proposal-1",
+            },
+        )
         self.assertEqual(change["unresolved"], [
             {
                 "type": "informed_by",

@@ -1014,6 +1014,8 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                             boundary,
                             boundary_name,
                         )
+                        if earliest_decision is not None:
+                            resolved["decision_event_id"] = earliest_decision.event_id
                     resolved["compaction"] = compaction
                 correction = _human_correction(source)
                 if relationship.type == "corrects" and correction is not None:

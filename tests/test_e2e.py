@@ -1493,10 +1493,12 @@ class ServeEndToEndTests(unittest.TestCase):
                 early = evidence.locator(".compaction-card").filter(has_text="early-summarizer")
                 late = evidence.locator(".compaction-card").filter(has_text="late-summarizer")
                 expect(early).to_contain_text("Compaction chronology undetermined")
+                expect(early).to_contain_text("decision event proposal-1")
                 expect(early).to_contain_text("docs/concurrent-source.md")
                 expect(early).to_contain_text("concurrent-source-reader")
                 expect(early).to_contain_text("source chronology undetermined")
                 expect(late).to_contain_text("Context compacted after decision")
+                expect(late).to_contain_text("decision event proposal-1")
                 expect(evidence.locator(".context-card").filter(has_text="docs/current.md")).to_be_visible()
                 expect(evidence.locator(".context-card").filter(has_text="docs/late.md")).to_be_visible()
                 undetermined_context = evidence.locator(".context-card").filter(
