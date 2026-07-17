@@ -1836,6 +1836,7 @@
             : 'running actor unknown');
           if (tool.status) metaParts.push(tool.status);
           if (tool.exit_code !== undefined) metaParts.push(`exit ${tool.exit_code}`);
+          if (link.decision_event_id) metaParts.push(`decision event ${link.decision_event_id}`);
           if (link.chronology === 'undetermined') metaParts.push('tool chronology undetermined');
           meta.textContent = metaParts.join(' · ');
           card.append(meta);

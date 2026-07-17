@@ -1003,6 +1003,8 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                             boundary,
                             boundary_name,
                         )
+                        if earliest_decision is not None:
+                            resolved["decision_event_id"] = earliest_decision.event_id
                     resolved["tool"] = tool
                 compaction = _context_compaction_detail(target, events_by_id)
                 if compaction is not None:

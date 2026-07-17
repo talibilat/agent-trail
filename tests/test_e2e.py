@@ -1539,10 +1539,12 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(late_requirement_diagnostic).to_contain_text("requirement.observed")
                 late_tool = evidence.locator(".tool-card").filter(has_text="git diff --check")
                 expect(late_tool).to_contain_text("late-runner")
+                expect(late_tool).to_contain_text("decision event proposal-1")
                 undetermined_tool = evidence.locator(".tool-card").filter(
                     has_text="git status --short"
                 )
                 expect(undetermined_tool).to_contain_text("concurrent-runner")
+                expect(undetermined_tool).to_contain_text("decision event proposal-1")
                 expect(undetermined_tool).to_contain_text("tool chronology undetermined")
                 undetermined_verification = evidence.locator(".verification-card").filter(
                     has_text="pytest tests/test_decision.py"
