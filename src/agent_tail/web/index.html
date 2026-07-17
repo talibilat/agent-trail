@@ -1849,6 +1849,8 @@
                     ? `Invalid compaction details · ${link.type}`
                     : link.reason === 'invalid_tool_detail'
                       ? `Invalid tool details · ${link.type}`
+                      : link.reason === 'invalid_tool_exit_code'
+                        ? `Invalid tool exit code · ${link.type}`
                       : link.reason === 'invalid_decision_actor'
                         ? `Invalid decision actor · ${link.type}`
                         : link.target_kind

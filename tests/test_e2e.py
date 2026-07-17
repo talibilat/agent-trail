@@ -203,6 +203,17 @@ class ServeEndToEndTests(unittest.TestCase):
                     attributes={"tool": {"command": " \t", "result": 42}},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="tool-invalid-exit-code",
+                    span_id="span-tool-invalid-exit-code",
+                    sequence=2,
+                    kind="tool.call.completed",
+                    operation={"status": "ok", "name": "shell"},
+                    attributes={"tool": {
+                        "command": "git diff --check",
+                        "exit_code": "<img id=invalid-tool-exit-code-injected>",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="proposal-1",
                     span_id="span-proposal",
                     sequence=8,
@@ -248,6 +259,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "preceded_by", "event_id": "tool-1"},
                         {"type": "preceded_by", "event_id": "tool-unknown-actor"},
                         {"type": "preceded_by", "event_id": "tool-invalid-detail<img id=invalid-tool-injected>"},
+                        {"type": "preceded_by", "event_id": "tool-invalid-exit-code"},
                         {"type": "references", "event_id": "unrelated-tool"},
                         {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-1"},
@@ -691,7 +703,14 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_tool).to_contain_text("Invalid tool details · preceded_by")
                 expect(malformed_tool).to_contain_text("tool.call.completed")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 17 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                malformed_tool_exit_code = evidence.locator(".unresolved-evidence").filter(
+                    has_text="tool-invalid-exit-code"
+                )
+                expect(malformed_tool_exit_code).to_contain_text("Invalid tool exit code · preceded_by")
+                expect(malformed_tool_exit_code).to_contain_text("tool.call.completed")
+                expect(evidence).to_contain_text("git diff --check")
+                expect(page.locator("#invalid-tool-exit-code-injected")).to_have_count(0)
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 18 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
