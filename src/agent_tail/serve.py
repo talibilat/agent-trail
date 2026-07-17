@@ -1672,7 +1672,7 @@ def _human_correction(event: Event) -> dict[str, object] | None:
     if not isinstance(correction, dict):
         return None
     action = correction.get("action")
-    if action not in {"modified", "reverted"}:
+    if not isinstance(action, str) or action not in {"modified", "reverted"}:
         return None
     return {"action": action}
 

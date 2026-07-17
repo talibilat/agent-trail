@@ -2704,7 +2704,7 @@ class ServeTests(unittest.TestCase):
                 sequence=4,
                 kind="human.corrected",
                 actor={"id": "maintainer-2"},
-                attributes={"correction": {"action": "edited"}},
+                attributes={"correction": {"action": ["edited"]}},
                 relationships=[{"type": "corrects", "event_id": "change-1"}],
             )) + "\n",
             json.dumps(event_data(
