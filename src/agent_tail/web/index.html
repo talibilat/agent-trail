@@ -1683,6 +1683,7 @@
             ? `read by ${link.target_actor_id}`
             : 'reading actor unknown');
           if (link.context.symbol) details.push(link.context.symbol);
+          if (link.chronology === 'undetermined') details.push('context chronology undetermined');
           const meta = document.createElement('div');
           meta.className = 'meta';
           meta.textContent = details.join(' · ');

@@ -1319,6 +1319,17 @@ class ServeTests(unittest.TestCase):
 
         change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
+        chronology_by_event = {
+            link["target_event_id"]: link["chronology"]
+            for link in change["links"]
+            if link["target_kind"] == "context.read"
+        }
+        self.assertEqual(chronology_by_event, {
+            "context-same-time": "after_decision",
+            "context-after-decision": "after_decision",
+            "context-clock-skew": "after_decision",
+            "context-other-emitter": "undetermined",
+        })
         self.assertEqual(change["unresolved"], [
             {
                 "type": "informed_by",
@@ -2654,6 +2665,7 @@ class ServeTests(unittest.TestCase):
             "source_actor_id": "reviewer-1",
             "target_kind": "context.read",
             "target_actor_id": "reviewer-1",
+            "chronology": "after_change",
             "context": {
                 "path": "docs/session-lifecycle.md",
                 "line_start": 42,

@@ -1288,6 +1288,16 @@ class ServeEndToEndTests(unittest.TestCase):
                     attributes={"context": {"path": "docs/late.md"}},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="context-undetermined",
+                    emitter_id="context-worker",
+                    span_id="span-undetermined-context",
+                    sequence=1,
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="context.read",
+                    actor={"id": "concurrent-researcher"},
+                    attributes={"context": {"path": "docs/concurrent.md"}},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="requirement-after-decision",
                     span_id="span-late-requirement",
                     sequence=5,
@@ -1346,6 +1356,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "motivated_by", "event_id": "requirement-after-decision"},
                         {"type": "informed_by", "event_id": "context-same-time"},
                         {"type": "informed_by", "event_id": "context-after-decision"},
+                        {"type": "informed_by", "event_id": "context-undetermined"},
                         {"type": "informed_by", "event_id": "compaction-before-decision"},
                         {"type": "informed_by", "event_id": "compaction-after-decision"},
                         {"type": "preceded_by", "event_id": "tool-after-decision"},
@@ -1382,6 +1393,11 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(late).to_contain_text("Context compacted after decision")
                 expect(evidence.locator(".context-card").filter(has_text="docs/current.md")).to_be_visible()
                 expect(evidence.locator(".context-card").filter(has_text="docs/late.md")).to_be_visible()
+                undetermined_context = evidence.locator(".context-card").filter(
+                    has_text="docs/concurrent.md"
+                )
+                expect(undetermined_context).to_contain_text("context chronology undetermined")
+                expect(undetermined_context).to_contain_text("concurrent-researcher")
                 current_context_diagnostic = evidence.locator(".unresolved-evidence").filter(
                     has_text="context-same-time"
                 )

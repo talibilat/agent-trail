@@ -928,6 +928,20 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     resolved["requirement"] = requirement
                 context = _context_read_detail(target)
                 if context is not None:
+                    if (
+                        source.kind == "change.applied"
+                        and relationship.type == "informed_by"
+                        and target.kind == "context.read"
+                    ):
+                        boundary = earliest_decision or source
+                        boundary_name = "decision" if earliest_decision else "change"
+                        if _event_follows(target, boundary):
+                            chronology = f"after_{boundary_name}"
+                        elif _event_follows(boundary, target):
+                            chronology = f"before_{boundary_name}"
+                        else:
+                            chronology = "undetermined"
+                        resolved["chronology"] = chronology
                     resolved["context"] = context
                 tool = _tool_call_detail(target)
                 if tool is not None:
