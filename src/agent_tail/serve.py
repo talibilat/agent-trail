@@ -891,6 +891,9 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 context = _context_read_detail(target)
                 if context is not None:
                     resolved["context"] = context
+                tool = _tool_call_detail(target)
+                if tool is not None:
+                    resolved["tool"] = tool
                 compaction = _context_compaction_detail(target, events_by_id)
                 if compaction is not None:
                     resolved["compaction"] = compaction
@@ -992,6 +995,27 @@ def _context_read_detail(event: Event) -> dict[str, object] | None:
     symbol = context.get("symbol")
     if isinstance(symbol, str):
         detail["symbol"] = symbol
+    return detail
+
+
+def _tool_call_detail(event: Event) -> dict[str, object] | None:
+    if not event.kind.startswith("tool.call."):
+        return None
+    operation = event.operation
+    detail: dict[str, object] = {"status": operation["status"]}
+    name = operation.get("name")
+    if isinstance(name, str) and name:
+        detail["name"] = name
+    tool = _attributes(event).get("tool")
+    if not isinstance(tool, dict):
+        return detail
+    for key in ("command", "result"):
+        value = tool.get(key)
+        if isinstance(value, str) and value:
+            detail[key] = value
+    exit_code = tool.get("exit_code")
+    if isinstance(exit_code, int) and not isinstance(exit_code, bool):
+        detail["exit_code"] = exit_code
     return detail
 
 

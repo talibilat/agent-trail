@@ -430,6 +430,89 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(link["context"], {"path": "src/auth/config.py"})
         self.assertEqual(link["target_kind"], "context.read")
 
+    def test_change_hunks_include_preceding_tool_commands_and_results(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[
+                    {"type": "preceded_by", "event_id": "tool-start-1"},
+                    {"type": "preceded_by", "event_id": "tool-finish-1"},
+                ],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="tool-start-1",
+                span_id="span-2",
+                sequence=2,
+                kind="tool.call.started",
+                operation={"status": "running", "name": "shell"},
+                attributes={"tool": {"command": "git diff -- src/auth/session.py"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="tool-finish-1",
+                span_id="span-3",
+                sequence=3,
+                kind="tool.call.completed",
+                actor={"id": "shell-1"},
+                operation={"status": "ok", "name": "shell"},
+                attributes={"tool": {
+                    "result": "1 file changed, 3 insertions(+)",
+                    "exit_code": 0,
+                }},
+            )) + "\n",
+        ])
+
+        links = store.run_detail("trace-1")["evidence_map"]["changes"][0]["links"]
+
+        self.assertEqual(links[0]["tool"], {
+            "status": "running",
+            "name": "shell",
+            "command": "git diff -- src/auth/session.py",
+        })
+        self.assertEqual(links[1]["target_actor_id"], "shell-1")
+        self.assertEqual(links[1]["tool"], {
+            "status": "ok",
+            "name": "shell",
+            "result": "1 file changed, 3 insertions(+)",
+            "exit_code": 0,
+        })
+
+    def test_evidence_omits_malformed_optional_tool_call_fields(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                relationships=[{
+                    "type": "preceded_by",
+                    "event_id": "tool-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="tool-1",
+                span_id="span-2",
+                sequence=2,
+                kind="tool.call.completed",
+                operation={"status": "failed", "name": ""},
+                attributes={"tool": {
+                    "command": 17,
+                    "result": "",
+                    "exit_code": True,
+                }},
+            )) + "\n",
+        ])
+
+        link = store.run_detail("trace-1")["evidence_map"]["links"][0]
+
+        self.assertEqual(link["tool"], {"status": "failed"})
+
     def test_change_hunks_include_context_compaction_sources(self):
         hunk = {
             "path": "src/auth/session.py",
