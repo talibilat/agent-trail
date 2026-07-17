@@ -110,7 +110,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     sequence=7,
                     kind="tool.call.completed",
                     actor={"id": "shell-1"},
-                    operation={"status": "ok", "name": "shell"},
+                    operation={"status": " \t", "name": "shell"},
                     attributes={"tool": {
                         "command": "git diff -- src/auth/session.py<img id=tool-command-injected>",
                         "result": "1 file changed<img id=tool-result-injected>",
@@ -304,7 +304,8 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("Tool · shell")
                 expect(evidence).to_contain_text("git diff -- src/auth/session.py")
                 expect(evidence).to_contain_text("1 file changed")
-                expect(evidence).to_contain_text("run by shell-1 · ok · exit 0")
+                expect(evidence).to_contain_text("run by shell-1 · exit 0")
+                expect(evidence).not_to_contain_text("undefined")
                 expect(evidence).not_to_contain_text("rm unrelated.tmp")
                 expect(evidence).not_to_contain_text("unrelated result")
                 expect(evidence).not_to_contain_text("unrelated-shell")

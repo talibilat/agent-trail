@@ -1152,7 +1152,10 @@ def _tool_call_detail(event: Event) -> dict[str, object] | None:
     if not event.kind.startswith("tool.call."):
         return None
     operation = event.operation
-    detail: dict[str, object] = {"status": operation["status"]}
+    detail: dict[str, object] = {}
+    status = operation["status"]
+    if status.strip():
+        detail["status"] = status
     name = operation.get("name")
     if isinstance(name, str) and name.strip():
         detail["name"] = name

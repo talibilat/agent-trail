@@ -693,7 +693,7 @@ class ServeTests(unittest.TestCase):
             "exit_code": 0,
         })
 
-    def test_evidence_omits_malformed_or_blank_optional_tool_call_fields(self):
+    def test_evidence_omits_malformed_or_blank_tool_call_fields(self):
         hunk = {
             "path": "src/auth/session.py",
             "old_start": 84,
@@ -701,12 +701,25 @@ class ServeTests(unittest.TestCase):
             "new_start": 84,
             "new_count": 19,
         }
-        for operation_name, tool_attributes in (
-            (["shell"], {"command": 17, "result": "", "exit_code": True}),
-            (" \t\n", {"command": " \t", "result": "\n ", "exit_code": True}),
+        for operation, tool_attributes, expected_tool in (
+            (
+                {"status": "failed", "name": ["shell"]},
+                {"command": 17, "result": "", "exit_code": True},
+                {"status": "failed"},
+            ),
+            (
+                {"status": "failed", "name": " \t\n"},
+                {"command": " \t", "result": "\n ", "exit_code": True},
+                {"status": "failed"},
+            ),
+            (
+                {"status": " \t\n", "name": "shell"},
+                {"command": "git diff"},
+                {"name": "shell", "command": "git diff"},
+            ),
         ):
             with self.subTest(
-                operation_name=operation_name,
+                operation=operation,
                 tool_attributes=tool_attributes,
             ):
                 store = RunStore.from_lines([
@@ -724,7 +737,7 @@ class ServeTests(unittest.TestCase):
                         span_id="span-2",
                         sequence=2,
                         kind="tool.call.completed",
-                        operation={"status": "failed", "name": operation_name},
+                        operation=operation,
                         attributes={"tool": tool_attributes},
                     )) + "\n",
                 ])
@@ -733,9 +746,10 @@ class ServeTests(unittest.TestCase):
 
                 self.assertEqual(
                     change["links"][0]["tool"],
-                    {"status": "failed"},
+                    expected_tool,
                 )
-                self.assertIn("tool", change["coverage"]["missing"])
+                if "command" not in expected_tool and "result" not in expected_tool:
+                    self.assertIn("tool", change["coverage"]["missing"])
 
     def test_change_hunks_include_context_compaction_sources(self):
         hunk = {
