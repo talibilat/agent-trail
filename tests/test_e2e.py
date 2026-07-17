@@ -66,6 +66,16 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="context-unknown-actor",
+                    span_id="span-context-unknown-actor",
+                    sequence=2,
+                    kind="context.read",
+                    actor={"id": " \t"},
+                    attributes={"context": {
+                        "path": "docs/anonymous-research.md",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="verification-started-1",
                     span_id="span-3",
                     sequence=3,
@@ -172,6 +182,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "references", "event_id": "unrelated-requirement"},
                         {"type": "informed_by", "event_id": "context-1"},
                         {"type": "informed_by", "event_id": "context-end-only"},
+                        {"type": "informed_by", "event_id": "context-unknown-actor"},
                         {"type": "references", "event_id": "unrelated-context"},
                         {"type": "informed_by", "event_id": "compaction-1"},
                         {"type": "preceded_by", "event_id": "tool-1"},
@@ -368,6 +379,9 @@ class ServeEndToEndTests(unittest.TestCase):
                 end_only_context = evidence.locator(".context-card").filter(has_text="docs/session-retention.md")
                 expect(end_only_context.locator(".path")).to_have_text("docs/session-retention.md:?-51")
                 expect(end_only_context).to_contain_text("researcher-2")
+                unknown_context_actor = evidence.locator(".context-card").filter(has_text="docs/anonymous-research.md")
+                expect(unknown_context_actor).to_contain_text("reading actor unknown")
+                expect(unknown_context_actor).not_to_contain_text("read by")
                 expect(evidence).not_to_contain_text("docs/unrelated.md")
                 expect(evidence).not_to_contain_text("unrelated-researcher")
                 expect(evidence).to_contain_text("Context compacted before change")
