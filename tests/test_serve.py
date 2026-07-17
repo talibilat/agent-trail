@@ -1345,16 +1345,23 @@ class ServeTests(unittest.TestCase):
                 "compaction-after-change",
                 "compaction-same-time-after-change",
                 "compaction-clock-skew-after-change",
+                "compaction-same-time-other-emitter",
             ],
         )
-        self.assertTrue(all(
-            item["reason"] == "compaction_not_preceding_change"
-            for item in change["unresolved"]
-        ))
+        self.assertEqual(
+            [item["reason"] for item in change["unresolved"]],
+            [
+                "compaction_not_preceding_change",
+                "compaction_not_preceding_change",
+                "compaction_not_preceding_change",
+                "compaction_chronology_undetermined",
+            ],
+        )
+        self.assertNotIn("decision_event_id", change["unresolved"][-1])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "tool", "verification", "decision"],
-            "unresolved_count": 3,
+            "unresolved_count": 4,
         })
 
     def test_context_read_after_decision_is_incomplete_evidence(self):
@@ -3739,7 +3746,7 @@ class ServeTests(unittest.TestCase):
             {
                 "status": "incomplete",
                 "missing": ["requirement", "tool", "verification", "decision"],
-                "unresolved_count": 3,
+                "unresolved_count": 4,
             },
         )
 
@@ -3791,7 +3798,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(detail["events"][1]["relationships"], relationships)
         self.assertEqual(len(compaction["sources"]), 1)
         self.assertEqual(len(compaction["unresolved"]), 2)
-        self.assertEqual(change["coverage"]["unresolved_count"], 2)
+        self.assertEqual(change["coverage"]["unresolved_count"], 3)
 
     def test_change_hunk_coverage_reports_complete_core_evidence(self):
         hunk = {
