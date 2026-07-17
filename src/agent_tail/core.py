@@ -34,6 +34,7 @@ _STRUCTURAL_IDENTITY_PATHS = {
     ("parent_span_id",),
     ("emitter_id",),
     ("actor", "id"),
+    ("relationships", "event_id"),
 }
 
 
@@ -63,6 +64,12 @@ def _redact_identity(value: str) -> str:
 
 
 @dataclass(frozen=True)
+class EventRelationship:
+    type: str
+    event_id: str
+
+
+@dataclass(frozen=True)
 class Event:
     schema_version: str
     event_id: str
@@ -73,6 +80,7 @@ class Event:
     sequence: int
     timestamp: datetime
     kind: str
+    relationships: tuple[EventRelationship, ...]
     _raw: dict[str, object] = field(repr=False)
 
     @property
@@ -143,6 +151,24 @@ class Event:
         if parent_span_id is not None and not isinstance(parent_span_id, str):
             raise EventError("parent_span_id must be a string")
 
+        relationships_data = data.get("relationships", [])
+        if not isinstance(relationships_data, list):
+            raise EventError("relationships must be an array")
+        relationships = []
+        for index, relationship in enumerate(relationships_data):
+            if not isinstance(relationship, Mapping):
+                raise EventError(f"relationships[{index}] must be an object")
+            if not isinstance(relationship.get("type"), str):
+                raise EventError(f"relationships[{index}].type must be a string")
+            if not isinstance(relationship.get("event_id"), str):
+                raise EventError(
+                    f"relationships[{index}].event_id must be a string"
+                )
+            relationships.append(EventRelationship(
+                type=relationship["type"],
+                event_id=relationship["event_id"],
+            ))
+
         snapshot = deepcopy(dict(data))
         return cls(
             schema_version=schema_version,
@@ -154,6 +180,7 @@ class Event:
             sequence=sequence,
             timestamp=timestamp,
             kind=data["kind"],
+            relationships=tuple(relationships),
             _raw=snapshot,
         )
 

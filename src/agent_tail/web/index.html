@@ -295,6 +295,48 @@
     .field-grid { display: grid; grid-template-columns: auto 1fr; gap: 7px 12px; }
     .field-grid .k { font: 400 10.5px "IBM Plex Mono", monospace; color: var(--dim); }
     .field-grid .v { font: 500 10.5px "IBM Plex Mono", monospace; word-break: break-all; }
+    .change-evidence .hunk { font: 600 11px "IBM Plex Mono", monospace; color: var(--accent); word-break: break-word; }
+    .change-evidence .actor { margin-top: 4px; font: 400 10px "IBM Plex Mono", monospace; color: var(--dim); }
+    .invalid-change .meta { font: 400 10px "IBM Plex Mono", monospace; color: var(--dim); word-break: break-word; }
+    .invalid-change .issue { margin-top: 8px; padding: 8px 10px; border-left: 2px solid var(--warn); background: rgba(255,190,92,.06); font: 600 10px "IBM Plex Mono", monospace; color: var(--warn); }
+    .requirement-card { margin-top: 10px; padding: 10px; border: 1px solid rgba(122,162,255,.35); border-radius: 8px; background: rgba(122,162,255,.08); }
+    .requirement-card .id { font: 600 10px "IBM Plex Mono", monospace; color: var(--accent); }
+    .requirement-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .requirement-card .text { margin-top: 4px; font: 400 11.5px/1.5 "IBM Plex Sans", sans-serif; color: var(--text); }
+    .proposal-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--orch); background: rgba(177,140,255,.06); }
+    .proposal-card .title { font: 600 10px "IBM Plex Mono", monospace; color: var(--orch); }
+    .proposal-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .context-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--run); background: rgba(51,201,255,.06); }
+    .context-card .path { font: 600 10.5px "IBM Plex Mono", monospace; color: var(--run); word-break: break-word; }
+    .context-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .compaction-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--orch); background: rgba(177,140,255,.06); }
+    .compaction-card .title { font: 600 10px "IBM Plex Mono", monospace; color: var(--orch); }
+    .compaction-card .source { margin-top: 5px; font: 500 10.5px "IBM Plex Mono", monospace; color: var(--text); word-break: break-word; }
+    .compaction-card .meta { margin-top: 3px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .compaction-card .incomplete { margin-top: 5px; font: 500 9.5px "IBM Plex Mono", monospace; color: var(--warn); }
+    .unresolved-evidence { margin-top: 8px; padding: 8px 10px; border-left: 2px solid var(--warn); background: rgba(255,190,92,.06); }
+    .unresolved-evidence .type { font: 600 10px "IBM Plex Mono", monospace; color: var(--warn); word-break: break-word; }
+    .unresolved-evidence .event-id { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); word-break: break-all; }
+    .tool-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--accent); background: rgba(122,162,255,.06); }
+    .tool-card .operation { font: 600 10px "IBM Plex Mono", monospace; color: var(--accent); }
+    .tool-card .command, .tool-card .result { margin-top: 4px; font: 500 10.5px/1.45 "IBM Plex Mono", monospace; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+    .tool-card .result { color: var(--dim); }
+    .tool-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .verification-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--ok); background: rgba(73,209,125,.06); }
+    .verification-card.failed, .verification-card.same-agent, .verification-card.unknown-origin { border-left-color: var(--warn); background: rgba(255,190,92,.06); }
+    .verification-card .outcome { font: 600 10px "IBM Plex Mono", monospace; color: var(--ok); }
+    .verification-card.failed .outcome, .verification-card.same-agent .provenance, .verification-card.unknown-origin .provenance { color: var(--warn); }
+    .verification-card .command { margin-top: 4px; font: 500 10.5px "IBM Plex Mono", monospace; color: var(--text); word-break: break-word; }
+    .verification-card .meta, .verification-card .provenance { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .verification-card .incomplete { margin-top: 5px; font: 500 9.5px "IBM Plex Mono", monospace; color: var(--warn); word-break: break-all; }
+    .correction-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--warn); background: rgba(255,190,92,.06); }
+    .correction-card.reverted { border-left-color: var(--err); background: rgba(255,107,107,.06); }
+    .correction-card .action { font: 600 10px "IBM Plex Mono", monospace; color: var(--warn); }
+    .correction-card.reverted .action { color: var(--err); }
+    .correction-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .evidence-completeness { margin-top: 9px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--faint); }
+    .evidence-completeness.incomplete { color: var(--warn); }
+    .evidence-missing { margin-top: 5px; font: 500 9.5px "IBM Plex Mono", monospace; color: var(--warn); }
     .usage-inline-row { display: flex; gap: 16px; }
     .usage-inline-row .k { font: 400 9px "IBM Plex Mono", monospace; color: var(--dim); }
     .usage-inline-row .v { font: 600 15px "IBM Plex Mono", monospace; }
@@ -1474,6 +1516,599 @@
       fieldsBlock.append(grid);
 
       wrap.append(head, fieldsBlock);
+
+      const evidenceMap = detail.evidence_map || {};
+      const changeEvidence = (evidenceMap.changes || []).find((change) => change.event_id === event.event_id);
+      const invalidChange = (evidenceMap.invalid_changes || []).find(
+        (change) => change.event_id === event.event_id
+      );
+      const sourceDiagnostics = (evidenceMap.unresolved || []).filter(
+        (link) => link.source_event_id === event.event_id
+      );
+      if (!changeEvidence && sourceDiagnostics.length) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block relationship-diagnostics';
+        block.innerHTML = `<div class="inspector-label">RELATIONSHIP DIAGNOSTICS</div>`;
+        sourceDiagnostics.forEach((link) => {
+          const card = document.createElement('div');
+          card.className = 'unresolved-evidence';
+          const type = document.createElement('div');
+          type.className = 'type';
+          type.textContent = link.reason === 'invalid_correction_detail'
+            ? `Invalid correction details · ${link.type}`
+            : link.reason === 'correction_chronology_undetermined'
+              ? `Correction chronology undetermined · ${link.type}`
+            : link.reason === 'verification_chronology_undetermined'
+              ? `Verification chronology undetermined · ${link.type}`
+            : link.reason === 'proposal_chronology_undetermined'
+              ? `Proposal chronology undetermined · ${link.type}`
+            : link.reason === 'requirement_chronology_undetermined'
+              ? `Requirement chronology undetermined · ${link.type}`
+            : link.reason === 'context_chronology_undetermined'
+              ? `Context chronology undetermined · ${link.type}`
+            : link.reason === 'compaction_chronology_undetermined'
+              ? `Compaction chronology undetermined · ${link.type}`
+            : link.reason === 'tool_chronology_undetermined'
+              ? `Tool chronology undetermined · ${link.type}`
+            : link.target_kind
+              ? `Invalid relationship target · ${link.type}`
+              : `Missing relationship target · ${link.type}`;
+          const eventId = document.createElement('div');
+          eventId.className = 'event-id';
+          const eventDetails = link.target_kind
+            ? `${link.target_event_id} · ${link.target_kind}`
+            : link.target_event_id;
+          eventId.textContent = link.decision_event_id
+            ? `${eventDetails} · decision event ${link.decision_event_id}`
+            : eventDetails;
+          card.append(type, eventId);
+          block.append(card);
+        });
+        wrap.append(block);
+      }
+      if (invalidChange) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block invalid-change';
+        block.innerHTML = `<div class="inspector-label">CHANGE INTEGRITY</div>`;
+        const actor = document.createElement('div');
+        actor.className = 'meta';
+        actor.textContent = typeof invalidChange.actor_id === 'string' && invalidChange.actor_id.trim()
+          ? `event ${invalidChange.event_id} · applied by ${invalidChange.actor_id}`
+          : `event ${invalidChange.event_id} · applying actor unknown`;
+        block.append(actor);
+        const labels = {
+          invalid_change_detail: 'Invalid change details',
+          invalid_change_path: 'Invalid change path',
+          invalid_change_old_start: 'Invalid change old start',
+          invalid_change_old_count: 'Invalid change old count',
+          invalid_change_new_start: 'Invalid change new start',
+          invalid_change_new_count: 'Invalid change new count',
+        };
+        (invalidChange.integrity || []).forEach((issue) => {
+          const warning = document.createElement('div');
+          warning.className = 'issue';
+          warning.textContent = labels[issue.reason] || `Invalid change metadata · ${issue.field}`;
+          block.append(warning);
+        });
+        wrap.append(block);
+      }
+      if (changeEvidence) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block change-evidence';
+        block.innerHTML = `<div class="inspector-label">CHANGE EVIDENCE</div>`;
+        const formatContextLocator = (context) => {
+          if (context.line_start !== undefined) {
+            const end = context.line_end === undefined ? '' : `-${context.line_end}`;
+            return `${context.path}:${context.line_start}${end}`;
+          }
+          return context.line_end === undefined
+            ? context.path
+            : `${context.path}:?-${context.line_end}`;
+        };
+
+        const hunk = changeEvidence.hunk;
+        const locator = document.createElement('div');
+        locator.className = 'hunk';
+        locator.textContent = hunk.new_count === 0
+          ? `${hunk.path}:${hunk.new_start} (0 lines)`
+          : `${hunk.path}:${hunk.new_start}-${hunk.new_start + hunk.new_count - 1}`;
+        const diffRange = document.createElement('div');
+        diffRange.className = 'actor';
+        diffRange.textContent = `@@ -${hunk.old_start},${hunk.old_count} +${hunk.new_start},${hunk.new_count} @@`;
+        block.append(locator, diffRange);
+        if (hunk.symbol) {
+          const symbol = document.createElement('div');
+          symbol.className = 'actor';
+          symbol.textContent = `symbol ${hunk.symbol}`;
+          block.append(symbol);
+        }
+        (changeEvidence.integrity || []).forEach((issue) => {
+          const warning = document.createElement('div');
+          warning.className = 'hunk-integrity incomplete';
+          warning.textContent = issue.reason === 'invalid_change_symbol'
+            ? 'Invalid change symbol'
+            : `Invalid change metadata · ${issue.field}`;
+          block.append(warning);
+        });
+        const actor = document.createElement('div');
+        actor.className = 'actor';
+        actor.textContent = typeof changeEvidence.actor_id === 'string' && changeEvidence.actor_id.trim()
+          ? `applied by ${changeEvidence.actor_id}`
+          : 'applying actor unknown';
+        const eventId = document.createElement('div');
+        eventId.className = 'actor';
+        eventId.textContent = `event ${changeEvidence.event_id}`;
+        block.append(actor, eventId);
+
+        (changeEvidence.links || []).filter(
+          (link) => link.type === 'applies'
+            && link.target_kind === 'change.proposed'
+        ).forEach((link) => {
+          const card = document.createElement('div');
+          card.className = 'proposal-card';
+          const title = document.createElement('div');
+          title.className = 'title';
+          title.textContent = 'Change proposed';
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          meta.textContent = typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+            ? `proposed by ${link.target_actor_id}`
+            : 'proposing actor unknown';
+          const eventId = document.createElement('div');
+          eventId.className = 'meta';
+          eventId.textContent = `event ${link.target_event_id}`;
+          card.append(title, meta, eventId);
+          if (link.chronology === 'undetermined') {
+            const chronology = document.createElement('div');
+            chronology.className = 'meta';
+            chronology.textContent = 'proposal chronology undetermined';
+            card.append(chronology);
+          }
+          block.append(card);
+        });
+
+        (changeEvidence.links || []).filter(
+          (link) => link.type === 'motivated_by'
+            && link.target_kind === 'requirement.observed'
+            && link.requirement
+        ).forEach((link) => {
+          const card = document.createElement('div');
+          card.className = 'requirement-card';
+          const requirementId = document.createElement('div');
+          requirementId.className = 'id';
+          requirementId.textContent = `Requirement ${link.requirement.id} · event ${link.target_event_id}`;
+          const observer = document.createElement('div');
+          observer.className = 'meta';
+          const observerDetails = [typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+            ? `observed by ${link.target_actor_id}`
+            : 'observing actor unknown'];
+          if (link.decision_event_id) observerDetails.push(`decision event ${link.decision_event_id}`);
+          if (link.chronology === 'undetermined') {
+            observerDetails.push('requirement chronology undetermined');
+          }
+          observer.textContent = observerDetails.join(' · ');
+          const requirementText = document.createElement('div');
+          requirementText.className = 'text';
+          requirementText.textContent = link.requirement.text;
+          card.append(requirementId, observer, requirementText);
+          block.append(card);
+        });
+
+        (changeEvidence.links || []).filter(
+          (link) => link.type === 'informed_by'
+            && link.target_kind === 'context.read'
+            && link.context
+        ).forEach((link) => {
+          const card = document.createElement('div');
+          card.className = 'context-card';
+          const path = document.createElement('div');
+          path.className = 'path';
+          path.textContent = formatContextLocator(link.context);
+          const hasReadingActor = typeof link.target_actor_id === 'string'
+            && link.target_actor_id.trim();
+          const details = [`event ${link.target_event_id}`];
+          details.push(hasReadingActor
+            ? `read by ${link.target_actor_id}`
+            : 'reading actor unknown');
+          if (link.context.symbol) details.push(link.context.symbol);
+          if (link.decision_event_id) details.push(`decision event ${link.decision_event_id}`);
+          if (link.chronology === 'undetermined') details.push('context chronology undetermined');
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          meta.textContent = details.join(' · ');
+          card.append(path, meta);
+          block.append(card);
+        });
+
+        (changeEvidence.links || []).filter(
+          (link) => link.type === 'informed_by'
+            && link.target_kind === 'context.compacted'
+            && link.compaction
+        ).forEach((link) => {
+          const card = document.createElement('div');
+          card.className = 'compaction-card';
+          const title = document.createElement('div');
+          title.className = 'title';
+          const compactionOccurredAfterChange = (changeEvidence.unresolved || []).some(
+            (item) => item.reason === 'compaction_not_preceding_change'
+              && item.target_event_id === link.target_event_id
+          );
+          const compactionOccurredAfterDecision = (changeEvidence.unresolved || []).some(
+            (item) => item.reason === 'compaction_follows_decision'
+              && item.target_event_id === link.target_event_id
+          );
+          const hasValidDecision = (changeEvidence.links || []).some(
+            (item) => item.type === 'applies'
+              && item.target_kind === 'change.proposed'
+              && typeof item.target_actor_id === 'string'
+              && item.target_actor_id.trim()
+              && !(changeEvidence.unresolved || []).some(
+                (diagnostic) => diagnostic.target_event_id === item.target_event_id
+                  && [
+                    'proposal_not_preceding_change',
+                    'invalid_decision_actor',
+                    'proposal_chronology_undetermined',
+                  ].includes(diagnostic.reason)
+              )
+          );
+          title.textContent = compactionOccurredAfterChange
+            ? 'Context compacted after change'
+            : compactionOccurredAfterDecision
+              ? 'Context compacted after decision'
+              : link.chronology === 'undetermined'
+                ? 'Compaction chronology undetermined'
+              : hasValidDecision
+                ? 'Context compacted before decision'
+                : 'Context compacted before change';
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          const compactionDetails = [`event ${link.target_event_id}`];
+          compactionDetails.push(
+            typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+              ? `compacted by ${link.target_actor_id}`
+              : 'compacting actor unknown'
+          );
+          if (link.decision_event_id) {
+            compactionDetails.push(`decision event ${link.decision_event_id}`);
+          }
+          meta.textContent = compactionDetails.join(' · ');
+          card.append(title, meta);
+          (link.compaction.sources || []).filter(
+            (source) => source.type === 'summarizes'
+          ).forEach((source) => {
+            const sourceNode = document.createElement('div');
+            sourceNode.className = 'source';
+            if (source.context) {
+              sourceNode.textContent = formatContextLocator(source.context);
+            } else {
+              sourceNode.textContent = source.kind;
+            }
+            const sourceMeta = document.createElement('div');
+            sourceMeta.className = 'meta';
+            const sourceDetails = [`event ${source.event_id}`];
+            sourceDetails.push(typeof source.actor_id === 'string' && source.actor_id.trim()
+              ? `source from ${source.actor_id}`
+              : 'source actor unknown');
+            if (source.context?.symbol) sourceDetails.push(source.context.symbol);
+            if (source.chronology === 'undetermined') {
+              sourceDetails.push('source chronology undetermined');
+            }
+            sourceMeta.textContent = sourceDetails.join(' · ');
+            card.append(sourceNode, sourceMeta);
+          });
+          const unresolvedSources = (link.compaction.unresolved || []).filter(
+            (source) => source.type === 'summarizes'
+          );
+          unresolvedSources.forEach((source) => {
+            const incomplete = document.createElement('div');
+            incomplete.className = 'incomplete';
+            incomplete.textContent = source.reason === 'invalid_context_detail'
+              ? `Invalid ${source.type} source details · ${source.event_id} · ${source.target_kind}`
+              : source.reason === 'context_not_preceding_compaction'
+                ? `Context read after compaction · ${source.event_id} · ${source.target_kind}`
+              : source.reason === 'context_source_chronology_undetermined'
+                ? `Context source chronology undetermined · ${source.event_id} · ${source.target_kind}`
+              : source.reason === 'invalid_context_line_start'
+                ? `Invalid ${source.type} source line start · ${source.event_id} · ${source.target_kind}`
+              : source.reason === 'invalid_context_line_end'
+                ? `Invalid ${source.type} source line end · ${source.event_id} · ${source.target_kind}`
+              : source.reason === 'invalid_context_symbol'
+                ? `Invalid ${source.type} source symbol · ${source.event_id} · ${source.target_kind}`
+              : source.target_kind
+              ? `Invalid ${source.type} source target · ${source.event_id} · ${source.target_kind}`
+              : `Missing ${source.type} source · ${source.event_id}`;
+            card.append(incomplete);
+          });
+          const missingCount = unresolvedSources.length;
+          if (missingCount) {
+            const incomplete = document.createElement('div');
+            incomplete.className = 'incomplete';
+            incomplete.textContent = `${missingCount} compacted source${missingCount === 1 ? '' : 's'} unresolved`;
+            card.append(incomplete);
+          }
+          block.append(card);
+        });
+
+        (changeEvidence.links || []).filter(
+          (link) => link.type === 'preceded_by' && link.tool
+        ).forEach((link) => {
+          const tool = link.tool;
+          const card = document.createElement('div');
+          card.className = 'tool-card';
+          const operation = document.createElement('div');
+          operation.className = 'operation';
+          operation.textContent = tool.name ? `Tool · ${tool.name}` : 'Tool';
+          card.append(operation);
+          if (tool.command) {
+            const command = document.createElement('div');
+            command.className = 'command';
+            command.textContent = `$ ${tool.command}`;
+            card.append(command);
+          }
+          if (tool.result) {
+            const result = document.createElement('div');
+            result.className = 'result';
+            result.textContent = tool.result;
+            card.append(result);
+          }
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          const metaParts = [`event ${link.target_event_id}`];
+          metaParts.push(typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+            ? `run by ${link.target_actor_id}`
+            : 'running actor unknown');
+          if (tool.status) metaParts.push(tool.status);
+          if (tool.exit_code !== undefined) metaParts.push(`exit ${tool.exit_code}`);
+          if (link.decision_event_id) metaParts.push(`decision event ${link.decision_event_id}`);
+          if (link.chronology === 'undetermined') metaParts.push('tool chronology undetermined');
+          meta.textContent = metaParts.join(' · ');
+          card.append(meta);
+          block.append(card);
+        });
+
+        (changeEvidence.links || []).filter(
+          (link) => link.type === 'verified_by' && link.verification
+        ).forEach((link) => {
+          const verification = link.verification;
+          const sameAgent = verification.test_origin === 'same_agent';
+          const unknownOrigin = !verification.test_origin;
+          const card = document.createElement('div');
+          card.className = `verification-card${verification.passed ? '' : ' failed'}${sameAgent ? ' same-agent' : ''}${unknownOrigin ? ' unknown-origin' : ''}`;
+          const outcome = document.createElement('div');
+          outcome.className = 'outcome';
+          outcome.textContent = verification.passed ? 'PASS' : 'FAIL';
+          card.append(outcome);
+          const starts = verification.starts || [];
+          starts.forEach((start) => {
+            if (start.command) {
+              const command = document.createElement('div');
+              command.className = 'command';
+              command.textContent = start.command;
+              card.append(command);
+            }
+            const startMeta = document.createElement('div');
+            startMeta.className = 'meta';
+            const startMetaParts = [`event ${start.event_id}`, (
+              typeof start.actor_id === 'string' && start.actor_id.trim()
+                ? `started by ${start.actor_id}`
+                : 'starting actor unknown'
+            )];
+            if (start.chronology === 'undetermined') {
+              startMetaParts.push('start chronology undetermined');
+            }
+            if (start.change_chronology === 'undetermined') {
+              startMetaParts.push('start/change chronology undetermined');
+            }
+            startMeta.textContent = startMetaParts.join(' · ');
+            card.append(startMeta);
+          });
+          const conflictingCommand = starts.some(
+            (start) => start.command && start.command !== verification.command
+          );
+          if ((!starts.some((start) => start.command) || conflictingCommand) && verification.command) {
+            const command = document.createElement('div');
+            command.className = 'command';
+            command.textContent = conflictingCommand
+              ? `Verification command · ${verification.command}`
+              : verification.command;
+            card.append(command);
+          }
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          const metaParts = [`event ${link.target_event_id}`];
+          metaParts.push(typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+            ? `result reported by ${link.target_actor_id}`
+            : 'reporting actor unknown');
+          if (verification.exit_code !== undefined) metaParts.push(`exit ${verification.exit_code}`);
+          if (link.chronology === 'undetermined') metaParts.push('verification chronology undetermined');
+          meta.textContent = metaParts.join(' · ');
+          card.append(meta);
+          (verification.unresolved || []).forEach((start) => {
+            const incomplete = document.createElement('div');
+            incomplete.className = 'incomplete';
+            incomplete.textContent = start.reason === 'invalid_verification_command'
+              ? `Invalid ${start.type} start command · ${start.event_id} · ${start.target_kind}`
+              : start.reason === 'verification_start_after_finish'
+                ? `Verification start occurred after finish · ${start.event_id} · ${start.target_kind}`
+              : start.reason === 'verification_start_finish_chronology_undetermined'
+                ? `Verification start/finish chronology undetermined · ${start.event_id} · ${start.target_kind}`
+              : start.reason === 'verification_start_precedes_change'
+                ? `Verification started before change · ${start.event_id} · ${start.target_kind}`
+              : start.reason === 'verification_start_change_chronology_undetermined'
+                ? `Verification start/change chronology undetermined · ${start.event_id} · ${start.target_kind}`
+              : start.reason === 'conflicting_verification_command'
+                ? `Conflicting ${start.type} start command · ${start.event_id} · ${start.target_kind}`
+              : start.target_kind
+              ? `Invalid ${start.type} start target · ${start.event_id} · ${start.target_kind}`
+              : `Missing ${start.type} start · ${start.event_id}`;
+            card.append(incomplete);
+          });
+          const provenance = document.createElement('div');
+          provenance.className = 'provenance';
+          provenance.textContent = unknownOrigin
+            ? 'Test provenance unknown'
+            : sameAgent
+              ? 'Warning: implementation and test written by the same agent'
+              : 'Test existed before this change';
+          card.append(provenance);
+          block.append(card);
+        });
+
+        (changeEvidence.corrections || []).forEach((link) => {
+          const action = link.correction && link.correction.action;
+          const card = document.createElement('div');
+          card.className = `correction-card${action === 'reverted' ? ' reverted' : ''}`;
+          const actionNode = document.createElement('div');
+          actionNode.className = 'action';
+          actionNode.textContent = link.reason === 'invalid_correction_detail'
+            ? 'Human correction action invalid'
+            : action === 'modified'
+              ? 'Human modified this change'
+              : action === 'reverted'
+                ? 'Human reverted this change'
+                : 'Human corrected this change';
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          const actor = typeof link.source_actor_id === 'string' && link.source_actor_id.trim()
+            ? `corrected by ${link.source_actor_id}`
+            : 'correcting actor unknown';
+          meta.textContent = `event ${link.source_event_id} · ${actor}`;
+          card.append(actionNode, meta);
+          if (link.reason === 'correction_precedes_change') {
+            const incomplete = document.createElement('div');
+            incomplete.className = 'incomplete';
+            incomplete.textContent = 'Correction occurred before change';
+            card.append(incomplete);
+          } else if (link.chronology === 'undetermined') {
+            const chronology = document.createElement('div');
+            chronology.className = 'meta';
+            chronology.textContent = 'correction chronology undetermined';
+            card.append(chronology);
+          }
+          block.append(card);
+        });
+
+        const unresolved = changeEvidence.unresolved || [];
+        const evidenceRelationshipTypes = new Set([
+          'applies',
+          'informed_by',
+          'motivated_by',
+          'preceded_by',
+          'verified_by',
+        ]);
+        unresolved.forEach((link) => {
+          const card = document.createElement('div');
+          card.className = 'unresolved-evidence';
+          const type = document.createElement('div');
+          type.className = 'type';
+          type.textContent = link.reason === 'invalid_verification_result'
+            ? `Invalid verification result · ${link.type}`
+            : link.reason === 'verification_precedes_change'
+              ? `Verification finished before change · ${link.type}`
+            : link.reason === 'verification_chronology_undetermined'
+              ? `Verification chronology undetermined · ${link.type}`
+            : link.reason === 'invalid_verification_exit_code'
+              ? `Invalid verification exit code · ${link.type}`
+            : link.reason === 'conflicting_verification_outcome'
+                ? `Conflicting verification outcome · ${link.type}`
+              : link.reason === 'invalid_verification_command'
+                ? `Invalid verification command · ${link.type}`
+                : link.reason === 'invalid_verification_test_origin'
+                  ? `Invalid verification test provenance · ${link.type}`
+                : link.reason === 'requirement_not_preceding_change'
+                  ? `Requirement observed after change · ${link.type}`
+                : link.reason === 'requirement_follows_decision'
+                  ? `Requirement observed after decision · ${link.type}`
+                : link.reason === 'requirement_chronology_undetermined'
+                  ? `Requirement chronology undetermined · ${link.type}`
+                : link.reason === 'invalid_requirement_detail'
+                ? `Invalid requirement details · ${link.type}`
+                 : link.reason === 'context_not_preceding_change'
+                   ? `Context read after change · ${link.type}`
+                : link.reason === 'context_follows_decision'
+                   ? `Context read after decision · ${link.type}`
+                 : link.reason === 'context_chronology_undetermined'
+                   ? `Context chronology undetermined · ${link.type}`
+                 : link.reason === 'compaction_not_preceding_change'
+                   ? `Context compacted after change · ${link.type}`
+                : link.reason === 'compaction_follows_decision'
+                  ? `Context compacted after decision · ${link.type}`
+                : link.reason === 'compaction_chronology_undetermined'
+                  ? `Compaction chronology undetermined · ${link.type}`
+                : link.reason === 'tool_chronology_undetermined'
+                  ? `Tool chronology undetermined · ${link.type}`
+                : link.reason === 'invalid_context_detail'
+                  ? `Invalid context details · ${link.type}`
+                  : link.reason === 'invalid_context_line_start'
+                    ? `Invalid context line start · ${link.type}`
+                  : link.reason === 'invalid_context_line_end'
+                    ? `Invalid context line end · ${link.type}`
+                  : link.reason === 'invalid_context_symbol'
+                    ? `Invalid context symbol · ${link.type}`
+                  : link.reason === 'invalid_compaction_detail'
+                    ? `Invalid compaction details · ${link.type}`
+                    : link.reason === 'invalid_tool_detail'
+                      ? `Invalid tool details · ${link.type}`
+                      : link.reason === 'invalid_tool_command'
+                        ? `Invalid tool command · ${link.type}`
+                        : link.reason === 'invalid_tool_result'
+                          ? `Invalid tool result · ${link.type}`
+                        : link.reason === 'invalid_tool_operation_status'
+                        ? `Invalid tool operation status · ${link.type}`
+                        : link.reason === 'invalid_tool_operation_name'
+                          ? `Invalid tool operation name · ${link.type}`
+                        : link.reason === 'invalid_tool_exit_code'
+                          ? `Invalid tool exit code · ${link.type}`
+                        : link.reason === 'tool_not_preceding_change'
+                          ? `Tool occurred after change · ${link.type}`
+                        : link.reason === 'tool_follows_decision'
+                          ? `Tool occurred after decision · ${link.type}`
+                          : link.reason === 'proposal_not_preceding_change'
+                            ? `Change proposed after application · ${link.type}`
+                          : link.reason === 'proposal_chronology_undetermined'
+                            ? `Proposal chronology undetermined · ${link.type}`
+                          : link.reason === 'invalid_decision_actor'
+                            ? `Invalid decision actor · ${link.type}`
+                            : link.target_kind
+                              ? `Invalid evidence target · ${link.type}`
+                              : evidenceRelationshipTypes.has(link.type)
+                                ? `Missing evidence target · ${link.type}`
+                                : `Missing relationship target · ${link.type}`;
+          const eventId = document.createElement('div');
+          eventId.className = 'event-id';
+          const eventDetails = link.target_kind
+            ? `${link.target_event_id} · ${link.target_kind}`
+            : link.target_event_id;
+          eventId.textContent = link.decision_event_id
+            ? `${eventDetails} · decision event ${link.decision_event_id}`
+            : eventDetails;
+          card.append(type, eventId);
+          block.append(card);
+        });
+        const coverage = changeEvidence.coverage || {};
+        const missing = coverage.missing || [];
+        missing.forEach((kind) => {
+          const warning = document.createElement('div');
+          warning.className = 'evidence-missing';
+          warning.textContent = `Missing ${kind} evidence`;
+          block.append(warning);
+        });
+        const unresolvedCount = coverage.unresolved_count === undefined
+          ? unresolved.length
+          : coverage.unresolved_count;
+        const unknownTestOriginCount = coverage.unknown_test_origin_count || 0;
+        const sameAgentTestCount = coverage.same_agent_test_count || 0;
+        const failedVerificationCount = coverage.failed_verification_count || 0;
+        const integrityIssueCount = coverage.integrity_issue_count || 0;
+        const completeness = document.createElement('div');
+        const incomplete = missing.length || unresolvedCount || unknownTestOriginCount || sameAgentTestCount || failedVerificationCount || integrityIssueCount;
+        completeness.className = `evidence-completeness${incomplete ? ' incomplete' : ''}`;
+        completeness.textContent = incomplete
+          ? `Evidence incomplete · ${missing.length} missing categor${missing.length === 1 ? 'y' : 'ies'} · ${unresolvedCount} unresolved reference${unresolvedCount === 1 ? '' : 's'} · ${integrityIssueCount} change integrity issue${integrityIssueCount === 1 ? '' : 's'} · ${unknownTestOriginCount} test${unknownTestOriginCount === 1 ? '' : 's'} with unknown provenance · ${sameAgentTestCount} same-agent test${sameAgentTestCount === 1 ? '' : 's'} · ${failedVerificationCount} failed verification${failedVerificationCount === 1 ? '' : 's'}`
+          : 'Core evidence complete';
+        block.append(completeness);
+        wrap.append(block);
+      }
 
       if (hasUsage) {
         const usageBlock = document.createElement('div');

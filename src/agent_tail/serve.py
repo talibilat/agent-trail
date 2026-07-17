@@ -222,6 +222,7 @@ class RunStore:
             view = self._index.trace(trace_id)
             now = self._warning_now(view.events)
             projection = _relationships(view)
+            evidence_map = _event_evidence(view.events)
             started_at = min((event.timestamp for event in view.events), default=None)
             return {
                 "api_version": "v1",
@@ -260,6 +261,7 @@ class RunStore:
                 "warnings": self._warnings_for_trace(trace_id, now) + projection["warnings"],
                 "links": projection["links"],
                 "unresolved_endpoints": projection["unresolved_endpoints"],
+                "evidence_map": evidence_map,
                 "source": dict(self._source_status),
                 "findings": [
                     finding for finding in self._findings
@@ -414,6 +416,10 @@ class RunStore:
             "kind": event.kind,
             "actor": event.actor,
             "operation": event.operation,
+            "relationships": [
+                {"type": relationship.type, "event_id": relationship.event_id}
+                for relationship in event.relationships
+            ],
             "attributes": _attributes(event),
             "usage": _usage_summary((event,)),
             "payload": _payload_preview(event),
@@ -846,6 +852,1384 @@ def _relationships(view) -> dict[str, object]:
         "warnings": warnings,
         "unresolved_endpoints": list(unresolved.values()),
     }
+
+
+def _event_follows(candidate: Event, reference: Event) -> bool:
+    if candidate.emitter_id == reference.emitter_id:
+        if candidate.sequence == reference.sequence:
+            return False
+        return candidate.sequence > reference.sequence
+    return candidate.timestamp > reference.timestamp
+
+
+def _evidence_chronology(
+    evidence: Event,
+    boundary: Event,
+    boundary_name: str,
+) -> str:
+    if _event_follows(evidence, boundary):
+        return f"after_{boundary_name}"
+    if _event_follows(boundary, evidence):
+        return f"before_{boundary_name}"
+    return "undetermined"
+
+
+def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
+    event_list = list(events)
+    events_by_id = {event.event_id: event for event in event_list}
+    corrections_by_change: dict[str, list[dict[str, object]]] = {}
+    changes = []
+    invalid_changes = []
+    links = []
+    unresolved = []
+    for source in event_list:
+        source_links = []
+        source_unresolved = []
+        decision_events = [
+            target
+            for relationship in source.relationships
+            if relationship.type == "applies"
+            and (target := events_by_id.get(relationship.event_id)) is not None
+            and target.kind == "change.proposed"
+            and target.actor["id"].strip()
+            and _event_follows(source, target)
+        ] if source.kind == "change.applied" else []
+        earliest_decision = None
+        for decision_event in decision_events:
+            if earliest_decision is None or _event_follows(
+                earliest_decision,
+                decision_event,
+            ):
+                earliest_decision = decision_event
+        projected_relationships = set()
+        for relationship in source.relationships:
+            relationship_key = (relationship.type, relationship.event_id)
+            if relationship_key in projected_relationships:
+                continue
+            projected_relationships.add(relationship_key)
+            item = {
+                "type": relationship.type,
+                "source_event_id": source.event_id,
+                "target_event_id": relationship.event_id,
+                "source_kind": source.kind,
+                "source_actor_id": source.actor["id"],
+            }
+            target = events_by_id.get(relationship.event_id)
+            if target is None:
+                unresolved.append(item)
+                source_unresolved.append(item)
+            else:
+                resolved = {
+                    **item,
+                    "target_kind": target.kind,
+                    "target_actor_id": target.actor["id"],
+                }
+                if (
+                    source.kind == "change.applied"
+                    and relationship.type == "applies"
+                    and target.kind == "change.proposed"
+                ):
+                    resolved["chronology"] = _evidence_chronology(
+                        target,
+                        source,
+                        "change",
+                    )
+                verification = _verification_result(
+                    target,
+                    events_by_id,
+                    source
+                    if source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    else None,
+                )
+                if verification is not None:
+                    if (
+                        source.kind == "change.applied"
+                        and relationship.type == "verified_by"
+                        and target.kind == "verification.finished"
+                    ):
+                        resolved["chronology"] = _evidence_chronology(
+                            target,
+                            source,
+                            "change",
+                        )
+                    resolved["verification"] = verification
+                requirement = _requirement_detail(target)
+                if requirement is not None:
+                    if (
+                        source.kind == "change.applied"
+                        and relationship.type == "motivated_by"
+                        and target.kind == "requirement.observed"
+                    ):
+                        boundary = earliest_decision or source
+                        boundary_name = "decision" if earliest_decision else "change"
+                        resolved["chronology"] = _evidence_chronology(
+                            target,
+                            boundary,
+                            boundary_name,
+                        )
+                        if earliest_decision is not None:
+                            resolved["decision_event_id"] = earliest_decision.event_id
+                    resolved["requirement"] = requirement
+                context = _context_read_detail(target)
+                if context is not None:
+                    if (
+                        source.kind == "change.applied"
+                        and relationship.type == "informed_by"
+                        and target.kind == "context.read"
+                    ):
+                        boundary = earliest_decision or source
+                        boundary_name = "decision" if earliest_decision else "change"
+                        resolved["chronology"] = _evidence_chronology(
+                            target,
+                            boundary,
+                            boundary_name,
+                        )
+                        if earliest_decision is not None:
+                            resolved["decision_event_id"] = earliest_decision.event_id
+                    resolved["context"] = context
+                tool = _tool_call_detail(target)
+                if tool is not None:
+                    if (
+                        source.kind == "change.applied"
+                        and relationship.type == "preceded_by"
+                        and target.kind.startswith("tool.call.")
+                    ):
+                        boundary = earliest_decision or source
+                        boundary_name = "decision" if earliest_decision else "change"
+                        resolved["chronology"] = _evidence_chronology(
+                            target,
+                            boundary,
+                            boundary_name,
+                        )
+                        if earliest_decision is not None:
+                            resolved["decision_event_id"] = earliest_decision.event_id
+                    resolved["tool"] = tool
+                compaction = _context_compaction_detail(target, events_by_id)
+                if compaction is not None:
+                    if (
+                        source.kind == "change.applied"
+                        and relationship.type == "informed_by"
+                        and target.kind == "context.compacted"
+                    ):
+                        boundary = earliest_decision or source
+                        boundary_name = "decision" if earliest_decision else "change"
+                        resolved["chronology"] = _evidence_chronology(
+                            target,
+                            boundary,
+                            boundary_name,
+                        )
+                        if earliest_decision is not None:
+                            resolved["decision_event_id"] = earliest_decision.event_id
+                    resolved["compaction"] = compaction
+                correction = _human_correction(source)
+                if relationship.type == "corrects" and correction is not None:
+                    resolved["correction"] = correction
+                if (
+                    relationship.type == "corrects"
+                    and source.kind == "human.corrected"
+                    and target.kind == "change.applied"
+                ):
+                    resolved["chronology"] = _evidence_chronology(
+                        source,
+                        target,
+                        "change",
+                    )
+                    if correction is None:
+                        resolved["reason"] = "invalid_correction_detail"
+                        invalid = {
+                            **item,
+                            "target_kind": target.kind,
+                            "reason": "invalid_correction_detail",
+                        }
+                        unresolved.append(invalid)
+                        source_unresolved.append(invalid)
+                    elif _event_follows(target, source):
+                        resolved["reason"] = "correction_precedes_change"
+                        invalid = {
+                            **item,
+                            "target_kind": target.kind,
+                            "reason": "correction_precedes_change",
+                        }
+                        unresolved.append(invalid)
+                        source_unresolved.append(invalid)
+                    elif not _event_follows(source, target):
+                        resolved["reason"] = "correction_chronology_undetermined"
+                        invalid = {
+                            **item,
+                            "target_kind": target.kind,
+                            "reason": "correction_chronology_undetermined",
+                        }
+                        unresolved.append(invalid)
+                        source_unresolved.append(invalid)
+                    corrections_by_change.setdefault(target.event_id, []).append(resolved)
+                links.append(resolved)
+                source_links.append(resolved)
+                if (
+                    source.kind == "change.applied"
+                    and relationship.type == "motivated_by"
+                    and target.kind == "requirement.observed"
+                    and _event_follows(target, source)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "requirement_not_preceding_change",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "motivated_by"
+                    and target.kind == "requirement.observed"
+                    and earliest_decision is not None
+                    and _event_follows(target, earliest_decision)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "requirement_follows_decision",
+                        "decision_event_id": earliest_decision.event_id,
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "motivated_by"
+                    and target.kind == "requirement.observed"
+                    and requirement is None
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_requirement_detail",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "motivated_by"
+                    and target.kind == "requirement.observed"
+                    and not _event_follows(target, earliest_decision or source)
+                    and not _event_follows(earliest_decision or source, target)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "requirement_chronology_undetermined",
+                    }
+                    if earliest_decision is not None:
+                        invalid["decision_event_id"] = earliest_decision.event_id
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.read"
+                    and _event_follows(target, source)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "context_not_preceding_change",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.read"
+                    and earliest_decision is not None
+                    and _event_follows(target, earliest_decision)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "context_follows_decision",
+                        "decision_event_id": earliest_decision.event_id,
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.read"
+                    and context is None
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_context_detail",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.read"
+                    and _has_invalid_context_line_start(target)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_context_line_start",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.read"
+                    and _has_invalid_context_line_end(target)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_context_line_end",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.read"
+                    and _has_invalid_context_symbol(target)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_context_symbol",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.read"
+                    and not _event_follows(target, earliest_decision or source)
+                    and not _event_follows(earliest_decision or source, target)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "context_chronology_undetermined",
+                    }
+                    if earliest_decision is not None:
+                        invalid["decision_event_id"] = earliest_decision.event_id
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.compacted"
+                    and _event_follows(target, source)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "compaction_not_preceding_change",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.compacted"
+                    and earliest_decision is not None
+                    and _event_follows(target, earliest_decision)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "compaction_follows_decision",
+                        "decision_event_id": earliest_decision.event_id,
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.compacted"
+                    and not any(
+                        candidate.type == "summarizes"
+                        for candidate in target.relationships
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_compaction_detail",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.compacted"
+                    and not _event_follows(target, earliest_decision or source)
+                    and not _event_follows(earliest_decision or source, target)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "compaction_chronology_undetermined",
+                    }
+                    if earliest_decision is not None:
+                        invalid["decision_event_id"] = earliest_decision.event_id
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "preceded_by"
+                    and target.kind.startswith("tool.call.")
+                    and _event_follows(target, source)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "tool_not_preceding_change",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "preceded_by"
+                    and target.kind.startswith("tool.call.")
+                    and earliest_decision is not None
+                    and _event_follows(target, earliest_decision)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "tool_follows_decision",
+                        "decision_event_id": earliest_decision.event_id,
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "preceded_by"
+                    and target.kind.startswith("tool.call.")
+                    and (
+                        not isinstance(tool, dict)
+                        or "command" not in tool and "result" not in tool
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_tool_detail",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "preceded_by"
+                    and target.kind.startswith("tool.call.")
+                    and isinstance(tool, dict)
+                    and isinstance(raw_tool := _attributes(target).get("tool"), dict)
+                    and "command" in raw_tool
+                    and (
+                        not isinstance(raw_tool["command"], str)
+                        or not raw_tool["command"].strip()
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_tool_command",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "preceded_by"
+                    and target.kind.startswith("tool.call.")
+                    and isinstance(tool, dict)
+                    and isinstance(raw_tool := _attributes(target).get("tool"), dict)
+                    and "result" in raw_tool
+                    and (
+                        not isinstance(raw_tool["result"], str)
+                        or not raw_tool["result"].strip()
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_tool_result",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "preceded_by"
+                    and target.kind.startswith("tool.call.")
+                    and isinstance(tool, dict)
+                    and not target.operation["status"].strip()
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_tool_operation_status",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "preceded_by"
+                    and target.kind.startswith("tool.call.")
+                    and isinstance(tool, dict)
+                    and "name" in target.operation
+                    and (
+                        not isinstance(target.operation["name"], str)
+                        or not target.operation["name"].strip()
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_tool_operation_name",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "preceded_by"
+                    and target.kind.startswith("tool.call.")
+                    and isinstance(tool, dict)
+                    and isinstance(raw_tool := _attributes(target).get("tool"), dict)
+                    and "exit_code" in raw_tool
+                    and (
+                        not isinstance(raw_tool["exit_code"], int)
+                        or isinstance(raw_tool["exit_code"], bool)
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_tool_exit_code",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "preceded_by"
+                    and target.kind.startswith("tool.call.")
+                    and not _event_follows(target, earliest_decision or source)
+                    and not _event_follows(earliest_decision or source, target)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "tool_chronology_undetermined",
+                    }
+                    if earliest_decision is not None:
+                        invalid["decision_event_id"] = earliest_decision.event_id
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    and target.kind == "verification.finished"
+                    and _event_follows(source, target)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "verification_precedes_change",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    and target.kind == "verification.finished"
+                    and verification is None
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_verification_result",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    and target.kind == "verification.finished"
+                    and isinstance(verification, dict)
+                    and isinstance(
+                        raw_verification := _attributes(target).get("verification"),
+                        dict,
+                    )
+                    and "exit_code" in raw_verification
+                    and (
+                        not isinstance(raw_verification["exit_code"], int)
+                        or isinstance(raw_verification["exit_code"], bool)
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_verification_exit_code",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    and target.kind == "verification.finished"
+                    and isinstance(verification, dict)
+                    and isinstance(
+                        raw_verification := _attributes(target).get("verification"),
+                        dict,
+                    )
+                    and not verification.get("unresolved")
+                    and "command" in raw_verification
+                    and (
+                        not isinstance(raw_verification["command"], str)
+                        or not raw_verification["command"].strip()
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_verification_command",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    and target.kind == "verification.finished"
+                    and isinstance(verification, dict)
+                    and isinstance(
+                        raw_verification := _attributes(target).get("verification"),
+                        dict,
+                    )
+                    and "test_origin" in raw_verification
+                    and (
+                        not isinstance(raw_verification["test_origin"], str)
+                        or raw_verification["test_origin"] not in {
+                            "pre_existing",
+                            "same_agent",
+                        }
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_verification_test_origin",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    and target.kind == "verification.finished"
+                    and isinstance(verification, dict)
+                    and "exit_code" in verification
+                    and (
+                        verification["passed"] is True
+                        and verification["exit_code"] != 0
+                        or verification["passed"] is False
+                        and verification["exit_code"] == 0
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "conflicting_verification_outcome",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    and target.kind == "verification.finished"
+                    and isinstance(verification, dict)
+                    and "command" not in verification
+                    and not verification.get("unresolved")
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_verification_command",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    and target.kind == "verification.finished"
+                    and not _event_follows(source, target)
+                    and not _event_follows(target, source)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "verification_chronology_undetermined",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "applies"
+                    and target.kind == "change.proposed"
+                    and _event_follows(target, source)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "proposal_not_preceding_change",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "applies"
+                    and target.kind == "change.proposed"
+                    and not target.actor["id"].strip()
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_decision_actor",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "applies"
+                    and target.kind == "change.proposed"
+                    and not _event_follows(source, target)
+                    and not _event_follows(target, source)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "proposal_chronology_undetermined",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and (
+                        relationship.type == "verified_by"
+                        and target.kind != "verification.finished"
+                        or relationship.type == "motivated_by"
+                        and target.kind != "requirement.observed"
+                        or relationship.type == "informed_by"
+                        and target.kind not in {"context.read", "context.compacted"}
+                        or relationship.type == "preceded_by"
+                        and not target.kind.startswith("tool.call.")
+                        or relationship.type == "applies"
+                        and target.kind != "change.proposed"
+                    )
+                ):
+                    invalid = {**item, "target_kind": target.kind}
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    relationship.type == "corrects"
+                    and source.kind == "human.corrected"
+                    and target.kind != "change.applied"
+                ):
+                    unresolved.append({**item, "target_kind": target.kind})
+        hunk = _change_hunk(source)
+        integrity = _change_hunk_integrity(source)
+        if hunk is not None:
+            change = {
+                "event_id": source.event_id,
+                "actor_id": source.actor["id"],
+                "hunk": hunk,
+                "links": source_links,
+                "unresolved": source_unresolved,
+                "corrections": corrections_by_change.setdefault(source.event_id, []),
+                "coverage": _evidence_coverage(
+                    source_links,
+                    source_unresolved,
+                    integrity,
+                ),
+            }
+            if integrity:
+                change["integrity"] = integrity
+            changes.append(change)
+        elif any(
+            issue["field"] in {
+                "change",
+                "path",
+                "old_start",
+                "old_count",
+                "new_start",
+                "new_count",
+            }
+            for issue in integrity
+        ):
+            invalid_changes.append({
+                "event_id": source.event_id,
+                "actor_id": source.actor["id"],
+                "integrity": integrity,
+            })
+    return {
+        "changes": changes,
+        "invalid_changes": invalid_changes,
+        "links": links,
+        "unresolved": unresolved,
+    }
+
+
+def _evidence_coverage(
+    links: list[dict[str, object]],
+    unresolved: list[dict[str, object]],
+    integrity: list[dict[str, str]],
+) -> dict[str, object]:
+    present = {
+        "requirement": any(
+            link.get("type") == "motivated_by"
+            and link.get("target_kind") == "requirement.observed"
+            and "requirement" in link
+            for link in links
+        ),
+        "context": any(
+            (
+                link.get("type") == "informed_by"
+                and link.get("target_kind") == "context.read"
+                and "context" in link
+            )
+            or (
+                link.get("type") == "informed_by"
+                and link.get("target_kind") == "context.compacted"
+                and isinstance((compaction := link.get("compaction")), dict)
+                and isinstance((sources := compaction.get("sources")), list)
+                and any(
+                    isinstance(source, dict)
+                    and source.get("type") == "summarizes"
+                    and source.get("kind") == "context.read"
+                    and "context" in source
+                    for source in sources
+                )
+            )
+            for link in links
+        ),
+        "tool": any(
+            link.get("type") == "preceded_by"
+            and isinstance((tool := link.get("tool")), dict)
+            and ("command" in tool or "result" in tool)
+            for link in links
+        ),
+        "verification": any(
+            link.get("type") == "verified_by"
+            and isinstance((verification := link.get("verification")), dict)
+            and "command" in verification
+            for link in links
+        ),
+        "decision": any(
+            link.get("type") == "applies"
+            and link.get("target_kind") == "change.proposed"
+            and isinstance(link.get("target_actor_id"), str)
+            and bool(link["target_actor_id"].strip())
+            for link in links
+        ),
+    }
+    missing = [kind for kind, is_present in present.items() if not is_present]
+    unresolved_count = sum(
+        link.get("type") in {
+            "motivated_by",
+            "informed_by",
+            "preceded_by",
+            "verified_by",
+            "applies",
+        }
+        for link in unresolved
+    ) + sum(
+        sum(
+            isinstance(source, dict) and source.get("type") == "summarizes"
+            for source in compaction.get("unresolved", [])
+        )
+        for link in links
+        if link.get("type") == "informed_by"
+        and link.get("target_kind") == "context.compacted"
+        and isinstance((compaction := link.get("compaction")), dict)
+        and isinstance(compaction.get("unresolved"), list)
+    ) + sum(
+        len(verification.get("unresolved", []))
+        for link in links
+        if link.get("type") == "verified_by"
+        and isinstance((verification := link.get("verification")), dict)
+        and isinstance(verification.get("unresolved"), list)
+    )
+    unknown_test_origin_count = sum(
+        "test_origin" not in verification
+        for link in links
+        if link.get("type") == "verified_by"
+        and isinstance((verification := link.get("verification")), dict)
+    )
+    same_agent_test_count = sum(
+        verification.get("test_origin") == "same_agent"
+        for link in links
+        if link.get("type") == "verified_by"
+        and isinstance((verification := link.get("verification")), dict)
+    )
+    failed_verification_count = sum(
+        verification.get("passed") is False
+        for link in links
+        if link.get("type") == "verified_by"
+        and isinstance((verification := link.get("verification")), dict)
+    )
+    coverage = {
+        "status": "incomplete"
+        if missing
+        or unresolved_count
+        or unknown_test_origin_count
+        or same_agent_test_count
+        or failed_verification_count
+        or integrity
+        else "complete",
+        "missing": missing,
+        "unresolved_count": unresolved_count,
+    }
+    if unknown_test_origin_count:
+        coverage["unknown_test_origin_count"] = unknown_test_origin_count
+    if same_agent_test_count:
+        coverage["same_agent_test_count"] = same_agent_test_count
+    if failed_verification_count:
+        coverage["failed_verification_count"] = failed_verification_count
+    if integrity:
+        coverage["integrity_issue_count"] = len(integrity)
+    return coverage
+
+
+def _change_hunk(event: Event) -> dict[str, object] | None:
+    if event.kind != "change.applied":
+        return None
+    change = _attributes(event).get("change")
+    if not isinstance(change, dict):
+        return None
+    path = change.get("path")
+    range_keys = ("old_start", "old_count", "new_start", "new_count")
+    if not isinstance(path, str) or not path.strip() or any(
+        not isinstance(change.get(key), int)
+        or isinstance(change.get(key), bool)
+        or change[key] < 0
+        for key in range_keys
+    ) or any(
+        change[start_key] == 0 and change[count_key] > 0
+        for start_key, count_key in (("old_start", "old_count"), ("new_start", "new_count"))
+    ):
+        return None
+    hunk = {"path": path, **{key: change[key] for key in range_keys}}
+    symbol = change.get("symbol")
+    if isinstance(symbol, str) and symbol.strip():
+        hunk["symbol"] = symbol
+    return hunk
+
+
+def _change_hunk_integrity(event: Event) -> list[dict[str, str]]:
+    change = _attributes(event).get("change")
+    if event.kind != "change.applied":
+        return []
+    if not isinstance(change, dict):
+        return [{"field": "change", "reason": "invalid_change_detail"}]
+    integrity = []
+    path = change.get("path")
+    if not isinstance(path, str) or not path.strip():
+        integrity.append({"field": "path", "reason": "invalid_change_path"})
+    old_start = change.get("old_start")
+    old_count = change.get("old_count")
+    if (
+        not isinstance(old_start, int)
+        or isinstance(old_start, bool)
+        or old_start < 0
+        or old_start == 0
+        and isinstance(old_count, int)
+        and not isinstance(old_count, bool)
+        and old_count > 0
+    ):
+        integrity.append({
+            "field": "old_start",
+            "reason": "invalid_change_old_start",
+        })
+    if (
+        not isinstance(old_count, int)
+        or isinstance(old_count, bool)
+        or old_count < 0
+    ):
+        integrity.append({
+            "field": "old_count",
+            "reason": "invalid_change_old_count",
+        })
+    new_start = change.get("new_start")
+    new_count = change.get("new_count")
+    if (
+        not isinstance(new_start, int)
+        or isinstance(new_start, bool)
+        or new_start < 0
+        or new_start == 0
+        and isinstance(new_count, int)
+        and not isinstance(new_count, bool)
+        and new_count > 0
+    ):
+        integrity.append({
+            "field": "new_start",
+            "reason": "invalid_change_new_start",
+        })
+    if (
+        not isinstance(new_count, int)
+        or isinstance(new_count, bool)
+        or new_count < 0
+    ):
+        integrity.append({
+            "field": "new_count",
+            "reason": "invalid_change_new_count",
+        })
+    if "symbol" in change:
+        symbol = change["symbol"]
+        if not isinstance(symbol, str) or not symbol.strip():
+            integrity.append({"field": "symbol", "reason": "invalid_change_symbol"})
+    return integrity
+
+
+def _verification_result(
+    event: Event,
+    events_by_id: dict[str, Event],
+    change_event: Event | None = None,
+) -> dict[str, object] | None:
+    if event.kind != "verification.finished":
+        return None
+    verification = _attributes(event).get("verification")
+    if not isinstance(verification, dict):
+        return None
+    command = verification.get("command")
+    passed = verification.get("passed")
+    if not isinstance(passed, bool):
+        return None
+    result: dict[str, object] = {"passed": passed}
+    if isinstance(command, str) and command.strip():
+        result["command"] = command
+    exit_code = verification.get("exit_code")
+    if isinstance(exit_code, int) and not isinstance(exit_code, bool):
+        result["exit_code"] = exit_code
+    test_origin = verification.get("test_origin")
+    if isinstance(test_origin, str) and test_origin in {"pre_existing", "same_agent"}:
+        result["test_origin"] = test_origin
+    starts = []
+    unresolved = []
+    projected_relationships = set()
+    for relationship in event.relationships:
+        if relationship.type != "completes":
+            continue
+        relationship_key = (relationship.type, relationship.event_id)
+        if relationship_key in projected_relationships:
+            continue
+        projected_relationships.add(relationship_key)
+        started = events_by_id.get(relationship.event_id)
+        if started is None:
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+            })
+            continue
+        if started.kind != "verification.started":
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": started.kind,
+            })
+            continue
+        detail: dict[str, object] = {
+            "event_id": started.event_id,
+            "actor_id": started.actor["id"],
+            "chronology": _evidence_chronology(started, event, "finish"),
+        }
+        if change_event is not None:
+            detail["change_chronology"] = _evidence_chronology(
+                started,
+                change_event,
+                "change",
+            )
+        unresolved_count_before_start = len(unresolved)
+        start_after_finish = _event_follows(started, event)
+        start_finish_chronology_undetermined = (
+            not start_after_finish and not _event_follows(event, started)
+        )
+        start_before_change = (
+            change_event is not None and _event_follows(change_event, started)
+        )
+        start_change_chronology_undetermined = (
+            change_event is not None
+            and not start_before_change
+            and not _event_follows(started, change_event)
+        )
+        if start_after_finish:
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": started.kind,
+                "reason": "verification_start_after_finish",
+            })
+        elif start_before_change:
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": started.kind,
+                "reason": "verification_start_precedes_change",
+            })
+        started_verification = _attributes(started).get("verification")
+        has_command = False
+        if isinstance(started_verification, dict):
+            started_command = started_verification.get("command")
+            if isinstance(started_command, str) and started_command.strip():
+                has_command = True
+                detail["command"] = started_command
+                result.setdefault("command", started_command)
+                if (
+                    not start_after_finish
+                    and not start_before_change
+                    and result["command"] != started_command
+                ):
+                    unresolved.append({
+                        "type": relationship.type,
+                        "event_id": relationship.event_id,
+                        "target_kind": started.kind,
+                        "reason": "conflicting_verification_command",
+                    })
+        starts.append(detail)
+        if (
+            not has_command
+            and not start_after_finish
+            and not start_before_change
+        ):
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": started.kind,
+                "reason": "invalid_verification_command",
+            })
+        if (
+            start_finish_chronology_undetermined
+            and len(unresolved) == unresolved_count_before_start
+        ):
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": started.kind,
+                "reason": "verification_start_finish_chronology_undetermined",
+            })
+        elif (
+            start_change_chronology_undetermined
+            and len(unresolved) == unresolved_count_before_start
+        ):
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": started.kind,
+                "reason": "verification_start_change_chronology_undetermined",
+            })
+    if starts:
+        result["starts"] = starts
+    if unresolved:
+        result["unresolved"] = unresolved
+    return result
+
+
+def _requirement_detail(event: Event) -> dict[str, object] | None:
+    if event.kind != "requirement.observed":
+        return None
+    requirement = _attributes(event).get("requirement")
+    if not isinstance(requirement, dict):
+        return None
+    requirement_id = requirement.get("id")
+    text = requirement.get("text")
+    if not isinstance(requirement_id, str) or not requirement_id.strip():
+        return None
+    if not isinstance(text, str) or not text.strip():
+        return None
+    return {"id": requirement_id, "text": text}
+
+
+def _context_read_detail(event: Event) -> dict[str, object] | None:
+    if event.kind != "context.read":
+        return None
+    context = _attributes(event).get("context")
+    if not isinstance(context, dict):
+        return None
+    path = context.get("path")
+    if not isinstance(path, str) or not path.strip():
+        return None
+    detail: dict[str, object] = {"path": path}
+    line_start = context.get("line_start")
+    if isinstance(line_start, int) and not isinstance(line_start, bool) and line_start > 0:
+        detail["line_start"] = line_start
+    line_end = context.get("line_end")
+    if (
+        isinstance(line_end, int)
+        and not isinstance(line_end, bool)
+        and line_end > 0
+        and ("line_start" not in detail or line_end >= detail["line_start"])
+    ):
+        detail["line_end"] = line_end
+    symbol = context.get("symbol")
+    if isinstance(symbol, str) and symbol.strip():
+        detail["symbol"] = symbol
+    return detail
+
+
+def _has_invalid_context_line_start(event: Event) -> bool:
+    context = _attributes(event).get("context")
+    if not isinstance(context, dict) or "line_start" not in context:
+        return False
+    line_start = context["line_start"]
+    return (
+        not isinstance(line_start, int)
+        or isinstance(line_start, bool)
+        or line_start <= 0
+    )
+
+
+def _has_invalid_context_line_end(event: Event) -> bool:
+    context = _attributes(event).get("context")
+    if not isinstance(context, dict) or "line_end" not in context:
+        return False
+    line_end = context["line_end"]
+    if not isinstance(line_end, int) or isinstance(line_end, bool) or line_end <= 0:
+        return True
+    line_start = context.get("line_start")
+    return (
+        isinstance(line_start, int)
+        and not isinstance(line_start, bool)
+        and line_start > 0
+        and line_end < line_start
+    )
+
+
+def _has_invalid_context_symbol(event: Event) -> bool:
+    context = _attributes(event).get("context")
+    if not isinstance(context, dict) or "symbol" not in context:
+        return False
+    symbol = context["symbol"]
+    return not isinstance(symbol, str) or not symbol.strip()
+
+
+def _tool_call_detail(event: Event) -> dict[str, object] | None:
+    if not event.kind.startswith("tool.call."):
+        return None
+    operation = event.operation
+    detail: dict[str, object] = {}
+    status = operation["status"]
+    if status.strip():
+        detail["status"] = status
+    name = operation.get("name")
+    if isinstance(name, str) and name.strip():
+        detail["name"] = name
+    tool = _attributes(event).get("tool")
+    if not isinstance(tool, dict):
+        return detail
+    for key in ("command", "result"):
+        value = tool.get(key)
+        if isinstance(value, str) and value.strip():
+            detail[key] = value
+    exit_code = tool.get("exit_code")
+    if isinstance(exit_code, int) and not isinstance(exit_code, bool):
+        detail["exit_code"] = exit_code
+    return detail
+
+
+def _context_compaction_detail(
+    event: Event,
+    events_by_id: dict[str, Event],
+) -> dict[str, object] | None:
+    if event.kind != "context.compacted":
+        return None
+    sources = []
+    unresolved = []
+    projected_relationships = set()
+    for relationship in event.relationships:
+        relationship_key = (relationship.type, relationship.event_id)
+        if relationship_key in projected_relationships:
+            continue
+        projected_relationships.add(relationship_key)
+        item: dict[str, object] = {
+            "type": relationship.type,
+            "event_id": relationship.event_id,
+        }
+        source = events_by_id.get(relationship.event_id)
+        if source is None:
+            unresolved.append(item)
+            continue
+        if relationship.type == "summarizes" and source.kind != "context.read":
+            item["target_kind"] = source.kind
+            unresolved.append(item)
+            continue
+        item["kind"] = source.kind
+        item["actor_id"] = source.actor["id"]
+        context = _context_read_detail(source)
+        if relationship.type == "summarizes" and context is None:
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": source.kind,
+                "reason": "invalid_context_detail",
+            })
+            continue
+        if context is not None:
+            item["context"] = context
+        if relationship.type == "summarizes":
+            item["chronology"] = _evidence_chronology(
+                source,
+                event,
+                "compaction",
+            )
+        sources.append(item)
+        source_chronology = item.get("chronology")
+        if relationship.type == "summarizes" and _event_follows(source, event):
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": source.kind,
+                "reason": "context_not_preceding_compaction",
+            })
+        elif relationship.type == "summarizes" and source_chronology == "undetermined":
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": source.kind,
+                "reason": "context_source_chronology_undetermined",
+            })
+        elif relationship.type == "summarizes" and _has_invalid_context_line_start(source):
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": source.kind,
+                "reason": "invalid_context_line_start",
+            })
+        elif relationship.type == "summarizes" and _has_invalid_context_line_end(source):
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": source.kind,
+                "reason": "invalid_context_line_end",
+            })
+        elif relationship.type == "summarizes" and _has_invalid_context_symbol(source):
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": source.kind,
+                "reason": "invalid_context_symbol",
+            })
+    return {"sources": sources, "unresolved": unresolved}
+
+
+def _human_correction(event: Event) -> dict[str, object] | None:
+    if event.kind != "human.corrected":
+        return None
+    correction = _attributes(event).get("correction")
+    if not isinstance(correction, dict):
+        return None
+    action = correction.get("action")
+    if not isinstance(action, str) or action not in {"modified", "reverted"}:
+        return None
+    return {"action": action}
 
 
 def _actor_role(events: Iterable[Event], actor_id: str) -> object:

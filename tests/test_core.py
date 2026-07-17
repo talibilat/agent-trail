@@ -67,6 +67,23 @@ class EventTests(unittest.TestCase):
     def test_accepts_missing_parent_span_id(self):
         self.assertIsNone(Event.from_dict(event_data()).parent_span_id)
 
+    def test_accepts_optional_event_relationships(self):
+        event = Event.from_dict(event_data(relationships=[
+            {
+                "type": "motivated_by",
+                "event_id": "requirement-1",
+                "future_field": True,
+            },
+        ]))
+
+        self.assertEqual(len(event.relationships), 1)
+        self.assertEqual(event.relationships[0].type, "motivated_by")
+        self.assertEqual(event.relationships[0].event_id, "requirement-1")
+        self.assertTrue(event.raw["relationships"][0]["future_field"])
+
+    def test_defaults_missing_event_relationships_to_empty(self):
+        self.assertEqual(Event.from_dict(event_data()).relationships, ())
+
     def test_is_immutable(self):
         event = Event.from_dict(event_data())
 
@@ -130,6 +147,20 @@ class EventTests(unittest.TestCase):
     def test_rejects_invalid_optional_parent_type(self):
         with self.assertRaisesRegex(EventError, "parent_span_id"):
             Event.from_dict(event_data(parent_span_id=1))
+
+    def test_rejects_invalid_event_relationships(self):
+        invalid_values = (
+            ({}, "relationships must be an array"),
+            (["event-1"], r"relationships\[0\] must be an object"),
+            ([{"event_id": "event-1"}], r"relationships\[0\]\.type"),
+            ([{"type": 1, "event_id": "event-1"}], r"relationships\[0\]\.type"),
+            ([{"type": "verified_by"}], r"relationships\[0\]\.event_id"),
+            ([{"type": "verified_by", "event_id": 1}], r"relationships\[0\]\.event_id"),
+        )
+        for relationships, message in invalid_values:
+            with self.subTest(relationships=relationships):
+                with self.assertRaisesRegex(EventError, message):
+                    Event.from_dict(event_data(relationships=relationships))
 
     def test_rejects_invalid_sequence(self):
         with self.assertRaisesRegex(EventError, "sequence"):
@@ -248,6 +279,17 @@ class RedactionTests(unittest.TestCase):
             sanitize_event(Event.from_dict(event_data())).event_id,
             "evt-1",
         )
+
+    def test_relationship_event_ids_share_structural_redaction(self):
+        secret = "ghp_" + "a" * 36
+        target = sanitize_event(Event.from_dict(event_data(event_id=secret)))
+        source = sanitize_event(Event.from_dict(event_data(
+            event_id="source",
+            relationships=[{"type": "verified_by", "event_id": secret}],
+        )))
+
+        self.assertEqual(source.relationships[0].event_id, target.event_id)
+        self.assertNotIn(secret, json.dumps(source.raw))
 
     def test_recursively_redacts_secret_dictionary_keys_without_collapsing_them(self):
         extension_secret = "ghp_" + "a" * 36
