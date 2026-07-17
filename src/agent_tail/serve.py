@@ -998,6 +998,28 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     and relationship.type == "verified_by"
                     and target.kind == "verification.finished"
                     and isinstance(verification, dict)
+                    and isinstance(
+                        raw_verification := _attributes(target).get("verification"),
+                        dict,
+                    )
+                    and "exit_code" in raw_verification
+                    and (
+                        not isinstance(raw_verification["exit_code"], int)
+                        or isinstance(raw_verification["exit_code"], bool)
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_verification_exit_code",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    and target.kind == "verification.finished"
+                    and isinstance(verification, dict)
                     and "exit_code" in verification
                     and (
                         verification["passed"] is True

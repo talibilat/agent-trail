@@ -256,6 +256,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "verified_by", "event_id": "verification-unknown-actors"},
                         {"type": "verified_by", "event_id": "verification-invalid-result"},
                         {"type": "verified_by", "event_id": "verification-conflicting-outcome"},
+                        {"type": "verified_by", "event_id": "verification-invalid-exit-code"},
                         {"type": "verified_by", "event_id": "context-1"},
                         {"type": "references", "event_id": "unrelated-verification"},
                         {"type": "reviewed_by", "event_id": "missing-review<img id=evidence-missing-injected>"},
@@ -476,6 +477,19 @@ class ServeEndToEndTests(unittest.TestCase):
                         "test_origin": "pre_existing",
                     }},
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="verification-invalid-exit-code",
+                    span_id="span-verification-invalid-exit-code",
+                    sequence=27,
+                    kind="verification.finished",
+                    actor={"id": "invalid-exit-code-reporter"},
+                    attributes={"verification": {
+                        "command": "pytest tests/test_invalid_exit_code.py",
+                        "passed": True,
+                        "exit_code": "<img id=invalid-exit-code-injected>",
+                        "test_origin": "pre_existing",
+                    }},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -638,6 +652,19 @@ class ServeEndToEndTests(unittest.TestCase):
                     "Conflicting verification outcome · verified_by"
                 )
                 expect(conflicting_outcome_diagnostic).to_contain_text("verification.finished")
+                invalid_exit_code = evidence.locator(".verification-card").filter(
+                    has_text="invalid-exit-code-reporter"
+                )
+                expect(invalid_exit_code).to_contain_text("pytest tests/test_invalid_exit_code.py")
+                expect(invalid_exit_code).to_contain_text("PASS")
+                invalid_exit_code_diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="verification-invalid-exit-code"
+                )
+                expect(invalid_exit_code_diagnostic).to_contain_text(
+                    "Invalid verification exit code · verified_by"
+                )
+                expect(invalid_exit_code_diagnostic).to_contain_text("verification.finished")
+                expect(page.locator("#invalid-exit-code-injected")).to_have_count(0)
                 malformed_requirement = evidence.locator(".unresolved-evidence").filter(
                     has_text="requirement-invalid-detail"
                 )
@@ -664,7 +691,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_tool).to_contain_text("Invalid tool details · preceded_by")
                 expect(malformed_tool).to_contain_text("tool.call.completed")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 16 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 17 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)

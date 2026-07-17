@@ -1835,11 +1835,13 @@
           type.className = 'type';
           type.textContent = link.reason === 'invalid_verification_result'
             ? `Invalid verification result · ${link.type}`
+            : link.reason === 'invalid_verification_exit_code'
+              ? `Invalid verification exit code · ${link.type}`
             : link.reason === 'conflicting_verification_outcome'
-              ? `Conflicting verification outcome · ${link.type}`
-            : link.reason === 'invalid_verification_command'
-              ? `Invalid verification command · ${link.type}`
-              : link.reason === 'invalid_requirement_detail'
+                ? `Conflicting verification outcome · ${link.type}`
+              : link.reason === 'invalid_verification_command'
+                ? `Invalid verification command · ${link.type}`
+                : link.reason === 'invalid_requirement_detail'
                 ? `Invalid requirement details · ${link.type}`
                 : link.reason === 'invalid_context_detail'
                   ? `Invalid context details · ${link.type}`

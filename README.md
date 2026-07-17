@@ -142,6 +142,7 @@ The browser event inspector presents the actor for compactions linked by `inform
 To attach a test result, emit a `verification.finished` event with a boolean `attributes.verification.passed` field and optional integer `exit_code`, then reference it from the change event with a `verified_by` relationship.
 Canonical finished verifications without a boolean result remain inspectable as generic links but are reported as invalid verification results and keep coverage incomplete.
 When `exit_code` is supplied, zero must correspond to `passed: true` and a nonzero value to `passed: false`; conflicting values remain visible but produce a diagnostic and keep coverage incomplete.
+A supplied exit code that is not an integer is omitted from the projected result, produces an invalid-exit-code diagnostic, and keeps coverage incomplete.
 For lifecycle attribution, emit the command as non-blank `attributes.verification.command` on a `verification.started` event and reference it from `verification.finished` with a `completes` relationship.
 Finished-only events can instead include the command directly for producers that do not emit a separate start event.
 Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
@@ -155,7 +156,7 @@ Any failed result linked by `verified_by` contributes to `failed_verification_co
 Distinct missing start events, resolved starts without valid commands, and `completes` targets that are not `verification.started` events remain visible under `verification.unresolved` and contribute to incomplete hunk coverage; wrong-kind targets include their actual event kind so consumers can distinguish them from missing events.
 The browser event inspector presents each test linked by `verified_by`, showing its starter and command separately from the result reporter, together with the pass or fail outcome, optional exit code, and whether the test predates the change, was written by the same agent, or has unknown provenance; a blank starter or reporter ID is identified as an unknown actor, and unrelated verification links are not attributed as tests of the hunk.
 It identifies each missing verification start by relationship type and event ID rather than hiding lifecycle gaps behind the aggregate incomplete-coverage status.
-Malformed optional verification metadata is omitted without rejecting the event, its relationship, or other valid verification details.
+Other malformed optional verification metadata is omitted without rejecting the event, its relationship, or other valid verification details.
 To record a later human change, emit a `human.corrected` event with a `corrects` relationship targeting the original `change.applied` event and set `attributes.correction.action` to `modified` or `reverted`.
 Each affected hunk exposes these inbound links in event order under `corrections`, including the human actor and validated action when available.
 Canonical corrections without a `modified` or `reverted` action remain visible but are reported as invalid correction details instead of being attributed to either outcome.
