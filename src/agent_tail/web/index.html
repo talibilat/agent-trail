@@ -1936,6 +1936,11 @@
             incomplete.className = 'incomplete';
             incomplete.textContent = 'Correction occurred before change';
             card.append(incomplete);
+          } else if (link.chronology === 'undetermined') {
+            const chronology = document.createElement('div');
+            chronology.className = 'meta';
+            chronology.textContent = 'correction chronology undetermined';
+            card.append(chronology);
           }
           block.append(card);
         });

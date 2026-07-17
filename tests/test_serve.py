@@ -4559,6 +4559,7 @@ class ServeTests(unittest.TestCase):
                 "source_actor_id": "maintainer-1",
                 "target_kind": "change.applied",
                 "target_actor_id": "reviewer-1",
+                "chronology": "after_change",
                 "correction": {"action": "modified"},
             },
             {
@@ -4569,6 +4570,7 @@ class ServeTests(unittest.TestCase):
                 "source_actor_id": "maintainer-1",
                 "target_kind": "change.applied",
                 "target_actor_id": "reviewer-1",
+                "chronology": "after_change",
                 "correction": {"action": "reverted"},
             },
             {
@@ -4579,6 +4581,7 @@ class ServeTests(unittest.TestCase):
                 "source_actor_id": "maintainer-2",
                 "target_kind": "change.applied",
                 "target_actor_id": "reviewer-1",
+                "chronology": "after_change",
                 "reason": "invalid_correction_detail",
             },
         ])
@@ -4670,8 +4673,20 @@ class ServeTests(unittest.TestCase):
             corrections["correction-before-change"]["reason"],
             "correction_precedes_change",
         )
+        self.assertEqual(
+            corrections["correction-before-change"]["chronology"],
+            "before_change",
+        )
         self.assertNotIn("reason", corrections["correction-after-change"])
+        self.assertEqual(
+            corrections["correction-after-change"]["chronology"],
+            "after_change",
+        )
         self.assertNotIn("reason", corrections["correction-same-time"])
+        self.assertEqual(
+            corrections["correction-same-time"]["chronology"],
+            "undetermined",
+        )
         self.assertEqual(evidence["unresolved"], [{
             "type": "corrects",
             "source_event_id": "correction-before-change",

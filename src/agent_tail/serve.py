@@ -1023,6 +1023,11 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     and source.kind == "human.corrected"
                     and target.kind == "change.applied"
                 ):
+                    resolved["chronology"] = _evidence_chronology(
+                        source,
+                        target,
+                        "change",
+                    )
                     if correction is None:
                         resolved["reason"] = "invalid_correction_detail"
                         invalid = {

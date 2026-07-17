@@ -527,6 +527,16 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[{"type": "corrects", "event_id": "change-1"}],
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="correction-undetermined",
+                    span_id="span-correction-undetermined",
+                    emitter_id="concurrent-correction-worker",
+                    timestamp="2026-07-13T11:02:44.912Z",
+                    kind="human.corrected",
+                    actor={"id": "concurrent-maintainer"},
+                    attributes={"correction": {"action": "modified"}},
+                    relationships=[{"type": "corrects", "event_id": "change-1"}],
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="unrelated-proposal",
                     span_id="span-unrelated-proposal",
                     sequence=12,
@@ -982,6 +992,13 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(early_correction).to_contain_text("Human modified this change")
                 expect(early_correction).to_contain_text("Correction occurred before change")
                 expect(early_correction).to_contain_text("event correction-before-change")
+                undetermined_correction = evidence.locator(".correction-card").filter(
+                    has_text="concurrent-maintainer"
+                )
+                expect(undetermined_correction).to_contain_text("Human modified this change")
+                expect(undetermined_correction).to_contain_text(
+                    "correction chronology undetermined"
+                )
                 expect(evidence).not_to_contain_text("unrelated-maintainer")
                 generic_diagnostic = evidence.locator(".unresolved-evidence").filter(has_text="reviewed_by")
                 expect(generic_diagnostic).to_contain_text("Missing relationship target · reviewed_by")
