@@ -160,6 +160,17 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="verification-started-after-finish",
+                    span_id="span-verification-started-after-finish",
+                    sequence=3,
+                    timestamp="2026-07-13T11:03:00Z",
+                    kind="verification.started",
+                    actor={"id": "late-test-runner"},
+                    attributes={"verification": {
+                        "command": "pytest tests/test_session.py<img id=verification-injected>",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="verification-1",
                     span_id="span-verification-finished",
                     sequence=4,
@@ -179,6 +190,10 @@ class ServeEndToEndTests(unittest.TestCase):
                         {
                             "type": "completes",
                             "event_id": "verification-started-conflict",
+                        },
+                        {
+                            "type": "completes",
+                            "event_id": "verification-started-after-finish",
                         },
                     ],
                 )) + "\n",
@@ -846,6 +861,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("result reported by result-reporter-1")
                 expect(evidence).to_contain_text("Invalid completes start command · verification-started-1 · verification.started")
                 expect(evidence).to_contain_text("Conflicting completes start command · verification-started-conflict · verification.started")
+                expect(evidence).to_contain_text("Verification start occurred after finish · verification-started-after-finish · verification.started")
                 expect(evidence).to_contain_text("Verification command · pytest tests/test_session.py")
                 verification = evidence.locator(".verification-card").filter(has_text="result-reporter-1")
                 expect(verification).to_have_count(1)
@@ -1066,7 +1082,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(later_tool).to_contain_text("Tool occurred after change · preceded_by")
                 expect(later_tool).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("git diff --stat")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 34 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 35 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)

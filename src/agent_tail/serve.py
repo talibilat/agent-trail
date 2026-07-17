@@ -1633,6 +1633,14 @@ def _verification_result(
             "event_id": started.event_id,
             "actor_id": started.actor["id"],
         }
+        start_after_finish = started.timestamp > event.timestamp
+        if start_after_finish:
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": started.kind,
+                "reason": "verification_start_after_finish",
+            })
         started_verification = _attributes(started).get("verification")
         has_command = False
         if isinstance(started_verification, dict):
@@ -1641,7 +1649,7 @@ def _verification_result(
                 has_command = True
                 detail["command"] = started_command
                 result.setdefault("command", started_command)
-                if result["command"] != started_command:
+                if not start_after_finish and result["command"] != started_command:
                     unresolved.append({
                         "type": relationship.type,
                         "event_id": relationship.event_id,
@@ -1649,7 +1657,7 @@ def _verification_result(
                         "reason": "conflicting_verification_command",
                     })
         starts.append(detail)
-        if not has_command:
+        if not has_command and not start_after_finish:
             unresolved.append({
                 "type": relationship.type,
                 "event_id": relationship.event_id,

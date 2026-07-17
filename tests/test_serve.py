@@ -1327,6 +1327,77 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 1,
         })
 
+    def test_verification_start_after_finish_is_a_lifecycle_diagnostic(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="verification-started-after-finish",
+                timestamp="2026-07-13T11:03:00Z",
+                kind="verification.started",
+                attributes={"verification": {"command": "pytest tests/test_session.py"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-started-same-time",
+                span_id="span-same-time",
+                sequence=2,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="verification.started",
+                attributes={"verification": {"command": "pytest tests/test_session.py"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-finished-1",
+                span_id="span-finished",
+                sequence=3,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="verification.finished",
+                attributes={"verification": {
+                    "passed": True,
+                    "test_origin": "pre_existing",
+                }},
+                relationships=[
+                    {"type": "completes", "event_id": "verification-started-after-finish"},
+                    {"type": "completes", "event_id": "verification-started-same-time"},
+                ],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                span_id="span-change",
+                sequence=4,
+                timestamp="2026-07-13T11:02:30Z",
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[{
+                    "type": "verified_by",
+                    "event_id": "verification-finished-1",
+                }],
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+        verification = change["links"][0]["verification"]
+
+        self.assertEqual(
+            [start["event_id"] for start in verification["starts"]],
+            ["verification-started-after-finish", "verification-started-same-time"],
+        )
+        self.assertEqual(verification["unresolved"], [{
+            "type": "completes",
+            "event_id": "verification-started-after-finish",
+            "target_kind": "verification.started",
+            "reason": "verification_start_after_finish",
+        }])
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "context", "tool", "decision"],
+            "unresolved_count": 1,
+        })
+
     def test_conflicting_verification_outcomes_are_diagnostics(self):
         hunk = {
             "path": "src/auth/session.py",
