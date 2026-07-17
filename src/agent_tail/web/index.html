@@ -1580,8 +1580,6 @@
         (changeEvidence.links || []).filter(
           (link) => link.type === 'applies'
             && link.target_kind === 'change.proposed'
-            && typeof link.target_actor_id === 'string'
-            && link.target_actor_id.trim()
         ).forEach((link) => {
           const card = document.createElement('div');
           card.className = 'proposal-card';
@@ -1590,7 +1588,9 @@
           title.textContent = 'Change proposed';
           const meta = document.createElement('div');
           meta.className = 'meta';
-          meta.textContent = `proposed by ${link.target_actor_id}`;
+          meta.textContent = typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+            ? `proposed by ${link.target_actor_id}`
+            : 'proposing actor unknown';
           card.append(title, meta);
           block.append(card);
         });

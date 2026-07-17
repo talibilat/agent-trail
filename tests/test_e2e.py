@@ -418,7 +418,12 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("implementer-1")
                 expect(evidence).to_contain_text("Change proposed")
                 expect(evidence).to_contain_text("proposed by planner-1")
-                expect(evidence.locator(".proposal-card")).to_have_count(1)
+                expect(evidence.locator(".proposal-card")).to_have_count(2)
+                anonymous_proposal = evidence.locator(".proposal-card").filter(
+                    has_text="proposing actor unknown"
+                )
+                expect(anonymous_proposal).to_have_count(1)
+                expect(anonymous_proposal).not_to_contain_text("proposed by")
                 expect(evidence).not_to_contain_text("unrelated-planner")
                 expect(evidence).to_contain_text("R3")
                 expect(evidence).to_contain_text("Expired sessions must be rejected.")
