@@ -638,12 +638,16 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("symbol reject_expired_session")
                 expect(evidence).to_contain_text("implementer-1")
                 expect(evidence).to_contain_text("Change proposed")
-                expect(evidence).to_contain_text("proposed by planner-1")
                 expect(evidence.locator(".proposal-card")).to_have_count(2)
+                named_proposal = evidence.locator(".proposal-card").filter(
+                    has_text="proposed by planner-1"
+                )
+                expect(named_proposal).to_contain_text("event proposal-1")
                 anonymous_proposal = evidence.locator(".proposal-card").filter(
                     has_text="proposing actor unknown"
                 )
                 expect(anonymous_proposal).to_have_count(1)
+                expect(anonymous_proposal).to_contain_text("event anonymous-proposal")
                 expect(anonymous_proposal).not_to_contain_text("proposed by")
                 invalid_decision = evidence.locator(".unresolved-evidence").filter(
                     has_text="anonymous-proposal"

@@ -1594,7 +1594,10 @@
           meta.textContent = typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
             ? `proposed by ${link.target_actor_id}`
             : 'proposing actor unknown';
-          card.append(title, meta);
+          const eventId = document.createElement('div');
+          eventId.className = 'meta';
+          eventId.textContent = `event ${link.target_event_id}`;
+          card.append(title, meta, eventId);
           block.append(card);
         });
 
