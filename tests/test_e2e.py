@@ -84,6 +84,16 @@ class ServeEndToEndTests(unittest.TestCase):
                     attributes={"verification": {}},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="verification-started-conflict",
+                    span_id="span-verification-started-conflict",
+                    sequence=3,
+                    kind="verification.started",
+                    actor={"id": "conflicting-test-runner"},
+                    attributes={"verification": {
+                        "command": "pytest tests/test_other_session.py<img id=verification-conflict-injected>",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="verification-1",
                     span_id="span-verification-finished",
                     sequence=4,
@@ -95,10 +105,16 @@ class ServeEndToEndTests(unittest.TestCase):
                         "exit_code": 0,
                         "test_origin": "same_agent",
                     }},
-                    relationships=[{
-                        "type": "completes",
-                        "event_id": "verification-started-1",
-                    }],
+                    relationships=[
+                        {
+                            "type": "completes",
+                            "event_id": "verification-started-1",
+                        },
+                        {
+                            "type": "completes",
+                            "event_id": "verification-started-conflict",
+                        },
+                    ],
                 )) + "\n",
                 json.dumps(event_data(
                     event_id="verification-2",
@@ -540,6 +556,8 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("started by test-runner-1")
                 expect(evidence).to_contain_text("result reported by result-reporter-1")
                 expect(evidence).to_contain_text("Invalid completes start command · verification-started-1 · verification.started")
+                expect(evidence).to_contain_text("Conflicting completes start command · verification-started-conflict · verification.started")
+                expect(evidence).to_contain_text("Verification command · pytest tests/test_session.py")
                 expect(evidence.locator(".verification-card").filter(has_text="result-reporter-1")).to_have_count(1)
                 expect(evidence).to_contain_text("exit 0")
                 expect(evidence).to_contain_text("implementation and test written by the same agent")
@@ -620,7 +638,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_tool).to_contain_text("Invalid tool details · preceded_by")
                 expect(malformed_tool).to_contain_text("tool.call.completed")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 14 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 15 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
@@ -631,6 +649,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#unrelated-tool-injected")).to_have_count(0)
                 expect(page.locator("#verification-injected")).to_have_count(0)
                 expect(page.locator("#verification-starter-injected")).to_have_count(0)
+                expect(page.locator("#verification-conflict-injected")).to_have_count(0)
                 expect(page.locator("#verification-missing-injected")).to_have_count(0)
                 expect(page.locator("#invalid-requirement-injected")).to_have_count(0)
                 expect(page.locator("#invalid-context-injected")).to_have_count(0)

@@ -1756,10 +1756,15 @@
               : 'starting actor unknown';
             card.append(startMeta);
           });
-          if (!starts.some((start) => start.command) && verification.command) {
+          const conflictingCommand = starts.some(
+            (start) => start.command && start.command !== verification.command
+          );
+          if ((!starts.some((start) => start.command) || conflictingCommand) && verification.command) {
             const command = document.createElement('div');
             command.className = 'command';
-            command.textContent = verification.command;
+            command.textContent = conflictingCommand
+              ? `Verification command · ${verification.command}`
+              : verification.command;
             card.append(command);
           }
           const meta = document.createElement('div');
@@ -1775,6 +1780,8 @@
             incomplete.className = 'incomplete';
             incomplete.textContent = start.reason === 'invalid_verification_command'
               ? `Invalid ${start.type} start command · ${start.event_id} · ${start.target_kind}`
+              : start.reason === 'conflicting_verification_command'
+                ? `Conflicting ${start.type} start command · ${start.event_id} · ${start.target_kind}`
               : start.target_kind
               ? `Invalid ${start.type} start target · ${start.event_id} · ${start.target_kind}`
               : `Missing ${start.type} start · ${start.event_id}`;

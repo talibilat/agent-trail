@@ -609,6 +609,72 @@ class ServeTests(unittest.TestCase):
         })
         self.assertEqual(change["unresolved"][0]["reason"], "invalid_verification_command")
 
+    def test_conflicting_verification_commands_are_lifecycle_diagnostics(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="verification-started-1",
+                kind="verification.started",
+                attributes={"verification": {"command": "pytest tests/test_a.py"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-finished-1",
+                span_id="span-2",
+                sequence=2,
+                kind="verification.finished",
+                attributes={"verification": {
+                    "command": "pytest tests/test_b.py",
+                    "passed": True,
+                    "test_origin": "pre_existing",
+                }},
+                relationships=[{
+                    "type": "completes",
+                    "event_id": "verification-started-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                span_id="span-3",
+                sequence=3,
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[{
+                    "type": "verified_by",
+                    "event_id": "verification-finished-1",
+                }],
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(change["links"][0]["verification"], {
+            "passed": True,
+            "command": "pytest tests/test_b.py",
+            "test_origin": "pre_existing",
+            "starts": [{
+                "event_id": "verification-started-1",
+                "actor_id": "reviewer-1",
+                "command": "pytest tests/test_a.py",
+            }],
+            "unresolved": [{
+                "type": "completes",
+                "event_id": "verification-started-1",
+                "target_kind": "verification.started",
+                "reason": "conflicting_verification_command",
+            }],
+        })
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "context", "tool", "decision"],
+            "unresolved_count": 1,
+        })
+
     def test_evidence_ignores_malformed_or_blank_requirement_details(self):
         hunk = {
             "path": "src/auth/session.py",

@@ -1259,6 +1259,13 @@ def _verification_result(
                 has_command = True
                 detail["command"] = started_command
                 result.setdefault("command", started_command)
+                if result["command"] != started_command:
+                    unresolved.append({
+                        "type": relationship.type,
+                        "event_id": relationship.event_id,
+                        "target_kind": started.kind,
+                        "reason": "conflicting_verification_command",
+                    })
         starts.append(detail)
         if not has_command:
             unresolved.append({
