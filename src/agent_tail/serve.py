@@ -2026,6 +2026,12 @@ def _context_compaction_detail(
             continue
         if context is not None:
             item["context"] = context
+        if relationship.type == "summarizes":
+            item["chronology"] = _evidence_chronology(
+                source,
+                event,
+                "compaction",
+            )
         sources.append(item)
         if relationship.type == "summarizes" and _event_follows(source, event):
             unresolved.append({

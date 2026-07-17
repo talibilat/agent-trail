@@ -1631,6 +1631,21 @@ class ServeTests(unittest.TestCase):
                 "docs/independent-current.md",
             ],
         )
+        self.assertEqual(
+            {
+                source["event_id"]: source["chronology"]
+                for source in compaction["sources"]
+            },
+            {
+                "context-before-compaction": "before_compaction",
+                "context-same-time": "before_compaction",
+                "context-after-compaction": "after_compaction",
+                "context-clock-skewed-before": "before_compaction",
+                "context-clock-skewed-after": "after_compaction",
+                "context-after-compaction-independent": "after_compaction",
+                "context-same-time-independent": "undetermined",
+            },
+        )
         self.assertEqual(compaction["unresolved"], [
             {
                 "type": "summarizes",
@@ -2823,6 +2838,7 @@ class ServeTests(unittest.TestCase):
                 "kind": "context.read",
                 "actor_id": "reviewer-1",
                 "context": {"path": "docs/session-lifecycle.md"},
+                "chronology": "before_compaction",
             }],
             "unresolved": [{
                 "type": "summarizes",
@@ -2895,6 +2911,7 @@ class ServeTests(unittest.TestCase):
                     "path": "src/auth/config.py",
                     "line_start": 42,
                 },
+                "chronology": "before_compaction",
             }],
             "unresolved": [{
                 "type": "summarizes",
@@ -3500,6 +3517,7 @@ class ServeTests(unittest.TestCase):
                     "line_start": 42,
                     "line_end": 51,
                 },
+                "chronology": "undetermined",
             }],
             "unresolved": [{
                 "type": "summarizes",

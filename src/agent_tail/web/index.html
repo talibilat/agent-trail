@@ -1764,6 +1764,9 @@
               ? `source from ${source.actor_id}`
               : 'source actor unknown');
             if (source.context?.symbol) sourceDetails.push(source.context.symbol);
+            if (source.chronology === 'undetermined') {
+              sourceDetails.push('source chronology undetermined');
+            }
             sourceMeta.textContent = sourceDetails.join(' · ');
             card.append(sourceNode, sourceMeta);
           });

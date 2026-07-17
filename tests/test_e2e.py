@@ -1324,6 +1324,16 @@ class ServeEndToEndTests(unittest.TestCase):
                     attributes={"context": {"path": "docs/concurrent.md"}},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="compaction-source-undetermined",
+                    emitter_id="concurrent-source-worker",
+                    span_id="span-concurrent-source",
+                    sequence=1,
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="context.read",
+                    actor={"id": "concurrent-source-reader"},
+                    attributes={"context": {"path": "docs/concurrent-source.md"}},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="requirement-after-decision",
                     span_id="span-late-requirement",
                     sequence=5,
@@ -1375,7 +1385,13 @@ class ServeEndToEndTests(unittest.TestCase):
                     timestamp="2026-07-13T11:01:00Z",
                     kind="context.compacted",
                     actor={"id": "early-summarizer"},
-                    relationships=[{"type": "summarizes", "event_id": "context-1"}],
+                    relationships=[
+                        {"type": "summarizes", "event_id": "context-1"},
+                        {
+                            "type": "summarizes",
+                            "event_id": "compaction-source-undetermined",
+                        },
+                    ],
                 )) + "\n",
                 json.dumps(event_data(
                     event_id="compaction-after-decision",
@@ -1461,6 +1477,9 @@ class ServeEndToEndTests(unittest.TestCase):
                 early = evidence.locator(".compaction-card").filter(has_text="early-summarizer")
                 late = evidence.locator(".compaction-card").filter(has_text="late-summarizer")
                 expect(early).to_contain_text("Compaction chronology undetermined")
+                expect(early).to_contain_text("docs/concurrent-source.md")
+                expect(early).to_contain_text("concurrent-source-reader")
+                expect(early).to_contain_text("source chronology undetermined")
                 expect(late).to_contain_text("Context compacted after decision")
                 expect(evidence.locator(".context-card").filter(has_text="docs/current.md")).to_be_visible()
                 expect(evidence.locator(".context-card").filter(has_text="docs/late.md")).to_be_visible()
