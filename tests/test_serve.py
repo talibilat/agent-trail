@@ -1369,7 +1369,7 @@ class ServeTests(unittest.TestCase):
                 event_id="change-1",
                 span_id="span-change",
                 sequence=4,
-                timestamp="2026-07-13T11:02:30Z",
+                timestamp="2026-07-13T11:01:30Z",
                 kind="change.applied",
                 attributes={"change": hunk},
                 relationships=[{
@@ -1391,6 +1391,72 @@ class ServeTests(unittest.TestCase):
             "event_id": "verification-started-after-finish",
             "target_kind": "verification.started",
             "reason": "verification_start_after_finish",
+        }])
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "context", "tool", "decision"],
+            "unresolved_count": 1,
+        })
+
+    def test_verification_before_change_is_a_temporal_diagnostic(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="verification-before-change",
+                timestamp="2026-07-13T11:01:00Z",
+                kind="verification.finished",
+                attributes={"verification": {
+                    "command": "pytest tests/test_session.py",
+                    "passed": True,
+                    "test_origin": "pre_existing",
+                }},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-same-time",
+                span_id="span-same-time",
+                sequence=2,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="verification.finished",
+                attributes={"verification": {
+                    "command": "pytest tests/test_session.py",
+                    "passed": True,
+                    "test_origin": "pre_existing",
+                }},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                span_id="span-change",
+                sequence=3,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[
+                    {"type": "verified_by", "event_id": "verification-before-change"},
+                    {"type": "verified_by", "event_id": "verification-same-time"},
+                ],
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(
+            [link["target_event_id"] for link in change["links"]],
+            ["verification-before-change", "verification-same-time"],
+        )
+        self.assertEqual(change["unresolved"], [{
+            "source_event_id": "change-1",
+            "source_actor_id": "reviewer-1",
+            "source_kind": "change.applied",
+            "type": "verified_by",
+            "target_event_id": "verification-before-change",
+            "target_kind": "verification.finished",
+            "reason": "verification_precedes_change",
         }])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",

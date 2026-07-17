@@ -1912,6 +1912,8 @@
           type.className = 'type';
           type.textContent = link.reason === 'invalid_verification_result'
             ? `Invalid verification result · ${link.type}`
+            : link.reason === 'verification_precedes_change'
+              ? `Verification finished before change · ${link.type}`
             : link.reason === 'invalid_verification_exit_code'
               ? `Invalid verification exit code · ${link.type}`
             : link.reason === 'conflicting_verification_outcome'

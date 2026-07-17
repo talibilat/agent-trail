@@ -216,6 +216,19 @@ class ServeEndToEndTests(unittest.TestCase):
                     ],
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="verification-before-change",
+                    span_id="span-verification-before-change",
+                    sequence=5,
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="verification.finished",
+                    actor={"id": "early-result-reporter"},
+                    attributes={"verification": {
+                        "command": "pytest tests/test_too_early.py",
+                        "passed": True,
+                        "test_origin": "pre_existing",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="compaction-1",
                     span_id="span-compaction",
                     sequence=6,
@@ -421,6 +434,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-2"},
+                        {"type": "verified_by", "event_id": "verification-before-change"},
                         {"type": "verified_by", "event_id": "verification-outcome-only"},
                         {"type": "verified_by", "event_id": "verification-unknown-actors"},
                         {"type": "verified_by", "event_id": "verification-invalid-result"},
@@ -862,6 +876,15 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("Invalid completes start command · verification-started-1 · verification.started")
                 expect(evidence).to_contain_text("Conflicting completes start command · verification-started-conflict · verification.started")
                 expect(evidence).to_contain_text("Verification start occurred after finish · verification-started-after-finish · verification.started")
+                early_verification = evidence.locator(".verification-card").filter(has_text="early-result-reporter")
+                expect(early_verification).to_contain_text("pytest tests/test_too_early.py")
+                early_verification_diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="verification-before-change"
+                )
+                expect(early_verification_diagnostic).to_contain_text(
+                    "Verification finished before change · verified_by"
+                )
+                expect(early_verification_diagnostic).to_contain_text("verification.finished")
                 expect(evidence).to_contain_text("Verification command · pytest tests/test_session.py")
                 verification = evidence.locator(".verification-card").filter(has_text="result-reporter-1")
                 expect(verification).to_have_count(1)
@@ -1082,7 +1105,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(later_tool).to_contain_text("Tool occurred after change · preceded_by")
                 expect(later_tool).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("git diff --stat")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 35 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 36 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
