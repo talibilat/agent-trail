@@ -1163,9 +1163,26 @@ class ServeTests(unittest.TestCase):
                 relationships=[{"type": "summarizes", "event_id": "context-1"}],
             )) + "\n",
             json.dumps(event_data(
+                event_id="compaction-clock-skew",
+                span_id="span-skewed-compaction",
+                sequence=5,
+                timestamp="2026-07-13T11:00:00Z",
+                kind="context.compacted",
+                relationships=[{"type": "summarizes", "event_id": "context-1"}],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="compaction-other-emitter",
+                emitter_id="worker-2",
+                span_id="span-other-emitter-compaction",
+                sequence=1,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="context.compacted",
+                relationships=[{"type": "summarizes", "event_id": "context-1"}],
+            )) + "\n",
+            json.dumps(event_data(
                 event_id="change-1",
                 span_id="span-change",
-                sequence=5,
+                sequence=6,
                 timestamp="2026-07-13T11:03:00Z",
                 kind="change.applied",
                 attributes={"change": {
@@ -1179,26 +1196,50 @@ class ServeTests(unittest.TestCase):
                     {"type": "applies", "event_id": "proposal-1"},
                     {"type": "informed_by", "event_id": "compaction-same-time"},
                     {"type": "informed_by", "event_id": "compaction-after-decision"},
+                    {"type": "informed_by", "event_id": "compaction-clock-skew"},
+                    {"type": "informed_by", "event_id": "compaction-other-emitter"},
                 ],
             )) + "\n",
         ])
 
         change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
-        self.assertEqual(change["unresolved"], [{
-            "type": "informed_by",
-            "source_event_id": "change-1",
-            "target_event_id": "compaction-after-decision",
-            "source_kind": "change.applied",
-            "source_actor_id": "reviewer-1",
-            "target_kind": "context.compacted",
-            "reason": "compaction_follows_decision",
-            "decision_event_id": "proposal-1",
-        }])
+        self.assertEqual(change["unresolved"], [
+            {
+                "type": "informed_by",
+                "source_event_id": "change-1",
+                "target_event_id": "compaction-same-time",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "context.compacted",
+                "reason": "compaction_follows_decision",
+                "decision_event_id": "proposal-1",
+            },
+            {
+                "type": "informed_by",
+                "source_event_id": "change-1",
+                "target_event_id": "compaction-after-decision",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "context.compacted",
+                "reason": "compaction_follows_decision",
+                "decision_event_id": "proposal-1",
+            },
+            {
+                "type": "informed_by",
+                "source_event_id": "change-1",
+                "target_event_id": "compaction-clock-skew",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "context.compacted",
+                "reason": "compaction_follows_decision",
+                "decision_event_id": "proposal-1",
+            },
+        ])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "tool", "verification"],
-            "unresolved_count": 1,
+            "unresolved_count": 3,
         })
 
     def test_context_read_after_compaction_cannot_be_summarized_evidence(self):
@@ -3442,6 +3483,7 @@ class ServeTests(unittest.TestCase):
             ),
             event_data(
                 event_id="empty-compaction-1",
+                emitter_id="invalid-compaction-worker",
                 sequence=8,
                 kind="context.compacted",
             ),

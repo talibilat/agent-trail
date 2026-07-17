@@ -1306,6 +1306,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )) + "\n",
                 json.dumps(event_data(
                     event_id="compaction-before-decision",
+                    emitter_id="early-compaction-worker",
                     span_id="span-early-compaction",
                     sequence=5,
                     timestamp="2026-07-13T11:01:00Z",

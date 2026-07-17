@@ -1101,7 +1101,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     and relationship.type == "informed_by"
                     and target.kind == "context.compacted"
                     and earliest_decision is not None
-                    and target.timestamp > earliest_decision.timestamp
+                    and _event_follows(target, earliest_decision)
                 ):
                     invalid = {
                         **item,
