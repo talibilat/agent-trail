@@ -1859,11 +1859,15 @@
             }
             const startMeta = document.createElement('div');
             startMeta.className = 'meta';
-            startMeta.textContent = `event ${start.event_id} · ${
+            const startMetaParts = [`event ${start.event_id}`, (
               typeof start.actor_id === 'string' && start.actor_id.trim()
                 ? `started by ${start.actor_id}`
                 : 'starting actor unknown'
-            }`;
+            )];
+            if (start.chronology === 'undetermined') {
+              startMetaParts.push('start chronology undetermined');
+            }
+            startMeta.textContent = startMetaParts.join(' · ');
             card.append(startMeta);
           });
           const conflictingCommand = starts.some(

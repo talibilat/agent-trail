@@ -1832,6 +1832,7 @@ def _verification_result(
         detail: dict[str, object] = {
             "event_id": started.event_id,
             "actor_id": started.actor["id"],
+            "chronology": _evidence_chronology(started, event, "finish"),
         }
         start_after_finish = _event_follows(started, event)
         start_before_change = (

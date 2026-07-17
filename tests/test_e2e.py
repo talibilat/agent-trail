@@ -1403,6 +1403,18 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[{"type": "summarizes", "event_id": "context-1"}],
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="verification-start-undetermined",
+                    emitter_id="verification-start-worker",
+                    span_id="span-concurrent-verification-start",
+                    sequence=1,
+                    timestamp="2026-07-13T11:03:00Z",
+                    kind="verification.started",
+                    actor={"id": "concurrent-test-starter"},
+                    attributes={"verification": {
+                        "command": "pytest tests/test_decision.py",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="verification-undetermined",
                     emitter_id="verification-worker",
                     span_id="span-concurrent-verification",
@@ -1415,6 +1427,10 @@ class ServeEndToEndTests(unittest.TestCase):
                         "passed": True,
                         "test_origin": "pre_existing",
                     }},
+                    relationships=[{
+                        "type": "completes",
+                        "event_id": "verification-start-undetermined",
+                    }],
                 )) + "\n",
                 json.dumps(event_data(
                     event_id="change-1",
@@ -1527,6 +1543,10 @@ class ServeEndToEndTests(unittest.TestCase):
                     has_text="pytest tests/test_decision.py"
                 )
                 expect(undetermined_verification).to_contain_text("concurrent-verifier")
+                expect(undetermined_verification).to_contain_text("concurrent-test-starter")
+                expect(undetermined_verification).to_contain_text(
+                    "start chronology undetermined"
+                )
                 expect(undetermined_verification).to_contain_text(
                     "verification chronology undetermined"
                 )

@@ -2063,6 +2063,7 @@ class ServeTests(unittest.TestCase):
             "starts": [{
                 "event_id": "verification-started-without-command",
                 "actor_id": "commandless-runner",
+                "chronology": "undetermined",
             }],
             "unresolved": [
                 {
@@ -2109,10 +2110,12 @@ class ServeTests(unittest.TestCase):
             "starts": [{
                 "event_id": "verification-started-1",
                 "actor_id": "test-runner",
+                "chronology": "undetermined",
                 "command": "pytest tests/test_session.py",
             }, {
                 "event_id": "verification-started-without-command",
                 "actor_id": "commandless-runner",
+                "chronology": "undetermined",
             }],
             "unresolved": [
                 {
@@ -2232,6 +2235,7 @@ class ServeTests(unittest.TestCase):
             "starts": [{
                 "event_id": "verification-started-1",
                 "actor_id": "reviewer-1",
+                "chronology": "before_finish",
                 "command": "pytest tests/test_a.py",
             }],
             "unresolved": [{
@@ -2387,6 +2391,22 @@ class ServeTests(unittest.TestCase):
                 "verification-started-clock-skew-after-change",
                 "verification-started-clock-skew-before-change",
             ],
+        )
+        self.assertEqual(
+            {
+                start["event_id"]: start["chronology"]
+                for start in verification["starts"]
+            },
+            {
+                "verification-started-after-finish": "after_finish",
+                "verification-started-same-time": "undetermined",
+                "verification-started-before-change": "before_finish",
+                "verification-started-with-change": "before_finish",
+                "verification-started-clock-skew-after-finish": "after_finish",
+                "verification-started-clock-skew-before-finish": "before_finish",
+                "verification-started-clock-skew-after-change": "before_finish",
+                "verification-started-clock-skew-before-change": "before_finish",
+            },
         )
         self.assertEqual(verification["unresolved"], [
             {
@@ -4305,6 +4325,7 @@ class ServeTests(unittest.TestCase):
                         "starts": [{
                             "event_id": "verification-started-1",
                             "actor_id": "reviewer-1",
+                            "chronology": "before_finish",
                             "command": "pytest tests/test_session.py",
                         }],
                     })
@@ -4324,6 +4345,7 @@ class ServeTests(unittest.TestCase):
                         "starts": [{
                             "event_id": "verification-started-1",
                             "actor_id": "reviewer-1",
+                            "chronology": "before_finish",
                         }],
                         "unresolved": [{
                             "type": "completes",
