@@ -1176,10 +1176,13 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                         dict,
                     )
                     and "test_origin" in raw_verification
-                    and raw_verification["test_origin"] not in {
-                        "pre_existing",
-                        "same_agent",
-                    }
+                    and (
+                        not isinstance(raw_verification["test_origin"], str)
+                        or raw_verification["test_origin"] not in {
+                            "pre_existing",
+                            "same_agent",
+                        }
+                    )
                 ):
                     invalid = {
                         **item,
@@ -1436,7 +1439,7 @@ def _verification_result(
     if isinstance(exit_code, int) and not isinstance(exit_code, bool):
         result["exit_code"] = exit_code
     test_origin = verification.get("test_origin")
-    if test_origin in {"pre_existing", "same_agent"}:
+    if isinstance(test_origin, str) and test_origin in {"pre_existing", "same_agent"}:
         result["test_origin"] = test_origin
     starts = []
     unresolved = []

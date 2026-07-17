@@ -446,7 +446,7 @@ class ServeTests(unittest.TestCase):
                     "command": "pytest tests/test_session.py",
                     "passed": True,
                     "exit_code": 0,
-                    "test_origin": "generated",
+                    "test_origin": ["generated"],
                 }},
             )) + "\n",
         ])
