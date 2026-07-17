@@ -449,32 +449,48 @@ class ServeTests(unittest.TestCase):
                         "type": "completes",
                         "event_id": "verification-started-1",
                     },
+                    {
+                        "type": "completes",
+                        "event_id": "not-a-verification-start",
+                    },
                 ],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="not-a-verification-start",
+                span_id="span-3",
+                sequence=3,
+                kind="requirement.observed",
             )) + "\n",
         ])
 
         before_detail = store.run_detail("trace-1")
         before_start = before_detail["evidence_map"]["changes"][0]
-        self.assertEqual(len(before_detail["events"][1]["relationships"]), 2)
+        self.assertEqual(len(before_detail["events"][1]["relationships"]), 3)
         self.assertEqual(before_start["links"][0]["verification"], {
             "passed": True,
             "exit_code": 0,
             "test_origin": "pre_existing",
-            "unresolved": [{
-                "type": "completes",
-                "event_id": "verification-started-1",
-            }],
+            "unresolved": [
+                {
+                    "type": "completes",
+                    "event_id": "verification-started-1",
+                },
+                {
+                    "type": "completes",
+                    "event_id": "not-a-verification-start",
+                },
+            ],
         })
         self.assertEqual(before_start["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "verification", "decision"],
-            "unresolved_count": 1,
+            "unresolved_count": 2,
         })
 
         store.feed_line(json.dumps(event_data(
             event_id="verification-started-1",
             span_id="span-3",
-            sequence=3,
+            sequence=4,
             kind="verification.started",
             actor={"id": "test-runner"},
             attributes={"verification": {
@@ -493,11 +509,15 @@ class ServeTests(unittest.TestCase):
                 "actor_id": "test-runner",
                 "command": "pytest tests/test_session.py",
             }],
+            "unresolved": [{
+                "type": "completes",
+                "event_id": "not-a-verification-start",
+            }],
         })
         self.assertEqual(after_start["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "decision"],
-            "unresolved_count": 0,
+            "unresolved_count": 1,
         })
 
     def test_outcome_only_verification_remains_visible_but_incomplete(self):

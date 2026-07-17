@@ -1109,6 +1109,10 @@ def _verification_result(
             })
             continue
         if started.kind != "verification.started":
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+            })
             continue
         detail: dict[str, object] = {
             "event_id": started.event_id,

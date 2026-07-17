@@ -137,7 +137,7 @@ Resolved links to the finished event include the validated result under `verific
 The browser falls back to the command reported by the finished event when resolved start events do not identify a command, while retaining their starter attribution.
 An outcome-only finished event remains visible in the API and browser but leaves the verification coverage category missing because no test command is known.
 Any failed result linked by `verified_by` contributes to `failed_verification_count` and keeps coverage incomplete even when another linked verification passed; failures linked by unrelated relationship types remain generic evidence and do not affect coverage.
-Distinct missing start events remain visible under `verification.unresolved` and contribute to incomplete hunk coverage until they arrive.
+Distinct missing start events and `completes` targets that are not `verification.started` events remain visible under `verification.unresolved` and contribute to incomplete hunk coverage.
 The browser event inspector presents each test linked by `verified_by`, showing its starter and command separately from the result reporter, together with the pass or fail outcome, optional exit code, and whether the test predates the change, was written by the same agent, or has unknown provenance; it does not attribute unrelated verification links as tests of the hunk.
 It identifies each missing verification start by relationship type and event ID rather than hiding lifecycle gaps behind the aggregate incomplete-coverage status.
 Malformed optional verification metadata is omitted without rejecting the event, its relationship, or other valid verification details.
