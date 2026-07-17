@@ -106,6 +106,9 @@ To attach a test result, emit a `verification.finished` event with `attributes.v
 Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
 Resolved links to that event include the validated result under `verification`, so each linked hunk exposes its test command and outcome directly.
 Malformed optional verification metadata is omitted without rejecting the event, its relationship, or other valid verification details.
+To record a later human change, emit a `human.corrected` event with a `corrects` relationship targeting the original `change.applied` event and set `attributes.correction.action` to `modified` or `reverted`.
+Each affected hunk exposes these inbound links in event order under `corrections`, including the human actor and validated action when available.
+Malformed correction metadata is omitted without hiding the correction relationship.
 Unknown kinds, fields, and supported minor schema versions are retained so the canonical envelope can evolve.
 
 Harnesses other than the v1 runtime need an adapter that emits this envelope.

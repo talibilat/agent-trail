@@ -857,6 +857,7 @@ def _relationships(view) -> dict[str, object]:
 def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
     event_list = list(events)
     events_by_id = {event.event_id: event for event in event_list}
+    corrections_by_change: dict[str, list[dict[str, object]]] = {}
     changes = []
     links = []
     unresolved = []
@@ -884,6 +885,15 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 verification = _verification_result(target)
                 if verification is not None:
                     resolved["verification"] = verification
+                correction = _human_correction(source)
+                if relationship.type == "corrects" and correction is not None:
+                    resolved["correction"] = correction
+                if (
+                    relationship.type == "corrects"
+                    and source.kind == "human.corrected"
+                    and target.kind == "change.applied"
+                ):
+                    corrections_by_change.setdefault(target.event_id, []).append(resolved)
                 links.append(resolved)
                 source_links.append(resolved)
         hunk = _change_hunk(source)
@@ -894,6 +904,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 "hunk": hunk,
                 "links": source_links,
                 "unresolved": source_unresolved,
+                "corrections": corrections_by_change.setdefault(source.event_id, []),
             })
     return {"changes": changes, "links": links, "unresolved": unresolved}
 
@@ -938,6 +949,18 @@ def _verification_result(event: Event) -> dict[str, object] | None:
     if test_origin in {"pre_existing", "same_agent"}:
         result["test_origin"] = test_origin
     return result
+
+
+def _human_correction(event: Event) -> dict[str, object] | None:
+    if event.kind != "human.corrected":
+        return None
+    correction = _attributes(event).get("correction")
+    if not isinstance(correction, dict):
+        return None
+    action = correction.get("action")
+    if action not in {"modified", "reverted"}:
+        return None
+    return {"action": action}
 
 
 def _actor_role(events: Iterable[Event], actor_id: str) -> object:

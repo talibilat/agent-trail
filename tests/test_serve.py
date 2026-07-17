@@ -161,6 +161,7 @@ class ServeTests(unittest.TestCase):
                 "hunk": valid_hunk,
                 "links": [],
                 "unresolved": [],
+                "corrections": [],
             },
             {
                 "event_id": "change-2",
@@ -172,6 +173,7 @@ class ServeTests(unittest.TestCase):
                 },
                 "links": [],
                 "unresolved": [],
+                "corrections": [],
             },
         ])
         self.assertEqual(evidence["links"], [])
@@ -250,6 +252,7 @@ class ServeTests(unittest.TestCase):
             "hunk": hunk,
             "links": [motivated_by],
             "unresolved": [verified_by_unresolved],
+            "corrections": [],
         }])
         self.assertEqual(after_verification["changes"], [{
             "event_id": "change-1",
@@ -267,6 +270,7 @@ class ServeTests(unittest.TestCase):
                 },
             }],
             "unresolved": [],
+            "corrections": [],
         }])
         self.assertEqual(
             before_verification["links"],
@@ -308,6 +312,84 @@ class ServeTests(unittest.TestCase):
             "command": "pytest",
             "passed": True,
         })
+
+    def test_change_hunks_include_later_human_corrections(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                attributes={"change": hunk},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="correction-1",
+                span_id="span-2",
+                sequence=2,
+                kind="human.corrected",
+                actor={"id": "maintainer-1"},
+                attributes={"correction": {"action": "modified"}},
+                relationships=[{"type": "corrects", "event_id": "change-1"}],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="correction-2",
+                span_id="span-3",
+                sequence=3,
+                kind="human.corrected",
+                actor={"id": "maintainer-1"},
+                attributes={"correction": {"action": "reverted"}},
+                relationships=[{"type": "corrects", "event_id": "change-1"}],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="correction-3",
+                span_id="span-4",
+                sequence=4,
+                kind="human.corrected",
+                actor={"id": "maintainer-2"},
+                attributes={"correction": {"action": "edited"}},
+                relationships=[{"type": "corrects", "event_id": "change-1"}],
+            )) + "\n",
+        ])
+
+        evidence = store.run_detail("trace-1")["evidence_map"]
+
+        self.assertEqual(evidence["changes"][0]["corrections"], [
+            {
+                "type": "corrects",
+                "source_event_id": "correction-1",
+                "target_event_id": "change-1",
+                "source_kind": "human.corrected",
+                "source_actor_id": "maintainer-1",
+                "target_kind": "change.applied",
+                "target_actor_id": "reviewer-1",
+                "correction": {"action": "modified"},
+            },
+            {
+                "type": "corrects",
+                "source_event_id": "correction-2",
+                "target_event_id": "change-1",
+                "source_kind": "human.corrected",
+                "source_actor_id": "maintainer-1",
+                "target_kind": "change.applied",
+                "target_actor_id": "reviewer-1",
+                "correction": {"action": "reverted"},
+            },
+            {
+                "type": "corrects",
+                "source_event_id": "correction-3",
+                "target_event_id": "change-1",
+                "source_kind": "human.corrected",
+                "source_actor_id": "maintainer-2",
+                "target_kind": "change.applied",
+                "target_actor_id": "reviewer-1",
+            },
+        ])
+        self.assertEqual(evidence["links"][0], evidence["changes"][0]["corrections"][0])
 
     def test_http_server_serves_offline_shell_and_versioned_api(self):
         store = RunStore.from_lines([
