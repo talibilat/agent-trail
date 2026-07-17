@@ -940,7 +940,11 @@ def _evidence_coverage(
             )
             for link in links
         ),
-        "tool": any("tool" in link for link in links),
+        "tool": any(
+            isinstance((tool := link.get("tool")), dict)
+            and ("command" in tool or "result" in tool)
+            for link in links
+        ),
         "verification": any("verification" in link for link in links),
         "decision": any(link.get("target_kind") == "change.proposed" for link in links),
     }

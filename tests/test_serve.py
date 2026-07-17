@@ -693,25 +693,34 @@ class ServeTests(unittest.TestCase):
             "new_start": 84,
             "new_count": 19,
         }
-        for test_origin, include_decision, expected in (
-            (None, True, {
+        for test_origin, include_decision, include_tool_detail, expected in (
+            (None, True, True, {
                 "status": "incomplete",
                 "missing": [],
                 "unresolved_count": 0,
                 "unknown_test_origin_count": 1,
             }),
-            ("pre_existing", False, {
+            ("pre_existing", False, True, {
                 "status": "incomplete",
                 "missing": ["decision"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", True, {
+            ("pre_existing", True, False, {
+                "status": "incomplete",
+                "missing": ["tool"],
+                "unresolved_count": 0,
+            }),
+            ("pre_existing", True, True, {
                 "status": "complete",
                 "missing": [],
                 "unresolved_count": 0,
             }),
         ):
-            with self.subTest(test_origin=test_origin, include_decision=include_decision):
+            with self.subTest(
+                test_origin=test_origin,
+                include_decision=include_decision,
+                include_tool_detail=include_tool_detail,
+            ):
                 verification = {"command": "pytest", "passed": True}
                 if test_origin is not None:
                     verification["test_origin"] = test_origin
@@ -735,6 +744,8 @@ class ServeTests(unittest.TestCase):
                         sequence=3,
                         kind="tool.call.completed",
                         operation={"status": "ok", "name": "shell"},
+                        attributes={"tool": {"command": "pytest"}}
+                        if include_tool_detail else None,
                     ),
                     event_data(
                         event_id="verification-1",
@@ -795,6 +806,7 @@ class ServeTests(unittest.TestCase):
                 sequence=3,
                 kind="tool.call.completed",
                 operation={"status": "ok", "name": "shell"},
+                attributes={"tool": {"command": "pytest"}},
             ),
             event_data(
                 event_id="verification-1",

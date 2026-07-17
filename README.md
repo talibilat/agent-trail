@@ -103,6 +103,7 @@ Valid locators are exposed in event order under `evidence_map.changes`, together
 Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
 It also includes factual `coverage` for requirement, context, tool, verification, and decision evidence, plus an unresolved count that includes missing compacted-context sources and verification-start events.
 A context category is present only when a direct context locator or a context locator among a compaction's resolved sources identifies repository or documentation evidence; an empty compaction does not satisfy it.
+A tool category is present only when a linked tool call identifies a non-empty command or result; operation identity and status alone do not satisfy it.
 Coverage is `complete` only when all five core categories are present, every direct, compacted, or verification-lifecycle reference resolves, and every verification has known test provenance.
 Otherwise `missing` identifies absent categories and `unknown_test_origin_count` identifies verifications without valid provenance, without assigning a subjective confidence score.
 The run-level arrays remain available for all relationships, including those originating from events without valid change locators.
