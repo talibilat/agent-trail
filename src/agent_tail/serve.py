@@ -985,6 +985,24 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     and relationship.type == "preceded_by"
                     and target.kind.startswith("tool.call.")
                     and isinstance(tool, dict)
+                    and "name" in target.operation
+                    and (
+                        not isinstance(target.operation["name"], str)
+                        or not target.operation["name"].strip()
+                    )
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_tool_operation_name",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "preceded_by"
+                    and target.kind.startswith("tool.call.")
+                    and isinstance(tool, dict)
                     and isinstance(raw_tool := _attributes(target).get("tool"), dict)
                     and "exit_code" in raw_tool
                     and (
