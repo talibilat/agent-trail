@@ -1190,7 +1190,12 @@ def _context_compaction_detail(
         return None
     sources = []
     unresolved = []
+    projected_relationships = set()
     for relationship in event.relationships:
+        relationship_key = (relationship.type, relationship.event_id)
+        if relationship_key in projected_relationships:
+            continue
+        projected_relationships.add(relationship_key)
         item: dict[str, object] = {
             "type": relationship.type,
             "event_id": relationship.event_id,

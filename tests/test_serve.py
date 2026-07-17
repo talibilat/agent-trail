@@ -875,6 +875,55 @@ class ServeTests(unittest.TestCase):
             },
         )
 
+    def test_context_compaction_deduplicates_identical_source_relationships(self):
+        relationships = [
+            {"type": "summarizes", "event_id": "context-1"},
+            {"type": "summarizes", "event_id": "context-1"},
+            {"type": "summarizes", "event_id": "missing-context"},
+            {"type": "summarizes", "event_id": "missing-context"},
+        ]
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[{
+                    "type": "informed_by",
+                    "event_id": "compaction-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="compaction-1",
+                span_id="span-2",
+                sequence=2,
+                kind="context.compacted",
+                relationships=relationships,
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-1",
+                span_id="span-3",
+                sequence=3,
+                kind="context.read",
+                attributes={"context": {"path": "src/auth/config.py"}},
+            )) + "\n",
+        ])
+
+        detail = store.run_detail("trace-1")
+        change = detail["evidence_map"]["changes"][0]
+        compaction = change["links"][0]["compaction"]
+
+        self.assertEqual(detail["events"][1]["relationships"], relationships)
+        self.assertEqual(len(compaction["sources"]), 1)
+        self.assertEqual(len(compaction["unresolved"]), 1)
+        self.assertEqual(change["coverage"]["unresolved_count"], 1)
+
     def test_change_hunk_coverage_reports_complete_core_evidence(self):
         hunk = {
             "path": "src/auth/session.py",
