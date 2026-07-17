@@ -149,6 +149,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "preceded_by", "event_id": "tool-1"},
                         {"type": "references", "event_id": "unrelated-tool"},
                         {"type": "verified_by", "event_id": "verification-1"},
+                        {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-2"},
                         {"type": "verified_by", "event_id": "verification-outcome-only"},
                         {"type": "references", "event_id": "unrelated-verification"},
@@ -313,6 +314,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("pytest tests/test_session.py")
                 expect(evidence).to_contain_text("started by test-runner-1")
                 expect(evidence).to_contain_text("result reported by result-reporter-1")
+                expect(evidence.locator(".verification-card").filter(has_text="result-reporter-1")).to_have_count(1)
                 expect(evidence).to_contain_text("exit 0")
                 expect(evidence).to_contain_text("implementation and test written by the same agent")
                 expect(evidence).to_contain_text("FAIL")

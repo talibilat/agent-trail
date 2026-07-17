@@ -864,7 +864,12 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
     for source in event_list:
         source_links = []
         source_unresolved = []
+        projected_relationships = set()
         for relationship in source.relationships:
+            relationship_key = (relationship.type, relationship.event_id)
+            if relationship_key in projected_relationships:
+                continue
+            projected_relationships.add(relationship_key)
             item = {
                 "type": relationship.type,
                 "source_event_id": source.event_id,

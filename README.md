@@ -79,6 +79,7 @@ Every event must be a JSON object containing these fields:
 `relationships` is an optional array of event references with string `type` and `event_id` fields.
 Relationship types are extensible, and referenced events may arrive later in a stream.
 Run-detail responses project these references into an `evidence_map` with resolved event links and unresolved references.
+Identical relationships from the same source event are projected once in first-declaration order, while the raw event retains every producer-supplied relationship.
 Resolved links include source and target kinds and actors so clients can present the smallest relevant evidence chain without joining the event list themselves.
 For repository changes, emit a `change.applied` event with a Git hunk locator under `attributes.change`:
 

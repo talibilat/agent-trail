@@ -110,6 +110,51 @@ class ServeTests(unittest.TestCase):
             "target_event_id": "missing-test",
         }])
 
+    def test_evidence_map_deduplicates_identical_relationships(self):
+        relationships = [
+            {"type": "verified_by", "event_id": "verification-1"},
+            {"type": "verified_by", "event_id": "verification-1"},
+            {"type": "reviewed_by", "event_id": "missing-review"},
+            {"type": "reviewed_by", "event_id": "missing-review"},
+        ]
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=relationships,
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-1",
+                span_id="span-2",
+                sequence=2,
+                kind="verification.finished",
+                attributes={"verification": {
+                    "command": "pytest tests/test_session.py",
+                    "passed": False,
+                    "test_origin": "same_agent",
+                }},
+            )) + "\n",
+        ])
+
+        detail = store.run_detail("trace-1")
+        change = detail["evidence_map"]["changes"][0]
+
+        self.assertEqual(detail["events"][0]["relationships"], relationships)
+        self.assertEqual(len(change["links"]), 1)
+        self.assertEqual(len(change["unresolved"]), 1)
+        self.assertEqual(len(detail["evidence_map"]["links"]), 1)
+        self.assertEqual(len(detail["evidence_map"]["unresolved"]), 1)
+        self.assertEqual(change["coverage"]["same_agent_test_count"], 1)
+        self.assertEqual(change["coverage"]["failed_verification_count"], 1)
+
     def test_run_evidence_map_projects_valid_change_hunks(self):
         valid_hunk = {
             "path": "src/auth/session.py",
