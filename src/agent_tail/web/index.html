@@ -1540,6 +1540,8 @@
               ? `Verification chronology undetermined · ${link.type}`
             : link.reason === 'proposal_chronology_undetermined'
               ? `Proposal chronology undetermined · ${link.type}`
+            : link.reason === 'requirement_chronology_undetermined'
+              ? `Requirement chronology undetermined · ${link.type}`
             : link.target_kind
               ? `Invalid relationship target · ${link.type}`
               : `Missing relationship target · ${link.type}`;
@@ -2005,6 +2007,8 @@
                   ? `Requirement observed after change · ${link.type}`
                 : link.reason === 'requirement_follows_decision'
                   ? `Requirement observed after decision · ${link.type}`
+                : link.reason === 'requirement_chronology_undetermined'
+                  ? `Requirement chronology undetermined · ${link.type}`
                 : link.reason === 'invalid_requirement_detail'
                 ? `Invalid requirement details · ${link.type}`
                  : link.reason === 'context_not_preceding_change'

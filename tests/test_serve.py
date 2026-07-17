@@ -514,6 +514,7 @@ class ServeTests(unittest.TestCase):
         targets = [
             event_data(
                 event_id="requirement-1",
+                timestamp="2026-07-13T10:59:00Z",
                 kind="requirement.observed",
                 attributes={"requirement": {"id": "R3", "text": "Reject expiry."}},
             ),
@@ -1104,11 +1105,21 @@ class ServeTests(unittest.TestCase):
                 "reason": "requirement_follows_decision",
                 "decision_event_id": "proposal-1",
             },
+            {
+                "type": "motivated_by",
+                "source_event_id": "change-1",
+                "target_event_id": "requirement-other-emitter",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "requirement.observed",
+                "reason": "requirement_chronology_undetermined",
+                "decision_event_id": "proposal-1",
+            },
         ])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["context", "tool", "verification"],
-            "unresolved_count": 3,
+            "unresolved_count": 4,
         })
 
     def test_context_read_after_change_uses_same_emitter_sequence_ordering(self):
@@ -3803,6 +3814,7 @@ class ServeTests(unittest.TestCase):
                 targets = [
                     event_data(
                         event_id="requirement-1",
+                        timestamp="2026-07-13T10:59:00Z",
                         kind="requirement.observed",
                         attributes={"requirement": {
                             "id": "R3",
@@ -4102,6 +4114,7 @@ class ServeTests(unittest.TestCase):
         targets = [
             event_data(
                 event_id="requirement-1",
+                timestamp="2026-07-13T10:59:00Z",
                 kind="requirement.observed",
                 attributes={"requirement": {"id": "R3", "text": "Reject expiry."}},
             ),
@@ -4366,6 +4379,7 @@ class ServeTests(unittest.TestCase):
                 events = [
                     event_data(
                         event_id="requirement-1",
+                        timestamp="2026-07-13T10:59:00Z",
                         kind="requirement.observed",
                         attributes={"requirement": {
                             "id": "R3",
@@ -4490,6 +4504,7 @@ class ServeTests(unittest.TestCase):
                 events = [
                     event_data(
                         event_id="requirement-1",
+                        timestamp="2026-07-13T10:59:00Z",
                         kind="requirement.observed",
                         attributes={"requirement": {
                             "id": "R3",
@@ -4573,6 +4588,7 @@ class ServeTests(unittest.TestCase):
         events = [
             event_data(
                 event_id="requirement-1",
+                timestamp="2026-07-13T10:59:00Z",
                 kind="requirement.observed",
                 attributes={"requirement": {"id": "R3", "text": "Reject expiry."}},
             ),

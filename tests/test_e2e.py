@@ -1546,6 +1546,15 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(undetermined_requirement).to_contain_text(
                     "requirement chronology undetermined"
                 )
+                undetermined_requirement_diagnostic = evidence.locator(
+                    ".unresolved-evidence"
+                ).filter(has_text="requirement-undetermined")
+                expect(undetermined_requirement_diagnostic).to_contain_text(
+                    "Requirement chronology undetermined · motivated_by"
+                )
+                expect(undetermined_requirement_diagnostic).to_contain_text(
+                    "decision event proposal-1"
+                )
                 late_requirement_diagnostic = evidence.locator(".unresolved-evidence").filter(
                     has_text="requirement-after-decision"
                 )
@@ -1603,7 +1612,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(diagnostic).to_contain_text("Context compacted after decision · informed_by")
                 expect(diagnostic).to_contain_text("context.compacted")
                 expect(diagnostic).to_contain_text("decision event proposal-1")
-                expect(evidence).to_contain_text("8 unresolved references")
+                expect(evidence).to_contain_text("9 unresolved references")
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):
