@@ -84,6 +84,7 @@ class ServeTests(unittest.TestCase):
         before_target = store.run_detail("trace-1")["evidence_map"]
         store.feed_line(json.dumps(event_data(
             event_id="requirement-1",
+            emitter_id="requirements",
             span_id="span-2",
             sequence=2,
             kind="requirement.observed",
@@ -765,10 +766,11 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 3,
         })
 
-    def test_requirement_observed_after_change_cannot_be_motivation(self):
+    def test_requirement_after_change_uses_same_emitter_sequence_ordering(self):
         store = RunStore.from_lines([
             json.dumps(event_data(
                 event_id="requirement-after-change",
+                emitter_id="worker-2",
                 timestamp="2026-07-13T11:03:00Z",
                 kind="requirement.observed",
                 attributes={"requirement": {
@@ -777,9 +779,9 @@ class ServeTests(unittest.TestCase):
                 }},
             )) + "\n",
             json.dumps(event_data(
-                event_id="requirement-same-time",
-                span_id="span-same-time",
-                sequence=2,
+                event_id="requirement-same-time-after-change",
+                span_id="span-same-time-requirement",
+                sequence=3,
                 timestamp="2026-07-13T11:02:00Z",
                 kind="requirement.observed",
                 attributes={"requirement": {
@@ -788,9 +790,32 @@ class ServeTests(unittest.TestCase):
                 }},
             )) + "\n",
             json.dumps(event_data(
+                event_id="requirement-clock-skew-after-change",
+                span_id="span-skewed-requirement",
+                sequence=4,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="requirement.observed",
+                attributes={"requirement": {
+                    "id": "R-skewed",
+                    "text": "Requirement recorded after the change by sequence.",
+                }},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="requirement-same-time-other-emitter",
+                emitter_id="worker-2",
+                span_id="span-other-emitter-requirement",
+                sequence=2,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="requirement.observed",
+                attributes={"requirement": {
+                    "id": "R-other-emitter",
+                    "text": "Requirement recorded at the same timestamp elsewhere.",
+                }},
+            )) + "\n",
+            json.dumps(event_data(
                 event_id="change-1",
                 span_id="span-2",
-                sequence=3,
+                sequence=2,
                 timestamp="2026-07-13T11:02:00Z",
                 kind="change.applied",
                 attributes={"change": {
@@ -802,7 +827,18 @@ class ServeTests(unittest.TestCase):
                 }},
                 relationships=[
                     {"type": "motivated_by", "event_id": "requirement-after-change"},
-                    {"type": "motivated_by", "event_id": "requirement-same-time"},
+                    {
+                        "type": "motivated_by",
+                        "event_id": "requirement-same-time-after-change",
+                    },
+                    {
+                        "type": "motivated_by",
+                        "event_id": "requirement-clock-skew-after-change",
+                    },
+                    {
+                        "type": "motivated_by",
+                        "event_id": "requirement-same-time-other-emitter",
+                    },
                 ],
             )) + "\n",
         ])
@@ -811,21 +847,24 @@ class ServeTests(unittest.TestCase):
 
         self.assertEqual(
             [link["requirement"]["id"] for link in change["links"]],
-            ["R-late", "R-equal"],
+            ["R-late", "R-equal", "R-skewed", "R-other-emitter"],
         )
-        self.assertEqual(change["unresolved"], [{
-            "type": "motivated_by",
-            "source_event_id": "change-1",
-            "target_event_id": "requirement-after-change",
-            "source_kind": "change.applied",
-            "source_actor_id": "reviewer-1",
-            "target_kind": "requirement.observed",
-            "reason": "requirement_not_preceding_change",
-        }])
+        self.assertEqual(
+            [item["target_event_id"] for item in change["unresolved"]],
+            [
+                "requirement-after-change",
+                "requirement-same-time-after-change",
+                "requirement-clock-skew-after-change",
+            ],
+        )
+        self.assertTrue(all(
+            item["reason"] == "requirement_not_preceding_change"
+            for item in change["unresolved"]
+        ))
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["context", "tool", "verification", "decision"],
-            "unresolved_count": 1,
+            "unresolved_count": 3,
         })
 
     def test_requirement_observed_after_decision_is_incomplete_evidence(self):

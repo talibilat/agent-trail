@@ -53,6 +53,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )) + "\n",
                 json.dumps(event_data(
                     event_id="requirement-after-change",
+                    emitter_id="requirements",
                     span_id="span-requirement-after-change",
                     timestamp="2026-07-13T11:03:00Z",
                     kind="requirement.observed",
