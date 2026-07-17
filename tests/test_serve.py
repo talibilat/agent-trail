@@ -430,6 +430,69 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(link["context"], {"path": "src/auth/config.py"})
         self.assertEqual(link["target_kind"], "context.read")
 
+    def test_change_hunks_include_context_compaction_sources(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[{
+                    "type": "informed_by",
+                    "event_id": "compaction-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="compaction-1",
+                span_id="span-2",
+                sequence=2,
+                kind="context.compacted",
+                relationships=[
+                    {"type": "summarizes", "event_id": "context-1"},
+                    {"type": "summarizes", "event_id": "missing-context"},
+                ],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-1",
+                span_id="span-3",
+                sequence=3,
+                kind="context.read",
+                actor={"id": "researcher-1"},
+                attributes={"context": {
+                    "path": "docs/session-lifecycle.md",
+                    "line_start": 42,
+                    "line_end": 51,
+                }},
+            )) + "\n",
+        ])
+
+        link = store.run_detail("trace-1")["evidence_map"]["changes"][0]["links"][0]
+
+        self.assertEqual(link["target_kind"], "context.compacted")
+        self.assertEqual(link["compaction"], {
+            "sources": [{
+                "type": "summarizes",
+                "event_id": "context-1",
+                "kind": "context.read",
+                "actor_id": "researcher-1",
+                "context": {
+                    "path": "docs/session-lifecycle.md",
+                    "line_start": 42,
+                    "line_end": 51,
+                },
+            }],
+            "unresolved": [{
+                "type": "summarizes",
+                "event_id": "missing-context",
+            }],
+        })
+
     def test_change_hunks_include_later_human_corrections(self):
         hunk = {
             "path": "src/auth/session.py",

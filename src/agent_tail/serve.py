@@ -891,6 +891,9 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 context = _context_read_detail(target)
                 if context is not None:
                     resolved["context"] = context
+                compaction = _context_compaction_detail(target, events_by_id)
+                if compaction is not None:
+                    resolved["compaction"] = compaction
                 correction = _human_correction(source)
                 if relationship.type == "corrects" and correction is not None:
                     resolved["correction"] = correction
@@ -990,6 +993,32 @@ def _context_read_detail(event: Event) -> dict[str, object] | None:
     if isinstance(symbol, str):
         detail["symbol"] = symbol
     return detail
+
+
+def _context_compaction_detail(
+    event: Event,
+    events_by_id: dict[str, Event],
+) -> dict[str, object] | None:
+    if event.kind != "context.compacted":
+        return None
+    sources = []
+    unresolved = []
+    for relationship in event.relationships:
+        item: dict[str, object] = {
+            "type": relationship.type,
+            "event_id": relationship.event_id,
+        }
+        source = events_by_id.get(relationship.event_id)
+        if source is None:
+            unresolved.append(item)
+            continue
+        item["kind"] = source.kind
+        item["actor_id"] = source.actor["id"]
+        context = _context_read_detail(source)
+        if context is not None:
+            item["context"] = context
+        sources.append(item)
+    return {"sources": sources, "unresolved": unresolved}
 
 
 def _human_correction(event: Event) -> dict[str, object] | None:

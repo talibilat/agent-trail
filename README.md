@@ -106,6 +106,9 @@ To identify a motivating requirement, emit a `requirement.observed` event with n
 Resolved links to that event include the validated ID and text under `requirement`, while malformed optional requirement metadata is omitted without hiding the relationship.
 To identify repository or documentation evidence, emit a `context.read` event with a non-empty `attributes.context.path`, optional non-negative integer `line_start` and `line_end` fields, and an optional string `symbol`, then reference it from the change event.
 Resolved links to that event include the validated locator under `context`; malformed optional locator fields are omitted without hiding the relationship.
+When context is summarized before a decision, emit a `context.compacted` event with relationships to the source events it summarizes, then reference the compaction event from the change.
+Resolved links to that event include `compaction.sources` with source event kinds, actors, and any context-read locators, plus `compaction.unresolved` for missing source events.
+This preserves the observable compaction boundary without capturing private reasoning or summary contents.
 To attach a test result, emit a `verification.finished` event with `attributes.verification.command` and boolean `attributes.verification.passed` fields, plus an optional integer `exit_code`.
 Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
 Resolved links to that event include the validated result under `verification`, so each linked hunk exposes its test command and outcome directly.
