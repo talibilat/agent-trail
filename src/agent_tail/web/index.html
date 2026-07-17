@@ -1761,7 +1761,9 @@
           card.className = 'unresolved-evidence';
           const type = document.createElement('div');
           type.className = 'type';
-          type.textContent = `Missing evidence · ${link.type}`;
+          type.textContent = link.target_kind
+            ? `Invalid evidence target · ${link.type}`
+            : `Missing evidence · ${link.type}`;
           const eventId = document.createElement('div');
           eventId.className = 'event-id';
           eventId.textContent = link.target_event_id;

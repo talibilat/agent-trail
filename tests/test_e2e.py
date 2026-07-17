@@ -160,6 +160,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "verified_by", "event_id": "verification-1"},
                         {"type": "verified_by", "event_id": "verification-2"},
                         {"type": "verified_by", "event_id": "verification-outcome-only"},
+                        {"type": "verified_by", "event_id": "context-1"},
                         {"type": "references", "event_id": "unrelated-verification"},
                         {"type": "reviewed_by", "event_id": "missing-review<img id=evidence-missing-injected>"},
                     ],
@@ -346,7 +347,9 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).not_to_contain_text("unrelated-maintainer")
                 expect(evidence).to_contain_text("Missing evidence · reviewed_by")
                 expect(evidence).to_contain_text("missing-review")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 2 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Invalid evidence target · verified_by")
+                expect(evidence).to_contain_text("context-1")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 3 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)

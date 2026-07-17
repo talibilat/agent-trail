@@ -913,6 +913,14 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     corrections_by_change.setdefault(target.event_id, []).append(resolved)
                 links.append(resolved)
                 source_links.append(resolved)
+                if (
+                    source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    and target.kind != "verification.finished"
+                ):
+                    invalid = {**item, "target_kind": target.kind}
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
         hunk = _change_hunk(source)
         if hunk is not None:
             changes.append({

@@ -1209,7 +1209,7 @@ class ServeTests(unittest.TestCase):
         })
         self.assertEqual(change["links"][0]["target_actor_id"], " \t")
 
-    def test_unrelated_missing_links_do_not_reduce_complete_coverage(self):
+    def test_wrong_kind_verification_target_reduces_complete_coverage(self):
         hunk = {
             "path": "src/auth/session.py",
             "old_start": 84,
@@ -1247,8 +1247,13 @@ class ServeTests(unittest.TestCase):
             ),
             event_data(event_id="proposal-1", sequence=5, kind="change.proposed"),
             event_data(
-                event_id="change-1",
+                event_id="wrong-verification-1",
                 sequence=6,
+                kind="verification.started",
+            ),
+            event_data(
+                event_id="change-1",
+                sequence=7,
                 kind="change.applied",
                 attributes={"change": hunk},
                 relationships=[
@@ -1256,6 +1261,7 @@ class ServeTests(unittest.TestCase):
                     {"type": "informed_by", "event_id": "context-1"},
                     {"type": "preceded_by", "event_id": "tool-1"},
                     {"type": "verified_by", "event_id": "verification-1"},
+                    {"type": "verified_by", "event_id": "wrong-verification-1"},
                     {"type": "applies", "event_id": "proposal-1"},
                     {"type": "references", "event_id": "missing-note"},
                 ],
@@ -1266,17 +1272,31 @@ class ServeTests(unittest.TestCase):
         change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
         self.assertEqual(change["coverage"], {
-            "status": "complete",
+            "status": "incomplete",
             "missing": [],
-            "unresolved_count": 0,
+            "unresolved_count": 1,
         })
-        self.assertEqual(change["unresolved"], [{
-            "type": "references",
-            "source_event_id": "change-1",
-            "target_event_id": "missing-note",
-            "source_kind": "change.applied",
-            "source_actor_id": "reviewer-1",
-        }])
+        self.assertEqual(change["unresolved"], [
+            {
+                "type": "verified_by",
+                "source_event_id": "change-1",
+                "target_event_id": "wrong-verification-1",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "verification.started",
+            },
+            {
+                "type": "references",
+                "source_event_id": "change-1",
+                "target_event_id": "missing-note",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+            },
+        ])
+        self.assertIn(
+            "wrong-verification-1",
+            [link["target_event_id"] for link in change["links"]],
+        )
 
     def test_blank_verification_commands_do_not_satisfy_verification_coverage(self):
         hunk = {
