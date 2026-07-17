@@ -155,11 +155,12 @@ It identifies each missing verification start by relationship type and event ID 
 Malformed optional verification metadata is omitted without rejecting the event, its relationship, or other valid verification details.
 To record a later human change, emit a `human.corrected` event with a `corrects` relationship targeting the original `change.applied` event and set `attributes.correction.action` to `modified` or `reverted`.
 Each affected hunk exposes these inbound links in event order under `corrections`, including the human actor and validated action when available.
+Canonical corrections without a `modified` or `reverted` action remain visible but are reported as invalid correction details instead of being attributed to either outcome.
 The browser event inspector highlights each later human modification or reversion directly on the selected change hunk, naming a non-blank correcting actor or reporting that the correcting actor is unknown.
 Wrong-kind `corrects` targets remain inspectable as generic links and are also reported as invalid targets in the run-level unresolved diagnostics.
 When the correction event is selected, the browser presents the relationship type, target event ID, and actual target kind from that diagnostic without attributing it to a change hunk.
 Other inbound relationship types remain available as generic evidence links but are not attributed as human corrections.
-Malformed correction metadata is omitted without hiding the correction relationship.
+Malformed correction metadata is omitted without hiding the correction relationship or its typed diagnostic.
 Unknown kinds, fields, and supported minor schema versions are retained so the canonical envelope can evolve.
 
 Harnesses other than the v1 runtime need an adapter that emits this envelope.

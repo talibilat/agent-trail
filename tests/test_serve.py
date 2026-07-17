@@ -2051,8 +2051,18 @@ class ServeTests(unittest.TestCase):
                 "source_actor_id": "maintainer-2",
                 "target_kind": "change.applied",
                 "target_actor_id": "reviewer-1",
+                "reason": "invalid_correction_detail",
             },
         ])
+        self.assertEqual(evidence["unresolved"], [{
+            "type": "corrects",
+            "source_event_id": "correction-3",
+            "target_event_id": "change-1",
+            "source_kind": "human.corrected",
+            "source_actor_id": "maintainer-2",
+            "target_kind": "change.applied",
+            "reason": "invalid_correction_detail",
+        }])
         self.assertEqual(evidence["links"][0], evidence["changes"][0]["corrections"][0])
         self.assertEqual(evidence["links"][-1], {
             "type": "references",

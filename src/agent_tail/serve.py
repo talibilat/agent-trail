@@ -910,6 +910,15 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     and source.kind == "human.corrected"
                     and target.kind == "change.applied"
                 ):
+                    if correction is None:
+                        resolved["reason"] = "invalid_correction_detail"
+                        invalid = {
+                            **item,
+                            "target_kind": target.kind,
+                            "reason": "invalid_correction_detail",
+                        }
+                        unresolved.append(invalid)
+                        source_unresolved.append(invalid)
                     corrections_by_change.setdefault(target.event_id, []).append(resolved)
                 links.append(resolved)
                 source_links.append(resolved)

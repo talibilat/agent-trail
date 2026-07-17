@@ -1528,9 +1528,11 @@
           card.className = 'unresolved-evidence';
           const type = document.createElement('div');
           type.className = 'type';
-          type.textContent = link.target_kind
-            ? `Invalid relationship target · ${link.type}`
-            : `Missing relationship target · ${link.type}`;
+          type.textContent = link.reason === 'invalid_correction_detail'
+            ? `Invalid correction details · ${link.type}`
+            : link.target_kind
+              ? `Invalid relationship target · ${link.type}`
+              : `Missing relationship target · ${link.type}`;
           const eventId = document.createElement('div');
           eventId.className = 'event-id';
           eventId.textContent = link.target_kind
@@ -1793,11 +1795,13 @@
           card.className = `correction-card${action === 'reverted' ? ' reverted' : ''}`;
           const actionNode = document.createElement('div');
           actionNode.className = 'action';
-          actionNode.textContent = action === 'modified'
-            ? 'Human modified this change'
-            : action === 'reverted'
-              ? 'Human reverted this change'
-              : 'Human corrected this change';
+          actionNode.textContent = link.reason === 'invalid_correction_detail'
+            ? 'Human correction action invalid'
+            : action === 'modified'
+              ? 'Human modified this change'
+              : action === 'reverted'
+                ? 'Human reverted this change'
+                : 'Human corrected this change';
           const meta = document.createElement('div');
           meta.className = 'meta';
           meta.textContent = typeof link.source_actor_id === 'string' && link.source_actor_id.trim()
