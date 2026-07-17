@@ -159,6 +159,8 @@ class ServeTests(unittest.TestCase):
                 "event_id": "change-1",
                 "actor_id": "reviewer-1",
                 "hunk": valid_hunk,
+                "links": [],
+                "unresolved": [],
             },
             {
                 "event_id": "change-2",
@@ -168,10 +170,101 @@ class ServeTests(unittest.TestCase):
                     "path": "tests/test_session.py",
                     "new_start": 91,
                 },
+                "links": [],
+                "unresolved": [],
             },
         ])
         self.assertEqual(evidence["links"], [])
         self.assertEqual(evidence["unresolved"], [])
+
+    def test_change_hunks_group_their_relationship_evidence(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="requirement-1",
+                kind="requirement.observed",
+                actor={"id": "user"},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                span_id="span-2",
+                sequence=2,
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[
+                    {"type": "motivated_by", "event_id": "requirement-1"},
+                    {"type": "verified_by", "event_id": "verification-1"},
+                ],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-1",
+                span_id="span-3",
+                sequence=3,
+                kind="context.read",
+                relationships=[
+                    {"type": "informed_by", "event_id": "missing-document"},
+                ],
+            )) + "\n",
+        ])
+
+        before_verification = store.run_detail("trace-1")["evidence_map"]
+        store.feed_line(json.dumps(event_data(
+            event_id="verification-1",
+            span_id="span-4",
+            sequence=4,
+            kind="verification.finished",
+        )) + "\n")
+        after_verification = store.run_detail("trace-1")["evidence_map"]
+
+        motivated_by = {
+            "type": "motivated_by",
+            "source_event_id": "change-1",
+            "target_event_id": "requirement-1",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+            "target_kind": "requirement.observed",
+            "target_actor_id": "user",
+        }
+        verified_by_unresolved = {
+            "type": "verified_by",
+            "source_event_id": "change-1",
+            "target_event_id": "verification-1",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+        }
+        self.assertEqual(before_verification["changes"], [{
+            "event_id": "change-1",
+            "actor_id": "reviewer-1",
+            "hunk": hunk,
+            "links": [motivated_by],
+            "unresolved": [verified_by_unresolved],
+        }])
+        self.assertEqual(after_verification["changes"], [{
+            "event_id": "change-1",
+            "actor_id": "reviewer-1",
+            "hunk": hunk,
+            "links": [motivated_by, {
+                **verified_by_unresolved,
+                "target_kind": "verification.finished",
+                "target_actor_id": "reviewer-1",
+            }],
+            "unresolved": [],
+        }])
+        self.assertEqual(
+            before_verification["links"],
+            before_verification["changes"][0]["links"],
+        )
+        self.assertIn(
+            verified_by_unresolved,
+            before_verification["unresolved"],
+        )
+        self.assertEqual(len(before_verification["unresolved"]), 2)
 
     def test_http_server_serves_offline_shell_and_versioned_api(self):
         store = RunStore.from_lines([

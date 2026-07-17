@@ -861,13 +861,8 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
     links = []
     unresolved = []
     for source in event_list:
-        hunk = _change_hunk(source)
-        if hunk is not None:
-            changes.append({
-                "event_id": source.event_id,
-                "actor_id": source.actor["id"],
-                "hunk": hunk,
-            })
+        source_links = []
+        source_unresolved = []
         for relationship in source.relationships:
             item = {
                 "type": relationship.type,
@@ -879,12 +874,24 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
             target = events_by_id.get(relationship.event_id)
             if target is None:
                 unresolved.append(item)
+                source_unresolved.append(item)
             else:
-                links.append({
+                resolved = {
                     **item,
                     "target_kind": target.kind,
                     "target_actor_id": target.actor["id"],
-                })
+                }
+                links.append(resolved)
+                source_links.append(resolved)
+        hunk = _change_hunk(source)
+        if hunk is not None:
+            changes.append({
+                "event_id": source.event_id,
+                "actor_id": source.actor["id"],
+                "hunk": hunk,
+                "links": source_links,
+                "unresolved": source_unresolved,
+            })
     return {"changes": changes, "links": links, "unresolved": unresolved}
 
 
