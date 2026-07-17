@@ -107,6 +107,7 @@ Unresolved generic relationships remain inspectable but do not reduce factual ev
 A context category is present for direct context only when an `informed_by` relationship resolves to a `context.read` event with a validated locator; other links to context reads remain visible but do not identify what informed the applied hunk.
 Canonical context-read events without a valid non-blank path remain inspectable as generic links but are reported as invalid context details and keep coverage incomplete.
 A supplied `line_start` that is not a positive integer is omitted, reported as an invalid context line start, and keeps coverage incomplete while the valid path remains visible.
+A supplied `line_end` that is not a positive integer or precedes a valid `line_start` is omitted, reported as an invalid context line end, and keeps coverage incomplete while the rest of the valid locator remains visible.
 A context locator among a compaction's resolved `summarizes` sources also satisfies the category when the change references that compaction with `informed_by`; unrelated outer or source links do not.
 An `informed_by` compaction without any `summarizes` relationship remains visible but is reported as invalid compaction details and keeps coverage incomplete even when other context evidence satisfies the category.
 A tool category is present only when a `preceded_by` relationship resolves to a tool call with a non-blank command or result; other links to tool calls remain visible, while operation identity and status alone do not satisfy it.

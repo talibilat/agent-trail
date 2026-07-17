@@ -964,6 +964,19 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 elif (
                     source.kind == "change.applied"
                     and relationship.type == "informed_by"
+                    and target.kind == "context.read"
+                    and _has_invalid_context_line_end(target)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_context_line_end",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
                     and target.kind == "context.compacted"
                     and not any(
                         candidate.type == "summarizes"
@@ -1524,6 +1537,22 @@ def _has_invalid_context_line_start(event: Event) -> bool:
     )
 
 
+def _has_invalid_context_line_end(event: Event) -> bool:
+    context = _attributes(event).get("context")
+    if not isinstance(context, dict) or "line_end" not in context:
+        return False
+    line_end = context["line_end"]
+    if not isinstance(line_end, int) or isinstance(line_end, bool) or line_end <= 0:
+        return True
+    line_start = context.get("line_start")
+    return (
+        isinstance(line_start, int)
+        and not isinstance(line_start, bool)
+        and line_start > 0
+        and line_end < line_start
+    )
+
+
 def _tool_call_detail(event: Event) -> dict[str, object] | None:
     if not event.kind.startswith("tool.call."):
         return None
@@ -1594,6 +1623,13 @@ def _context_compaction_detail(
                 "event_id": relationship.event_id,
                 "target_kind": source.kind,
                 "reason": "invalid_context_line_start",
+            })
+        elif relationship.type == "summarizes" and _has_invalid_context_line_end(source):
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": source.kind,
+                "reason": "invalid_context_line_end",
             })
     return {"sources": sources, "unresolved": unresolved}
 

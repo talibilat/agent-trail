@@ -1682,6 +1682,8 @@
               ? `Invalid ${source.type} source details · ${source.event_id} · ${source.target_kind}`
               : source.reason === 'invalid_context_line_start'
                 ? `Invalid ${source.type} source line start · ${source.event_id} · ${source.target_kind}`
+              : source.reason === 'invalid_context_line_end'
+                ? `Invalid ${source.type} source line end · ${source.event_id} · ${source.target_kind}`
               : source.target_kind
               ? `Invalid ${source.type} source target · ${source.event_id} · ${source.target_kind}`
               : `Missing ${source.type} source · ${source.event_id}`;
@@ -1851,6 +1853,8 @@
                   ? `Invalid context details · ${link.type}`
                   : link.reason === 'invalid_context_line_start'
                     ? `Invalid context line start · ${link.type}`
+                  : link.reason === 'invalid_context_line_end'
+                    ? `Invalid context line end · ${link.type}`
                   : link.reason === 'invalid_compaction_detail'
                     ? `Invalid compaction details · ${link.type}`
                     : link.reason === 'invalid_tool_detail'

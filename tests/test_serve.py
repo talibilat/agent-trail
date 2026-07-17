@@ -1027,20 +1027,17 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 2,
         })
 
-    def test_evidence_omits_context_line_end_before_line_start(self):
+    def test_invalid_context_line_ends_are_direct_and_compacted_diagnostics(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
         store = RunStore.from_lines([
             json.dumps(event_data(
-                event_id="change-1",
-                kind="change.applied",
-                relationships=[{
-                    "type": "informed_by",
-                    "event_id": "context-1",
-                }],
-            )) + "\n",
-            json.dumps(event_data(
                 event_id="context-1",
-                span_id="span-2",
-                sequence=2,
                 kind="context.read",
                 attributes={"context": {
                     "path": "src/auth/config.py",
@@ -1048,15 +1045,59 @@ class ServeTests(unittest.TestCase):
                     "line_end": 17,
                 }},
             )) + "\n",
+            json.dumps(event_data(
+                event_id="compaction-1",
+                span_id="span-2",
+                sequence=2,
+                kind="context.compacted",
+                relationships=[{"type": "summarizes", "event_id": "context-1"}],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                span_id="span-3",
+                sequence=3,
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[
+                    {"type": "informed_by", "event_id": "context-1"},
+                    {"type": "informed_by", "event_id": "compaction-1"},
+                ],
+            )) + "\n",
         ])
 
-        link = store.run_detail("trace-1")["evidence_map"]["links"][0]
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
-        self.assertEqual(link["context"], {
+        self.assertEqual(change["links"][0]["context"], {
             "path": "src/auth/config.py",
             "line_start": 42,
         })
-        self.assertEqual(link["target_kind"], "context.read")
+        self.assertEqual(change["links"][1]["compaction"], {
+            "sources": [{
+                "type": "summarizes",
+                "event_id": "context-1",
+                "kind": "context.read",
+                "actor_id": "reviewer-1",
+                "context": {
+                    "path": "src/auth/config.py",
+                    "line_start": 42,
+                },
+            }],
+            "unresolved": [{
+                "type": "summarizes",
+                "event_id": "context-1",
+                "target_kind": "context.read",
+                "reason": "invalid_context_line_end",
+            }],
+        })
+        self.assertEqual(
+            [item["reason"] for item in change["unresolved"]],
+            ["invalid_context_line_end"],
+        )
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "tool", "verification", "decision"],
+            "unresolved_count": 2,
+        })
 
     def test_evidence_preserves_context_line_end_without_line_start(self):
         store = RunStore.from_lines([
