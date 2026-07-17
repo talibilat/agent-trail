@@ -1773,7 +1773,9 @@
           (verification.unresolved || []).forEach((start) => {
             const incomplete = document.createElement('div');
             incomplete.className = 'incomplete';
-            incomplete.textContent = start.target_kind
+            incomplete.textContent = start.reason === 'invalid_verification_command'
+              ? `Invalid ${start.type} start command · ${start.event_id} · ${start.target_kind}`
+              : start.target_kind
               ? `Invalid ${start.type} start target · ${start.event_id} · ${start.target_kind}`
               : `Missing ${start.type} start · ${start.event_id}`;
             card.append(incomplete);

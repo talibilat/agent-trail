@@ -461,6 +461,10 @@ class ServeTests(unittest.TestCase):
                         "type": "completes",
                         "event_id": "not-a-verification-start",
                     },
+                    {
+                        "type": "completes",
+                        "event_id": "verification-started-without-command",
+                    },
                 ],
             )) + "\n",
             json.dumps(event_data(
@@ -469,15 +473,27 @@ class ServeTests(unittest.TestCase):
                 sequence=3,
                 kind="requirement.observed",
             )) + "\n",
+            json.dumps(event_data(
+                event_id="verification-started-without-command",
+                span_id="span-4",
+                sequence=4,
+                kind="verification.started",
+                actor={"id": "commandless-runner"},
+                attributes={"verification": {"command": " \t"}},
+            )) + "\n",
         ])
 
         before_detail = store.run_detail("trace-1")
         before_start = before_detail["evidence_map"]["changes"][0]
-        self.assertEqual(len(before_detail["events"][1]["relationships"]), 3)
+        self.assertEqual(len(before_detail["events"][1]["relationships"]), 4)
         self.assertEqual(before_start["links"][0]["verification"], {
             "passed": True,
             "exit_code": 0,
             "test_origin": "pre_existing",
+            "starts": [{
+                "event_id": "verification-started-without-command",
+                "actor_id": "commandless-runner",
+            }],
             "unresolved": [
                 {
                     "type": "completes",
@@ -488,12 +504,18 @@ class ServeTests(unittest.TestCase):
                     "event_id": "not-a-verification-start",
                     "target_kind": "requirement.observed",
                 },
+                {
+                    "type": "completes",
+                    "event_id": "verification-started-without-command",
+                    "target_kind": "verification.started",
+                    "reason": "invalid_verification_command",
+                },
             ],
         })
         self.assertEqual(before_start["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "verification", "decision"],
-            "unresolved_count": 2,
+            "unresolved_count": 3,
         })
 
         store.feed_line(json.dumps(event_data(
@@ -517,17 +539,28 @@ class ServeTests(unittest.TestCase):
                 "event_id": "verification-started-1",
                 "actor_id": "test-runner",
                 "command": "pytest tests/test_session.py",
+            }, {
+                "event_id": "verification-started-without-command",
+                "actor_id": "commandless-runner",
             }],
-            "unresolved": [{
-                "type": "completes",
-                "event_id": "not-a-verification-start",
-                "target_kind": "requirement.observed",
-            }],
+            "unresolved": [
+                {
+                    "type": "completes",
+                    "event_id": "not-a-verification-start",
+                    "target_kind": "requirement.observed",
+                },
+                {
+                    "type": "completes",
+                    "event_id": "verification-started-without-command",
+                    "target_kind": "verification.started",
+                    "reason": "invalid_verification_command",
+                },
+            ],
         })
         self.assertEqual(after_start["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "decision"],
-            "unresolved_count": 1,
+            "unresolved_count": 2,
         })
 
     def test_outcome_only_verification_remains_visible_but_incomplete(self):
@@ -1779,21 +1812,19 @@ class ServeTests(unittest.TestCase):
                         "event_id": "verification-started-1",
                         "actor_id": "reviewer-1",
                     }],
+                    "unresolved": [{
+                        "type": "completes",
+                        "event_id": "verification-started-1",
+                        "target_kind": "verification.started",
+                        "reason": "invalid_verification_command",
+                    }],
                 })
                 self.assertEqual(change["coverage"], {
                     "status": "incomplete",
                     "missing": ["verification"],
                     "unresolved_count": 1,
                 })
-                self.assertEqual(change["unresolved"], [{
-                    "type": "verified_by",
-                    "source_event_id": "change-1",
-                    "target_event_id": "verification-finished-1",
-                    "source_kind": "change.applied",
-                    "source_actor_id": "reviewer-1",
-                    "target_kind": "verification.finished",
-                    "reason": "invalid_verification_command",
-                }])
+                self.assertEqual(change["unresolved"], [])
 
     def test_only_canonical_compaction_links_satisfy_context_coverage(self):
         hunk = {

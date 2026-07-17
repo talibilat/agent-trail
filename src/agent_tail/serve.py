@@ -1252,12 +1252,21 @@ def _verification_result(
             "actor_id": started.actor["id"],
         }
         started_verification = _attributes(started).get("verification")
+        has_command = False
         if isinstance(started_verification, dict):
             started_command = started_verification.get("command")
             if isinstance(started_command, str) and started_command.strip():
+                has_command = True
                 detail["command"] = started_command
                 result.setdefault("command", started_command)
         starts.append(detail)
+        if not has_command:
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": started.kind,
+                "reason": "invalid_verification_command",
+            })
     if starts:
         result["starts"] = starts
     if unresolved:
