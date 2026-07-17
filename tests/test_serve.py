@@ -2143,10 +2143,12 @@ class ServeTests(unittest.TestCase):
             "new_start": 84,
             "new_count": 19,
         }
-        for finished_command, started_command in (
-            (None, None),
-            (" \t", None),
-            (None, "\n "),
+        for finished_command, started_command, invalid_finished in (
+            (None, None, False),
+            (" \t", None, False),
+            (None, "\n ", False),
+            (17, "pytest tests/test_session.py", True),
+            (" " * 2, "pytest tests/test_session.py", True),
         ):
             with self.subTest(
                 finished_command=finished_command,
@@ -2228,26 +2230,47 @@ class ServeTests(unittest.TestCase):
 
                 change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
-                self.assertEqual(change["links"][3]["verification"], {
-                    "passed": True,
-                    "test_origin": "pre_existing",
-                    "starts": [{
-                        "event_id": "verification-started-1",
-                        "actor_id": "reviewer-1",
-                    }],
-                    "unresolved": [{
-                        "type": "completes",
-                        "event_id": "verification-started-1",
-                        "target_kind": "verification.started",
-                        "reason": "invalid_verification_command",
-                    }],
-                })
-                self.assertEqual(change["coverage"], {
-                    "status": "incomplete",
-                    "missing": ["verification"],
-                    "unresolved_count": 1,
-                })
-                self.assertEqual(change["unresolved"], [])
+                if invalid_finished:
+                    self.assertEqual(change["links"][3]["verification"], {
+                        "passed": True,
+                        "command": "pytest tests/test_session.py",
+                        "test_origin": "pre_existing",
+                        "starts": [{
+                            "event_id": "verification-started-1",
+                            "actor_id": "reviewer-1",
+                            "command": "pytest tests/test_session.py",
+                        }],
+                    })
+                    self.assertEqual(change["coverage"], {
+                        "status": "incomplete",
+                        "missing": [],
+                        "unresolved_count": 1,
+                    })
+                    self.assertEqual(
+                        change["unresolved"][0]["reason"],
+                        "invalid_verification_command",
+                    )
+                else:
+                    self.assertEqual(change["links"][3]["verification"], {
+                        "passed": True,
+                        "test_origin": "pre_existing",
+                        "starts": [{
+                            "event_id": "verification-started-1",
+                            "actor_id": "reviewer-1",
+                        }],
+                        "unresolved": [{
+                            "type": "completes",
+                            "event_id": "verification-started-1",
+                            "target_kind": "verification.started",
+                            "reason": "invalid_verification_command",
+                        }],
+                    })
+                    self.assertEqual(change["coverage"], {
+                        "status": "incomplete",
+                        "missing": ["verification"],
+                        "unresolved_count": 1,
+                    })
+                    self.assertEqual(change["unresolved"], [])
 
     def test_only_canonical_compaction_links_satisfy_context_coverage(self):
         hunk = {

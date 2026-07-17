@@ -147,6 +147,7 @@ When `exit_code` is supplied, zero must correspond to `passed: true` and a nonze
 A supplied exit code that is not an integer is omitted from the projected result, produces an invalid-exit-code diagnostic, and keeps coverage incomplete.
 For lifecycle attribution, emit the command as non-blank `attributes.verification.command` on a `verification.started` event and reference it from `verification.finished` with a `completes` relationship.
 Finished-only events can instead include the command directly for producers that do not emit a separate start event.
+A supplied finished-event command that is malformed or blank is omitted and reported as invalid verification command evidence even when a valid start supplies the effective command, while an absent finished-event command remains valid for lifecycle-based producers.
 Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
 Resolved links to the finished event include the validated result under `verification`, including each distinct resolved start event and its actor, so each linked hunk exposes every known test command and outcome directly.
 Resolved start events without a non-blank command remain available for actor attribution but are reported as invalid start commands and keep coverage incomplete even when another lifecycle event supplies a valid command.
