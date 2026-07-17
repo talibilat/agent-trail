@@ -969,6 +969,8 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                             boundary,
                             boundary_name,
                         )
+                        if earliest_decision is not None:
+                            resolved["decision_event_id"] = earliest_decision.event_id
                     resolved["requirement"] = requirement
                 context = _context_read_detail(target)
                 if context is not None:

@@ -1521,10 +1521,12 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(late_context_diagnostic).to_contain_text("context.read")
                 late_requirement = evidence.locator(".requirement-card").filter(has_text="R-late")
                 expect(late_requirement).to_contain_text("Requirement observed after the decision.")
+                expect(late_requirement).to_contain_text("decision event proposal-1")
                 undetermined_requirement = evidence.locator(".requirement-card").filter(
                     has_text="R-concurrent"
                 )
                 expect(undetermined_requirement).to_contain_text("concurrent-observer")
+                expect(undetermined_requirement).to_contain_text("decision event proposal-1")
                 expect(undetermined_requirement).to_contain_text(
                     "requirement chronology undetermined"
                 )

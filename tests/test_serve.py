@@ -1044,6 +1044,19 @@ class ServeTests(unittest.TestCase):
                 "requirement-other-emitter": "undetermined",
             },
         )
+        self.assertEqual(
+            {
+                link["target_event_id"]: link["decision_event_id"]
+                for link in change["links"]
+                if link["target_kind"] == "requirement.observed"
+            },
+            {
+                "requirement-same-time": "proposal-1",
+                "requirement-after-decision": "proposal-1",
+                "requirement-clock-skew": "proposal-1",
+                "requirement-other-emitter": "proposal-1",
+            },
+        )
         self.assertEqual(change["unresolved"], [
             {
                 "type": "motivated_by",
