@@ -1650,9 +1650,13 @@
           title.textContent = 'Context compacted before change';
           const meta = document.createElement('div');
           meta.className = 'meta';
-          meta.textContent = typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
-            ? `compacted by ${link.target_actor_id}`
-            : 'compacting actor unknown';
+          const compactionDetails = [`event ${link.target_event_id}`];
+          compactionDetails.push(
+            typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+              ? `compacted by ${link.target_actor_id}`
+              : 'compacting actor unknown'
+          );
+          meta.textContent = compactionDetails.join(' · ');
           card.append(title, meta);
           (link.compaction.sources || []).filter(
             (source) => source.type === 'summarizes'
@@ -1666,9 +1670,10 @@
             }
             const sourceMeta = document.createElement('div');
             sourceMeta.className = 'meta';
-            const sourceDetails = [typeof source.actor_id === 'string' && source.actor_id.trim()
+            const sourceDetails = [`event ${source.event_id}`];
+            sourceDetails.push(typeof source.actor_id === 'string' && source.actor_id.trim()
               ? `source from ${source.actor_id}`
-              : 'source actor unknown'];
+              : 'source actor unknown');
             if (source.context?.symbol) sourceDetails.push(source.context.symbol);
             sourceMeta.textContent = sourceDetails.join(' · ');
             card.append(sourceNode, sourceMeta);
