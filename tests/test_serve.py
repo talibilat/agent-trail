@@ -1087,6 +1087,7 @@ class ServeTests(unittest.TestCase):
             )) + "\n",
             json.dumps(event_data(
                 event_id="compaction-after-change",
+                emitter_id="worker-2",
                 span_id="span-late-compaction",
                 sequence=2,
                 timestamp="2026-07-13T11:03:00Z",
@@ -1094,9 +1095,34 @@ class ServeTests(unittest.TestCase):
                 relationships=[{"type": "summarizes", "event_id": "context-1"}],
             )) + "\n",
             json.dumps(event_data(
-                event_id="compaction-same-time",
+                event_id="compaction-same-time-before-change",
                 span_id="span-current-compaction",
                 sequence=3,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="context.compacted",
+                relationships=[{"type": "summarizes", "event_id": "context-1"}],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="compaction-same-time-after-change",
+                span_id="span-equal-late-compaction",
+                sequence=5,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="context.compacted",
+                relationships=[{"type": "summarizes", "event_id": "context-1"}],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="compaction-clock-skew-after-change",
+                span_id="span-skewed-late-compaction",
+                sequence=6,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="context.compacted",
+                relationships=[{"type": "summarizes", "event_id": "context-1"}],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="compaction-same-time-other-emitter",
+                emitter_id="worker-3",
+                span_id="span-concurrent-compaction",
+                sequence=7,
                 timestamp="2026-07-13T11:02:00Z",
                 kind="context.compacted",
                 relationships=[{"type": "summarizes", "event_id": "context-1"}],
@@ -1116,7 +1142,22 @@ class ServeTests(unittest.TestCase):
                 }},
                 relationships=[
                     {"type": "informed_by", "event_id": "compaction-after-change"},
-                    {"type": "informed_by", "event_id": "compaction-same-time"},
+                    {
+                        "type": "informed_by",
+                        "event_id": "compaction-same-time-before-change",
+                    },
+                    {
+                        "type": "informed_by",
+                        "event_id": "compaction-same-time-after-change",
+                    },
+                    {
+                        "type": "informed_by",
+                        "event_id": "compaction-clock-skew-after-change",
+                    },
+                    {
+                        "type": "informed_by",
+                        "event_id": "compaction-same-time-other-emitter",
+                    },
                 ],
             )) + "\n",
         ])
@@ -1125,21 +1166,30 @@ class ServeTests(unittest.TestCase):
 
         self.assertEqual(
             [link["target_event_id"] for link in change["links"]],
-            ["compaction-after-change", "compaction-same-time"],
+            [
+                "compaction-after-change",
+                "compaction-same-time-before-change",
+                "compaction-same-time-after-change",
+                "compaction-clock-skew-after-change",
+                "compaction-same-time-other-emitter",
+            ],
         )
-        self.assertEqual(change["unresolved"], [{
-            "type": "informed_by",
-            "source_event_id": "change-1",
-            "target_event_id": "compaction-after-change",
-            "source_kind": "change.applied",
-            "source_actor_id": "reviewer-1",
-            "target_kind": "context.compacted",
-            "reason": "compaction_not_preceding_change",
-        }])
+        self.assertEqual(
+            [item["target_event_id"] for item in change["unresolved"]],
+            [
+                "compaction-after-change",
+                "compaction-same-time-after-change",
+                "compaction-clock-skew-after-change",
+            ],
+        )
+        self.assertTrue(all(
+            item["reason"] == "compaction_not_preceding_change"
+            for item in change["unresolved"]
+        ))
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "tool", "verification", "decision"],
-            "unresolved_count": 1,
+            "unresolved_count": 3,
         })
 
     def test_context_read_after_decision_is_incomplete_evidence(self):
@@ -3030,6 +3080,7 @@ class ServeTests(unittest.TestCase):
             )) + "\n",
             json.dumps(event_data(
                 event_id="compaction-1",
+                emitter_id="worker-2",
                 span_id="span-2",
                 sequence=2,
                 kind="context.compacted",
@@ -3132,6 +3183,7 @@ class ServeTests(unittest.TestCase):
             )) + "\n",
             json.dumps(event_data(
                 event_id="compaction-1",
+                emitter_id="worker-2",
                 span_id="span-2",
                 sequence=2,
                 kind="context.compacted",

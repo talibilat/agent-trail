@@ -1087,7 +1087,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     source.kind == "change.applied"
                     and relationship.type == "informed_by"
                     and target.kind == "context.compacted"
-                    and target.timestamp > source.timestamp
+                    and _event_follows(target, source)
                 ):
                     invalid = {
                         **item,
