@@ -621,6 +621,69 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 1,
         })
 
+    def test_requirement_observed_after_change_cannot_be_motivation(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="requirement-after-change",
+                timestamp="2026-07-13T11:03:00Z",
+                kind="requirement.observed",
+                attributes={"requirement": {
+                    "id": "R-late",
+                    "text": "Requirement recorded after implementation.",
+                }},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="requirement-same-time",
+                span_id="span-same-time",
+                sequence=2,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="requirement.observed",
+                attributes={"requirement": {
+                    "id": "R-equal",
+                    "text": "Requirement recorded at the change timestamp.",
+                }},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                span_id="span-2",
+                sequence=3,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="change.applied",
+                attributes={"change": {
+                    "path": "src/auth/session.py",
+                    "old_start": 84,
+                    "old_count": 18,
+                    "new_start": 84,
+                    "new_count": 19,
+                }},
+                relationships=[
+                    {"type": "motivated_by", "event_id": "requirement-after-change"},
+                    {"type": "motivated_by", "event_id": "requirement-same-time"},
+                ],
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(
+            [link["requirement"]["id"] for link in change["links"]],
+            ["R-late", "R-equal"],
+        )
+        self.assertEqual(change["unresolved"], [{
+            "type": "motivated_by",
+            "source_event_id": "change-1",
+            "target_event_id": "requirement-after-change",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+            "target_kind": "requirement.observed",
+            "reason": "requirement_not_preceding_change",
+        }])
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["context", "tool", "verification", "decision"],
+            "unresolved_count": 1,
+        })
+
     def test_change_hunks_group_their_relationship_evidence(self):
         hunk = {
             "path": "src/auth/session.py",

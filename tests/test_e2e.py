@@ -52,6 +52,17 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="requirement-after-change",
+                    span_id="span-requirement-after-change",
+                    timestamp="2026-07-13T11:03:00Z",
+                    kind="requirement.observed",
+                    actor={"id": "late-observer"},
+                    attributes={"requirement": {
+                        "id": "R-late",
+                        "text": "Requirement observed after implementation.",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="context-1",
                     span_id="span-2",
                     sequence=2,
@@ -336,6 +347,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "references", "event_id": "unrelated-proposal"},
                         {"type": "motivated_by", "event_id": "requirement-1"},
                         {"type": "motivated_by", "event_id": "requirement-unknown-actor"},
+                        {"type": "motivated_by", "event_id": "requirement-after-change"},
                         {"type": "motivated_by", "event_id": "requirement-invalid-detail"},
                         {"type": "references", "event_id": "unrelated-requirement"},
                         {"type": "informed_by", "event_id": "context-1"},
@@ -708,6 +720,15 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(anonymous_requirement).to_contain_text("event requirement-unknown-actor")
                 expect(anonymous_requirement).to_contain_text("observing actor unknown")
                 expect(anonymous_requirement).not_to_contain_text("observed by")
+                late_requirement = evidence.locator(".requirement-card").filter(has_text="R-late")
+                expect(late_requirement).to_contain_text("Requirement observed after implementation.")
+                late_requirement_diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="requirement-after-change"
+                )
+                expect(late_requirement_diagnostic).to_contain_text(
+                    "Requirement observed after change · motivated_by"
+                )
+                expect(late_requirement_diagnostic).to_contain_text("requirement.observed")
                 expect(evidence).not_to_contain_text("R-unrelated")
                 expect(evidence).not_to_contain_text("Unrelated requirement")
                 direct_context = evidence.locator(".context-card").filter(has_text="docs/session-lifecycle.md")
@@ -981,7 +1002,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(later_tool).to_contain_text("Tool occurred after change · preceded_by")
                 expect(later_tool).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("git diff --stat")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 30 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 31 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
