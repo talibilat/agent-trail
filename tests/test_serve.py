@@ -638,9 +638,26 @@ class ServeTests(unittest.TestCase):
                 attributes={"tool": {"command": "git status --short"}},
             )) + "\n",
             json.dumps(event_data(
+                event_id="tool-clock-skew",
+                span_id="span-skewed-tool",
+                sequence=3,
+                timestamp="2026-07-13T11:00:00Z",
+                kind="tool.call.completed",
+                attributes={"tool": {"command": "git diff --stat"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="tool-other-emitter",
+                emitter_id="worker-2",
+                span_id="span-other-emitter-tool",
+                sequence=1,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="tool.call.completed",
+                attributes={"tool": {"command": "git status --porcelain"}},
+            )) + "\n",
+            json.dumps(event_data(
                 event_id="tool-after-decision",
                 span_id="span-late-tool",
-                sequence=3,
+                sequence=4,
                 timestamp="2026-07-13T11:02:00Z",
                 kind="tool.call.completed",
                 attributes={"tool": {"command": "git diff --check"}},
@@ -648,7 +665,7 @@ class ServeTests(unittest.TestCase):
             json.dumps(event_data(
                 event_id="change-1",
                 span_id="span-change",
-                sequence=4,
+                sequence=5,
                 timestamp="2026-07-13T11:03:00Z",
                 kind="change.applied",
                 attributes={"change": {
@@ -661,6 +678,8 @@ class ServeTests(unittest.TestCase):
                 relationships=[
                     {"type": "applies", "event_id": "proposal-1"},
                     {"type": "preceded_by", "event_id": "tool-same-time"},
+                    {"type": "preceded_by", "event_id": "tool-clock-skew"},
+                    {"type": "preceded_by", "event_id": "tool-other-emitter"},
                     {"type": "preceded_by", "event_id": "tool-after-decision"},
                 ],
             )) + "\n",
@@ -668,20 +687,42 @@ class ServeTests(unittest.TestCase):
 
         change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
-        self.assertEqual(change["unresolved"], [{
-            "type": "preceded_by",
-            "source_event_id": "change-1",
-            "target_event_id": "tool-after-decision",
-            "source_kind": "change.applied",
-            "source_actor_id": "reviewer-1",
-            "target_kind": "tool.call.completed",
-            "reason": "tool_follows_decision",
-            "decision_event_id": "proposal-1",
-        }])
+        self.assertEqual(change["unresolved"], [
+            {
+                "type": "preceded_by",
+                "source_event_id": "change-1",
+                "target_event_id": "tool-same-time",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "tool.call.completed",
+                "reason": "tool_follows_decision",
+                "decision_event_id": "proposal-1",
+            },
+            {
+                "type": "preceded_by",
+                "source_event_id": "change-1",
+                "target_event_id": "tool-clock-skew",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "tool.call.completed",
+                "reason": "tool_follows_decision",
+                "decision_event_id": "proposal-1",
+            },
+            {
+                "type": "preceded_by",
+                "source_event_id": "change-1",
+                "target_event_id": "tool-after-decision",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "tool.call.completed",
+                "reason": "tool_follows_decision",
+                "decision_event_id": "proposal-1",
+            },
+        ])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "verification"],
-            "unresolved_count": 1,
+            "unresolved_count": 3,
         })
 
     def test_requirement_observed_after_change_cannot_be_motivation(self):
@@ -3298,7 +3339,7 @@ class ServeTests(unittest.TestCase):
             ),
             event_data(
                 event_id="invalid-tool-1",
-                sequence=8,
+                sequence=4,
                 kind="tool.call.completed",
                 operation={"status": "ok", "name": "shell"},
                 attributes={"tool": {"command": " \t", "result": 42}},

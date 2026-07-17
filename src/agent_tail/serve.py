@@ -854,6 +854,15 @@ def _relationships(view) -> dict[str, object]:
     }
 
 
+def _event_follows(candidate: Event, reference: Event) -> bool:
+    if (
+        candidate.emitter_id == reference.emitter_id
+        and candidate.sequence != reference.sequence
+    ):
+        return candidate.sequence > reference.sequence
+    return candidate.timestamp > reference.timestamp
+
+
 def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
     event_list = list(events)
     events_by_id = {event.event_id: event for event in event_list}
@@ -1136,7 +1145,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     and relationship.type == "preceded_by"
                     and target.kind.startswith("tool.call.")
                     and earliest_decision is not None
-                    and target.timestamp > earliest_decision.timestamp
+                    and _event_follows(target, earliest_decision)
                 ):
                     invalid = {
                         **item,
