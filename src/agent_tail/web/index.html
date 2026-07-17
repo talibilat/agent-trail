@@ -1703,9 +1703,27 @@
             (item) => item.reason === 'compaction_not_preceding_change'
               && item.target_event_id === link.target_event_id
           );
+          const compactionOccurredAfterDecision = (changeEvidence.unresolved || []).some(
+            (item) => item.reason === 'compaction_follows_decision'
+              && item.target_event_id === link.target_event_id
+          );
+          const hasValidDecision = (changeEvidence.links || []).some(
+            (item) => item.type === 'applies'
+              && item.target_kind === 'change.proposed'
+              && typeof item.target_actor_id === 'string'
+              && item.target_actor_id.trim()
+              && !(changeEvidence.unresolved || []).some(
+                (diagnostic) => diagnostic.target_event_id === item.target_event_id
+                  && ['proposal_not_preceding_change', 'invalid_decision_actor'].includes(diagnostic.reason)
+              )
+          );
           title.textContent = compactionOccurredAfterChange
             ? 'Context compacted after change'
-            : 'Context compacted before change';
+            : compactionOccurredAfterDecision
+              ? 'Context compacted after decision'
+              : hasValidDecision
+                ? 'Context compacted before decision'
+                : 'Context compacted before change';
           const meta = document.createElement('div');
           meta.className = 'meta';
           const compactionDetails = [`event ${link.target_event_id}`];
@@ -1940,6 +1958,8 @@
                   ? `Context read after change · ${link.type}`
                 : link.reason === 'compaction_not_preceding_change'
                   ? `Context compacted after change · ${link.type}`
+                : link.reason === 'compaction_follows_decision'
+                  ? `Context compacted after decision · ${link.type}`
                 : link.reason === 'invalid_context_detail'
                   ? `Invalid context details · ${link.type}`
                   : link.reason === 'invalid_context_line_start'

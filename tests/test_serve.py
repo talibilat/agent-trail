@@ -806,6 +806,77 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 1,
         })
 
+    def test_context_compacted_after_decision_is_incomplete_evidence(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="context-1",
+                timestamp="2026-07-13T11:00:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/session-lifecycle.md"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="proposal-1",
+                span_id="span-proposal",
+                sequence=2,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="change.proposed",
+                actor={"id": "planner-1"},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="compaction-same-time",
+                span_id="span-current-compaction",
+                sequence=3,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="context.compacted",
+                relationships=[{"type": "summarizes", "event_id": "context-1"}],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="compaction-after-decision",
+                span_id="span-late-compaction",
+                sequence=4,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="context.compacted",
+                relationships=[{"type": "summarizes", "event_id": "context-1"}],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                span_id="span-change",
+                sequence=5,
+                timestamp="2026-07-13T11:03:00Z",
+                kind="change.applied",
+                attributes={"change": {
+                    "path": "src/auth/session.py",
+                    "old_start": 84,
+                    "old_count": 18,
+                    "new_start": 84,
+                    "new_count": 19,
+                }},
+                relationships=[
+                    {"type": "applies", "event_id": "proposal-1"},
+                    {"type": "informed_by", "event_id": "compaction-same-time"},
+                    {"type": "informed_by", "event_id": "compaction-after-decision"},
+                ],
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(change["unresolved"], [{
+            "type": "informed_by",
+            "source_event_id": "change-1",
+            "target_event_id": "compaction-after-decision",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+            "target_kind": "context.compacted",
+            "reason": "compaction_follows_decision",
+            "decision_event_id": "proposal-1",
+        }])
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "tool", "verification"],
+            "unresolved_count": 1,
+        })
+
     def test_context_read_after_compaction_cannot_be_summarized_evidence(self):
         store = RunStore.from_lines([
             json.dumps(event_data(

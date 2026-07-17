@@ -865,7 +865,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(late_context_diagnostic).to_contain_text("context.read")
                 expect(evidence).not_to_contain_text("docs/unrelated.md")
                 expect(evidence).not_to_contain_text("unrelated-researcher")
-                expect(evidence).to_contain_text("Context compacted before change")
+                expect(evidence).to_contain_text("Context compacted before decision")
                 expect(evidence).to_contain_text("compacted by summarizer-1")
                 compaction = evidence.locator(".compaction-card").filter(has_text="summarizer-1")
                 expect(compaction).to_contain_text("event compaction-1")
@@ -1073,28 +1073,28 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("docs/invalid-symbol.md")
                 expect(page.locator("#invalid-context-symbol-injected")).to_have_count(0)
                 invalid_compacted_line_start = evidence.locator(".compaction-card").filter(
-                    has_text="Context compacted before change"
+                    has_text="Context compacted before decision"
                 ).locator(".incomplete").filter(has_text="context-invalid-line-start")
                 expect(invalid_compacted_line_start).to_contain_text(
                     "Invalid summarizes source line start"
                 )
                 expect(invalid_compacted_line_start).to_contain_text("context.read")
                 invalid_compacted_line_end = evidence.locator(".compaction-card").filter(
-                    has_text="Context compacted before change"
+                    has_text="Context compacted before decision"
                 ).locator(".incomplete").filter(has_text="context-invalid-line-end")
                 expect(invalid_compacted_line_end).to_contain_text(
                     "Invalid summarizes source line end"
                 )
                 expect(invalid_compacted_line_end).to_contain_text("context.read")
                 invalid_compacted_symbol = evidence.locator(".compaction-card").filter(
-                    has_text="Context compacted before change"
+                    has_text="Context compacted before decision"
                 ).locator(".incomplete").filter(has_text="context-invalid-symbol")
                 expect(invalid_compacted_symbol).to_contain_text(
                     "Invalid summarizes source symbol"
                 )
                 expect(invalid_compacted_symbol).to_contain_text("context.read")
                 malformed_compacted_context = evidence.locator(".compaction-card").filter(
-                    has_text="Context compacted before change"
+                    has_text="Context compacted before decision"
                 ).locator(".incomplete").filter(has_text="context-invalid-detail")
                 expect(malformed_compacted_context).to_contain_text("Invalid summarizes source details")
                 expect(malformed_compacted_context).to_contain_text("context.read")
@@ -1242,6 +1242,100 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(diagnostics).to_contain_text("context-1")
                 expect(diagnostics).to_contain_text("context.read")
                 expect(page.locator("#invalid-correction-target-injected")).to_have_count(0)
+                browser.close()
+
+    def test_compaction_after_decision_is_visible_as_incomplete_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "compaction-after-decision.jsonl")
+            source.write_text("".join((
+                json.dumps(event_data(
+                    event_id="context-1",
+                    timestamp="2026-07-13T11:00:00Z",
+                    kind="context.read",
+                    actor={"id": "researcher-1"},
+                    attributes={"context": {"path": "docs/decision.md"}},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="proposal-1",
+                    span_id="span-proposal",
+                    sequence=2,
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="change.proposed",
+                    actor={"id": "planner-1"},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="compaction-before-decision",
+                    span_id="span-early-compaction",
+                    sequence=3,
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="context.compacted",
+                    actor={"id": "early-summarizer"},
+                    relationships=[{"type": "summarizes", "event_id": "context-1"}],
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="compaction-after-decision",
+                    span_id="span-late-compaction",
+                    sequence=4,
+                    timestamp="2026-07-13T11:02:00Z",
+                    kind="context.compacted",
+                    actor={"id": "late-summarizer"},
+                    relationships=[{"type": "summarizes", "event_id": "context-1"}],
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="change-1",
+                    span_id="span-change",
+                    sequence=5,
+                    timestamp="2026-07-13T11:03:00Z",
+                    kind="change.applied",
+                    actor={"id": "implementer-1"},
+                    attributes={"change": {
+                        "path": "src/decision.py",
+                        "old_start": 1,
+                        "old_count": 1,
+                        "new_start": 1,
+                        "new_count": 2,
+                    }},
+                    relationships=[
+                        {"type": "applies", "event_id": "proposal-1"},
+                        {"type": "informed_by", "event_id": "compaction-before-decision"},
+                        {"type": "informed_by", "event_id": "compaction-after-decision"},
+                    ],
+                )) + "\n",
+            )), encoding="utf-8")
+            port = _free_port()
+            process = subprocess.Popen(
+                [sys.executable, "-m", "agent_tail", "serve", str(source), "--port", str(port)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(channel="chrome", headless=True)
+                page = browser.new_page()
+                page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
+                expect(page.locator(".node-wrap").filter(has_text="implementer-1")).to_be_visible()
+                page.evaluate("""() => {
+                  [...document.querySelectorAll('.node-wrap')]
+                    .find((node) => node.textContent.includes('implementer-1')).click();
+                  [...document.querySelectorAll('.event-row')]
+                    .find((row) => row.textContent.includes('span-change')).click();
+                }""")
+
+                evidence = page.locator(".change-evidence")
+                early = evidence.locator(".compaction-card").filter(has_text="early-summarizer")
+                late = evidence.locator(".compaction-card").filter(has_text="late-summarizer")
+                expect(early).to_contain_text("Context compacted before decision")
+                expect(late).to_contain_text("Context compacted after decision")
+                diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="compaction-after-decision"
+                )
+                expect(diagnostic).to_contain_text("Context compacted after decision · informed_by")
+                expect(diagnostic).to_contain_text("context.compacted")
+                expect(evidence).to_contain_text("1 unresolved reference")
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):

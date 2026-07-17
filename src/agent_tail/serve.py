@@ -865,6 +865,20 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
     for source in event_list:
         source_links = []
         source_unresolved = []
+        decision_events = [
+            target
+            for relationship in source.relationships
+            if relationship.type == "applies"
+            and (target := events_by_id.get(relationship.event_id)) is not None
+            and target.kind == "change.proposed"
+            and target.actor["id"].strip()
+            and target.timestamp <= source.timestamp
+        ] if source.kind == "change.applied" else []
+        earliest_decision = min(
+            decision_events,
+            key=lambda event: event.timestamp,
+            default=None,
+        )
         projected_relationships = set()
         for relationship in source.relationships:
             relationship_key = (relationship.type, relationship.event_id)
@@ -1040,6 +1054,21 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                         **item,
                         "target_kind": target.kind,
                         "reason": "compaction_not_preceding_change",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.compacted"
+                    and earliest_decision is not None
+                    and target.timestamp > earliest_decision.timestamp
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "compaction_follows_decision",
+                        "decision_event_id": earliest_decision.event_id,
                     }
                     unresolved.append(invalid)
                     source_unresolved.append(invalid)
