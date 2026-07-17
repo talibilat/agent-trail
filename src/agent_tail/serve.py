@@ -1942,6 +1942,9 @@ def _verification_result(
             )
         unresolved_count_before_start = len(unresolved)
         start_after_finish = _event_follows(started, event)
+        start_finish_chronology_undetermined = (
+            not start_after_finish and not _event_follows(event, started)
+        )
         start_before_change = (
             change_event is not None and _event_follows(change_event, started)
         )
@@ -1996,6 +1999,16 @@ def _verification_result(
                 "reason": "invalid_verification_command",
             })
         if (
+            start_finish_chronology_undetermined
+            and len(unresolved) == unresolved_count_before_start
+        ):
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": started.kind,
+                "reason": "verification_start_finish_chronology_undetermined",
+            })
+        elif (
             start_change_chronology_undetermined
             and len(unresolved) == unresolved_count_before_start
         ):

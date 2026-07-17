@@ -1928,6 +1928,8 @@
               ? `Invalid ${start.type} start command · ${start.event_id} · ${start.target_kind}`
               : start.reason === 'verification_start_after_finish'
                 ? `Verification start occurred after finish · ${start.event_id} · ${start.target_kind}`
+              : start.reason === 'verification_start_finish_chronology_undetermined'
+                ? `Verification start/finish chronology undetermined · ${start.event_id} · ${start.target_kind}`
               : start.reason === 'verification_start_precedes_change'
                 ? `Verification started before change · ${start.event_id} · ${start.target_kind}`
               : start.reason === 'verification_start_change_chronology_undetermined'

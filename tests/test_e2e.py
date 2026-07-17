@@ -1617,7 +1617,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     "verification chronology undetermined"
                 )
                 expect(undetermined_verification).to_contain_text(
-                    "Verification start/change chronology undetermined · verification-start-undetermined · verification.started"
+                    "Verification start/finish chronology undetermined · verification-start-undetermined · verification.started"
                 )
                 undetermined_verification_diagnostic = evidence.locator(
                     ".unresolved-evidence"

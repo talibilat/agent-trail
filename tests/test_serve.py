@@ -2553,6 +2553,12 @@ class ServeTests(unittest.TestCase):
             },
             {
                 "type": "completes",
+                "event_id": "verification-started-same-time",
+                "target_kind": "verification.started",
+                "reason": "verification_start_finish_chronology_undetermined",
+            },
+            {
+                "type": "completes",
                 "event_id": "verification-started-before-change",
                 "target_kind": "verification.started",
                 "reason": "verification_start_precedes_change",
@@ -2579,7 +2585,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "decision"],
-            "unresolved_count": 5,
+            "unresolved_count": 6,
         })
 
     def test_verification_before_change_uses_same_emitter_sequence_ordering(self):
