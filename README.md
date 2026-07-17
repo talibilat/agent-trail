@@ -104,6 +104,7 @@ Each change record groups the resolved and unresolved relationships originating 
 The run-level arrays remain available for all relationships, including those originating from events without valid change locators.
 To identify a motivating requirement, emit a `requirement.observed` event with non-empty `attributes.requirement.id` and `attributes.requirement.text` strings, then reference it from the change event.
 Resolved links to that event include the validated ID and text under `requirement`, while malformed optional requirement metadata is omitted without hiding the relationship.
+The browser event inspector presents this motivating requirement with the selected change hunk, applying agent, and unresolved-reference status.
 To identify repository or documentation evidence, emit a `context.read` event with a non-empty `attributes.context.path`, optional non-negative integer `line_start` and `line_end` fields, and an optional string `symbol`, then reference it from the change event.
 Resolved links to that event include the validated locator under `context`; malformed optional locator fields are omitted without hiding the relationship.
 To expose commands and tool results that preceded a change, reference the relevant `tool.call.*` events from the change event.

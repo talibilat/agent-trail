@@ -295,6 +295,13 @@
     .field-grid { display: grid; grid-template-columns: auto 1fr; gap: 7px 12px; }
     .field-grid .k { font: 400 10.5px "IBM Plex Mono", monospace; color: var(--dim); }
     .field-grid .v { font: 500 10.5px "IBM Plex Mono", monospace; word-break: break-all; }
+    .change-evidence .hunk { font: 600 11px "IBM Plex Mono", monospace; color: var(--accent); word-break: break-word; }
+    .change-evidence .actor { margin-top: 4px; font: 400 10px "IBM Plex Mono", monospace; color: var(--dim); }
+    .requirement-card { margin-top: 10px; padding: 10px; border: 1px solid rgba(122,162,255,.35); border-radius: 8px; background: rgba(122,162,255,.08); }
+    .requirement-card .id { font: 600 10px "IBM Plex Mono", monospace; color: var(--accent); }
+    .requirement-card .text { margin-top: 4px; font: 400 11.5px/1.5 "IBM Plex Sans", sans-serif; color: var(--text); }
+    .evidence-completeness { margin-top: 9px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--faint); }
+    .evidence-completeness.incomplete { color: var(--warn); }
     .usage-inline-row { display: flex; gap: 16px; }
     .usage-inline-row .k { font: 400 9px "IBM Plex Mono", monospace; color: var(--dim); }
     .usage-inline-row .v { font: 600 15px "IBM Plex Mono", monospace; }
@@ -1474,6 +1481,46 @@
       fieldsBlock.append(grid);
 
       wrap.append(head, fieldsBlock);
+
+      const evidenceMap = detail.evidence_map || {};
+      const changeEvidence = (evidenceMap.changes || []).find((change) => change.event_id === event.event_id);
+      if (changeEvidence) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block change-evidence';
+        block.innerHTML = `<div class="inspector-label">CHANGE EVIDENCE</div>`;
+
+        const hunk = changeEvidence.hunk;
+        const hunkEnd = hunk.new_count ? hunk.new_start + hunk.new_count - 1 : hunk.new_start;
+        const locator = document.createElement('div');
+        locator.className = 'hunk';
+        locator.textContent = `${hunk.path}:${hunk.new_start}-${hunkEnd}`;
+        const actor = document.createElement('div');
+        actor.className = 'actor';
+        actor.textContent = `applied by ${changeEvidence.actor_id}`;
+        block.append(locator, actor);
+
+        (changeEvidence.links || []).filter((link) => link.requirement).forEach((link) => {
+          const card = document.createElement('div');
+          card.className = 'requirement-card';
+          const requirementId = document.createElement('div');
+          requirementId.className = 'id';
+          requirementId.textContent = `Requirement ${link.requirement.id}`;
+          const requirementText = document.createElement('div');
+          requirementText.className = 'text';
+          requirementText.textContent = link.requirement.text;
+          card.append(requirementId, requirementText);
+          block.append(card);
+        });
+
+        const unresolvedCount = (changeEvidence.unresolved || []).length;
+        const completeness = document.createElement('div');
+        completeness.className = `evidence-completeness${unresolvedCount ? ' incomplete' : ''}`;
+        completeness.textContent = unresolvedCount
+          ? `${unresolvedCount} unresolved evidence reference${unresolvedCount === 1 ? '' : 's'}`
+          : 'All evidence references resolved';
+        block.append(completeness);
+        wrap.append(block);
+      }
 
       if (hasUsage) {
         const usageBlock = document.createElement('div');

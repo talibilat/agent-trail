@@ -28,6 +28,62 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
+    def test_change_inspector_shows_motivating_requirement_safely(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "change-evidence.jsonl")
+            source.write_text("".join((
+                json.dumps(event_data(
+                    event_id="requirement-1",
+                    kind="requirement.observed",
+                    actor={"id": "user"},
+                    attributes={"requirement": {
+                        "id": "R3",
+                        "text": "Expired sessions must be rejected. <img id=evidence-injected src=x>",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="change-1",
+                    span_id="span-2",
+                    sequence=2,
+                    kind="change.applied",
+                    actor={"id": "implementer-1"},
+                    attributes={"change": {
+                        "path": "src/auth/session.py",
+                        "old_start": 84,
+                        "old_count": 18,
+                        "new_start": 84,
+                        "new_count": 19,
+                    }},
+                    relationships=[{"type": "motivated_by", "event_id": "requirement-1"}],
+                )) + "\n",
+            )), encoding="utf-8")
+            port = _free_port()
+            process = subprocess.Popen(
+                [sys.executable, "-m", "agent_tail", "serve", str(source), "--port", str(port)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(channel="chrome", headless=True)
+                page = browser.new_page()
+                page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
+                page.locator(".node-wrap").filter(has_text="implementer-1").click()
+                page.locator(".event-row").click()
+
+                evidence = page.locator(".change-evidence")
+                expect(evidence).to_contain_text("CHANGE EVIDENCE")
+                expect(evidence).to_contain_text("src/auth/session.py:84-102")
+                expect(evidence).to_contain_text("implementer-1")
+                expect(evidence).to_contain_text("R3")
+                expect(evidence).to_contain_text("Expired sessions must be rejected.")
+                expect(page.locator("#evidence-injected")).to_have_count(0)
+                browser.close()
+
     def test_multi_trace_run_picker_stays_within_top_bar(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "multi-trace.jsonl")
