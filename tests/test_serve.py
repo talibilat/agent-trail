@@ -1484,6 +1484,7 @@ class ServeTests(unittest.TestCase):
         store = RunStore.from_lines([
             json.dumps(event_data(
                 event_id="proposal-after-change",
+                emitter_id="independent-planner",
                 timestamp="2026-07-13T11:03:00Z",
                 kind="change.proposed",
                 actor={"id": "late-planner"},
@@ -1495,6 +1496,29 @@ class ServeTests(unittest.TestCase):
                 timestamp="2026-07-13T11:02:00Z",
                 kind="change.proposed",
                 actor={"id": "current-planner"},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="proposal-same-time-after",
+                span_id="span-same-time-after",
+                sequence=4,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="change.proposed",
+                actor={"id": "sequence-late-planner"},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="proposal-clock-skewed-after",
+                span_id="span-clock-skewed-after",
+                sequence=5,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="change.proposed",
+                actor={"id": "clock-skewed-late-planner"},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="proposal-same-time-independent",
+                emitter_id="another-planner",
+                timestamp="2026-07-13T11:02:00Z",
+                kind="change.proposed",
+                actor={"id": "independent-current-planner"},
             )) + "\n",
             json.dumps(event_data(
                 event_id="change-1",
@@ -1512,6 +1536,9 @@ class ServeTests(unittest.TestCase):
                 relationships=[
                     {"type": "applies", "event_id": "proposal-after-change"},
                     {"type": "applies", "event_id": "proposal-same-time"},
+                    {"type": "applies", "event_id": "proposal-same-time-after"},
+                    {"type": "applies", "event_id": "proposal-clock-skewed-after"},
+                    {"type": "applies", "event_id": "proposal-same-time-independent"},
                 ],
             )) + "\n",
         ])
@@ -1520,21 +1547,30 @@ class ServeTests(unittest.TestCase):
 
         self.assertEqual(
             [link["target_actor_id"] for link in change["links"]],
-            ["late-planner", "current-planner"],
+            [
+                "late-planner",
+                "current-planner",
+                "sequence-late-planner",
+                "clock-skewed-late-planner",
+                "independent-current-planner",
+            ],
         )
-        self.assertEqual(change["unresolved"], [{
-            "type": "applies",
-            "source_event_id": "change-1",
-            "target_event_id": "proposal-after-change",
-            "source_kind": "change.applied",
-            "source_actor_id": "reviewer-1",
-            "target_kind": "change.proposed",
-            "reason": "proposal_not_preceding_change",
-        }])
+        self.assertEqual(
+            [item["target_event_id"] for item in change["unresolved"]],
+            [
+                "proposal-after-change",
+                "proposal-same-time-after",
+                "proposal-clock-skewed-after",
+            ],
+        )
+        self.assertTrue(all(
+            item["reason"] == "proposal_not_preceding_change"
+            for item in change["unresolved"]
+        ))
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "verification"],
-            "unresolved_count": 1,
+            "unresolved_count": 3,
         })
 
     def test_change_hunks_group_their_relationship_evidence(self):

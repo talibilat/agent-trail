@@ -881,7 +881,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
             and (target := events_by_id.get(relationship.event_id)) is not None
             and target.kind == "change.proposed"
             and target.actor["id"].strip()
-            and target.timestamp <= source.timestamp
+            and not _event_follows(target, source)
         ] if source.kind == "change.applied" else []
         earliest_decision = min(
             decision_events,
@@ -1395,7 +1395,7 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     source.kind == "change.applied"
                     and relationship.type == "applies"
                     and target.kind == "change.proposed"
-                    and target.timestamp > source.timestamp
+                    and _event_follows(target, source)
                 ):
                     invalid = {
                         **item,
