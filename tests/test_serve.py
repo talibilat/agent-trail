@@ -1270,9 +1270,18 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "verification", "decision"],
-            "unresolved_count": 0,
+            "unresolved_count": 1,
         })
         self.assertEqual(change["links"][0]["target_actor_id"], " \t")
+        self.assertEqual(change["unresolved"], [{
+            "type": "applies",
+            "source_event_id": "change-1",
+            "target_event_id": "proposal-1",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+            "target_kind": "change.proposed",
+            "reason": "invalid_decision_actor",
+        }])
 
     def test_wrong_kind_decision_target_is_an_unresolved_diagnostic(self):
         store = RunStore.from_lines([
@@ -1514,6 +1523,12 @@ class ServeTests(unittest.TestCase):
                 attributes={"tool": {"command": " \t", "result": 42}},
             ),
             event_data(
+                event_id="invalid-proposal-1",
+                sequence=8,
+                kind="change.proposed",
+                actor={"id": " \t"},
+            ),
+            event_data(
                 event_id="change-1",
                 sequence=9,
                 kind="change.applied",
@@ -1529,6 +1544,7 @@ class ServeTests(unittest.TestCase):
                     {"type": "informed_by", "event_id": "invalid-context-1"},
                     {"type": "preceded_by", "event_id": "invalid-tool-1"},
                     {"type": "applies", "event_id": "proposal-1"},
+                    {"type": "applies", "event_id": "invalid-proposal-1"},
                     {"type": "references", "event_id": "missing-note"},
                 ],
             ),
@@ -1540,7 +1556,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": [],
-            "unresolved_count": 5,
+            "unresolved_count": 6,
         })
         self.assertEqual(change["unresolved"], [
             {
@@ -1586,6 +1602,15 @@ class ServeTests(unittest.TestCase):
                 "source_actor_id": "reviewer-1",
                 "target_kind": "tool.call.completed",
                 "reason": "invalid_tool_detail",
+            },
+            {
+                "type": "applies",
+                "source_event_id": "change-1",
+                "target_event_id": "invalid-proposal-1",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "change.proposed",
+                "reason": "invalid_decision_actor",
             },
             {
                 "type": "references",

@@ -465,6 +465,11 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(anonymous_proposal).to_have_count(1)
                 expect(anonymous_proposal).not_to_contain_text("proposed by")
+                invalid_decision = evidence.locator(".unresolved-evidence").filter(
+                    has_text="anonymous-proposal"
+                )
+                expect(invalid_decision).to_contain_text("Invalid decision actor · applies")
+                expect(invalid_decision).to_contain_text("change.proposed")
                 expect(evidence).not_to_contain_text("unrelated-planner")
                 expect(evidence).to_contain_text("R3")
                 expect(evidence).to_contain_text("Expired sessions must be rejected.")
@@ -576,7 +581,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_tool).to_contain_text("Invalid tool details · preceded_by")
                 expect(malformed_tool).to_contain_text("tool.call.completed")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 9 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 10 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
