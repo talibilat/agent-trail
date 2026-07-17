@@ -1536,6 +1536,8 @@
           type.className = 'type';
           type.textContent = link.reason === 'invalid_correction_detail'
             ? `Invalid correction details · ${link.type}`
+            : link.reason === 'correction_chronology_undetermined'
+              ? `Correction chronology undetermined · ${link.type}`
             : link.reason === 'verification_chronology_undetermined'
               ? `Verification chronology undetermined · ${link.type}`
             : link.reason === 'proposal_chronology_undetermined'

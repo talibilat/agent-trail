@@ -4920,20 +4920,34 @@ class ServeTests(unittest.TestCase):
             corrections["correction-after-change"]["chronology"],
             "after_change",
         )
-        self.assertNotIn("reason", corrections["correction-same-time"])
+        self.assertEqual(
+            corrections["correction-same-time"]["reason"],
+            "correction_chronology_undetermined",
+        )
         self.assertEqual(
             corrections["correction-same-time"]["chronology"],
             "undetermined",
         )
-        self.assertEqual(evidence["unresolved"], [{
-            "type": "corrects",
-            "source_event_id": "correction-before-change",
-            "target_event_id": "change-1",
-            "source_kind": "human.corrected",
-            "source_actor_id": "early-maintainer",
-            "target_kind": "change.applied",
-            "reason": "correction_precedes_change",
-        }])
+        self.assertEqual(evidence["unresolved"], [
+            {
+                "type": "corrects",
+                "source_event_id": "correction-same-time",
+                "target_event_id": "change-1",
+                "source_kind": "human.corrected",
+                "source_actor_id": "current-maintainer",
+                "target_kind": "change.applied",
+                "reason": "correction_chronology_undetermined",
+            },
+            {
+                "type": "corrects",
+                "source_event_id": "correction-before-change",
+                "target_event_id": "change-1",
+                "source_kind": "human.corrected",
+                "source_actor_id": "early-maintainer",
+                "target_kind": "change.applied",
+                "reason": "correction_precedes_change",
+            },
+        ])
         self.assertEqual(change["coverage"]["unresolved_count"], 0)
 
     def test_wrong_kind_human_correction_target_is_an_unresolved_diagnostic(self):

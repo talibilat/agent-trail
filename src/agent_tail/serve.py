@@ -1054,6 +1054,15 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                         }
                         unresolved.append(invalid)
                         source_unresolved.append(invalid)
+                    elif not _event_follows(source, target):
+                        resolved["reason"] = "correction_chronology_undetermined"
+                        invalid = {
+                            **item,
+                            "target_kind": target.kind,
+                            "reason": "correction_chronology_undetermined",
+                        }
+                        unresolved.append(invalid)
+                        source_unresolved.append(invalid)
                     corrections_by_change.setdefault(target.event_id, []).append(resolved)
                 links.append(resolved)
                 source_links.append(resolved)
