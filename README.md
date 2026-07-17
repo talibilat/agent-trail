@@ -102,7 +102,7 @@ For repository changes, emit a `change.applied` event with a Git hunk locator un
 `path` is a non-blank string, the four range values are non-negative integers, each positive count has a positive start, and `symbol` is an optional non-blank string.
 Valid locators are exposed in event order under `evidence_map.changes`, together with the change event and actor IDs.
 Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
-It also includes factual `coverage` for requirement, context, tool, verification, and decision evidence, plus an unresolved count for missing targets on those canonical evidence relationships, `verified_by` targets that are not finished verifications, missing compacted-context sources, and missing verification-start events.
+It also includes factual `coverage` for requirement, context, tool, verification, and decision evidence, plus an unresolved count for missing targets on those canonical evidence relationships, targets of the wrong event kind, missing compacted-context sources, and missing verification-start events.
 Unresolved generic relationships remain inspectable but do not reduce factual evidence coverage.
 A context category is present for direct context only when an `informed_by` relationship resolves to a `context.read` event with a validated locator; other links to context reads remain visible but do not identify what informed the applied hunk.
 A context locator among a compaction's resolved `summarizes` sources also satisfies the category when the change references that compaction with `informed_by`; unrelated outer or source links and empty compactions do not.
@@ -118,7 +118,7 @@ Resolved links to that event include the validated ID and text under `requiremen
 The browser event inspector presents the selected hunk path, new-file range, canonical old/new Git hunk header, optional symbol, and applying agent together with requirements linked by `motivated_by`; it does not attribute unrelated requirement links as motivations.
 To distinguish the agent that made the change decision from the agent that applied it, reference a `change.proposed` event with a non-blank actor ID from `change.applied` using an `applies` relationship; the browser presents both actors separately on the selected hunk and does not attribute unrelated or anonymous proposals as decisions.
 Each unresolved hunk relationship is identified by its relationship type and target event ID, followed by an aggregate unresolved-reference status.
-Resolved `motivated_by`, `informed_by`, `preceded_by`, and `verified_by` targets of the wrong event kind remain inspectable as generic links and are also identified as invalid evidence targets.
+Resolved `motivated_by`, `informed_by`, `preceded_by`, `verified_by`, and `applies` targets of the wrong event kind remain inspectable as generic links and are also identified as invalid evidence targets.
 Valid `informed_by` targets are `context.read` and `context.compacted` events.
 To identify repository or documentation evidence, emit a `context.read` event with a non-blank `attributes.context.path`, optional positive integer `line_start` and `line_end` fields where `line_end` is not before `line_start` when both are present, and an optional non-blank string `symbol`, then reference it from the change event with an `informed_by` relationship.
 Resolved links to that event include the validated locator under `context`; malformed optional locator fields are omitted without hiding the relationship.
