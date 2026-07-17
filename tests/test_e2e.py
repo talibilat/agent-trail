@@ -101,6 +101,8 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[
                         {"type": "summarizes", "event_id": "context-1"},
                         {"type": "summarizes", "event_id": "missing-context<img id=compaction-missing-injected>"},
+                        {"type": "references", "event_id": "unrelated-context"},
+                        {"type": "references", "event_id": "irrelevant-missing-context"},
                     ],
                 )) + "\n",
                 json.dumps(event_data(
@@ -283,6 +285,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("source from researcher-1")
                 expect(evidence).to_contain_text("Missing summarizes source")
                 expect(evidence).to_contain_text("missing-context")
+                expect(evidence).not_to_contain_text("irrelevant-missing-context")
                 expect(evidence).to_contain_text("1 compacted source unresolved")
                 expect(evidence).to_contain_text("Tool · shell")
                 expect(evidence).to_contain_text("git diff -- src/auth/session.py")

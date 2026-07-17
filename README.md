@@ -126,7 +126,7 @@ The browser event inspector presents each tool operation, command, result, actor
 When context is summarized before a decision, emit a `context.compacted` event with `summarizes` relationships to its source events, then reference the compaction event from the change with `informed_by`.
 Resolved links to that event include `compaction.sources` with source event kinds, actors, and any context-read locators, plus `compaction.unresolved` for missing source events.
 This preserves the observable compaction boundary without capturing private reasoning or summary contents.
-The browser event inspector presents the compaction actor, source kinds or repository locators, source actors, and each missing source's relationship type and event ID directly on the selected change hunk.
+The browser event inspector presents the actor for compactions linked by `informed_by`, plus source kinds or repository locators, source actors, and missing source IDs linked by `summarizes` directly on the selected change hunk; unrelated outer and source relationships are not attributed as compacted context.
 To attach a test result, emit a `verification.finished` event with a boolean `attributes.verification.passed` field and optional integer `exit_code`, then reference it from the change event with a `verified_by` relationship.
 For lifecycle attribution, emit the command as non-empty `attributes.verification.command` on a `verification.started` event and reference it from `verification.finished` with a `completes` relationship.
 Finished-only events can instead include the command directly for producers that do not emit a separate start event.

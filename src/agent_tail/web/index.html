@@ -1595,7 +1595,11 @@
           block.append(card);
         });
 
-        (changeEvidence.links || []).filter((link) => link.compaction).forEach((link) => {
+        (changeEvidence.links || []).filter(
+          (link) => link.type === 'informed_by'
+            && link.target_kind === 'context.compacted'
+            && link.compaction
+        ).forEach((link) => {
           const card = document.createElement('div');
           card.className = 'compaction-card';
           const title = document.createElement('div');
@@ -1605,7 +1609,9 @@
           meta.className = 'meta';
           meta.textContent = `compacted by ${link.target_actor_id}`;
           card.append(title, meta);
-          (link.compaction.sources || []).forEach((source) => {
+          (link.compaction.sources || []).filter(
+            (source) => source.type === 'summarizes'
+          ).forEach((source) => {
             const sourceNode = document.createElement('div');
             sourceNode.className = 'source';
             if (source.context) {
@@ -1621,7 +1627,9 @@
             sourceMeta.textContent = `source from ${source.actor_id}`;
             card.append(sourceNode, sourceMeta);
           });
-          const unresolvedSources = link.compaction.unresolved || [];
+          const unresolvedSources = (link.compaction.unresolved || []).filter(
+            (source) => source.type === 'summarizes'
+          );
           unresolvedSources.forEach((source) => {
             const incomplete = document.createElement('div');
             incomplete.className = 'incomplete';
