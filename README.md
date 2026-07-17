@@ -149,6 +149,7 @@ For lifecycle attribution, emit the command as non-blank `attributes.verificatio
 Finished-only events can instead include the command directly for producers that do not emit a separate start event.
 A supplied finished-event command that is malformed or blank is omitted and reported as invalid verification command evidence even when a valid start supplies the effective command, while an absent finished-event command remains valid for lifecycle-based producers.
 Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
+A supplied `test_origin` outside those values is omitted, reported as invalid verification test provenance, and keeps coverage incomplete; an absent value remains unknown provenance without being treated as malformed.
 Resolved links to the finished event include the validated result under `verification`, including each distinct resolved start event and its actor, so each linked hunk exposes every known test command and outcome directly.
 Resolved start events without a non-blank command remain available for actor attribution but are reported as invalid start commands and keep coverage incomplete even when another lifecycle event supplies a valid command.
 When a resolved start command conflicts with the command on the finished event or another resolved start, both commands remain visible and a conflicting-command lifecycle diagnostic keeps coverage incomplete.

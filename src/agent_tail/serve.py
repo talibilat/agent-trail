@@ -1132,6 +1132,28 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     and relationship.type == "verified_by"
                     and target.kind == "verification.finished"
                     and isinstance(verification, dict)
+                    and isinstance(
+                        raw_verification := _attributes(target).get("verification"),
+                        dict,
+                    )
+                    and "test_origin" in raw_verification
+                    and raw_verification["test_origin"] not in {
+                        "pre_existing",
+                        "same_agent",
+                    }
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "invalid_verification_test_origin",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    and target.kind == "verification.finished"
+                    and isinstance(verification, dict)
                     and "exit_code" in verification
                     and (
                         verification["passed"] is True

@@ -1841,6 +1841,8 @@
                 ? `Conflicting verification outcome · ${link.type}`
               : link.reason === 'invalid_verification_command'
                 ? `Invalid verification command · ${link.type}`
+                : link.reason === 'invalid_verification_test_origin'
+                  ? `Invalid verification test provenance · ${link.type}`
                 : link.reason === 'invalid_requirement_detail'
                 ? `Invalid requirement details · ${link.type}`
                 : link.reason === 'invalid_context_detail'

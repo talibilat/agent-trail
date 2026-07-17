@@ -305,6 +305,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "verified_by", "event_id": "verification-invalid-result"},
                         {"type": "verified_by", "event_id": "verification-conflicting-outcome"},
                         {"type": "verified_by", "event_id": "verification-invalid-exit-code"},
+                        {"type": "verified_by", "event_id": "verification-invalid-test-origin"},
                         {"type": "verified_by", "event_id": "context-1"},
                         {"type": "references", "event_id": "unrelated-verification"},
                         {"type": "reviewed_by", "event_id": "missing-review<img id=evidence-missing-injected>"},
@@ -538,6 +539,19 @@ class ServeEndToEndTests(unittest.TestCase):
                         "test_origin": "pre_existing",
                     }},
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="verification-invalid-test-origin",
+                    span_id="span-verification-invalid-test-origin",
+                    sequence=28,
+                    kind="verification.finished",
+                    actor={"id": "invalid-test-origin-reporter"},
+                    attributes={"verification": {
+                        "command": "pytest tests/test_invalid_test_origin.py",
+                        "passed": True,
+                        "exit_code": 0,
+                        "test_origin": "generated<img id=invalid-test-origin-injected>",
+                    }},
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -713,6 +727,19 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(invalid_exit_code_diagnostic).to_contain_text("verification.finished")
                 expect(page.locator("#invalid-exit-code-injected")).to_have_count(0)
+                invalid_test_origin = evidence.locator(".verification-card").filter(
+                    has_text="invalid-test-origin-reporter"
+                )
+                expect(invalid_test_origin).to_contain_text("pytest tests/test_invalid_test_origin.py")
+                expect(invalid_test_origin).to_contain_text("Test provenance unknown")
+                invalid_test_origin_diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="verification-invalid-test-origin"
+                )
+                expect(invalid_test_origin_diagnostic).to_contain_text(
+                    "Invalid verification test provenance · verified_by"
+                )
+                expect(invalid_test_origin_diagnostic).to_contain_text("verification.finished")
+                expect(page.locator("#invalid-test-origin-injected")).to_have_count(0)
                 malformed_requirement = evidence.locator(".unresolved-evidence").filter(
                     has_text="requirement-invalid-detail"
                 )
@@ -778,7 +805,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(malformed_tool_result).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("git status --ignored")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 22 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 23 unresolved references · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
