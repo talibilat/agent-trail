@@ -125,6 +125,13 @@ class ServeEndToEndTests(unittest.TestCase):
                     actor={"id": "planner-1<img id=proposal-injected>"},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="anonymous-proposal",
+                    span_id="span-anonymous-proposal",
+                    sequence=8,
+                    kind="change.proposed",
+                    actor={"id": " \t"},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="change-1",
                     span_id="span-5",
                     sequence=9,
@@ -140,6 +147,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                     relationships=[
                         {"type": "applies", "event_id": "proposal-1"},
+                        {"type": "applies", "event_id": "anonymous-proposal"},
                         {"type": "references", "event_id": "unrelated-proposal"},
                         {"type": "motivated_by", "event_id": "requirement-1"},
                         {"type": "references", "event_id": "unrelated-requirement"},
@@ -282,6 +290,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("implementer-1")
                 expect(evidence).to_contain_text("Change proposed")
                 expect(evidence).to_contain_text("proposed by planner-1")
+                expect(evidence.locator(".proposal-card")).to_have_count(1)
                 expect(evidence).not_to_contain_text("unrelated-planner")
                 expect(evidence).to_contain_text("R3")
                 expect(evidence).to_contain_text("Expired sessions must be rejected.")

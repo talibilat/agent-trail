@@ -1542,7 +1542,10 @@
         block.append(actor);
 
         (changeEvidence.links || []).filter(
-          (link) => link.type === 'applies' && link.target_kind === 'change.proposed'
+          (link) => link.type === 'applies'
+            && link.target_kind === 'change.proposed'
+            && typeof link.target_actor_id === 'string'
+            && link.target_actor_id.trim()
         ).forEach((link) => {
           const card = document.createElement('div');
           card.className = 'proposal-card';

@@ -974,6 +974,8 @@ def _evidence_coverage(
         "decision": any(
             link.get("type") == "applies"
             and link.get("target_kind") == "change.proposed"
+            and isinstance(link.get("target_actor_id"), str)
+            and bool(link["target_actor_id"].strip())
             for link in links
         ),
     }

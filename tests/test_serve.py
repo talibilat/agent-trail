@@ -1158,6 +1158,37 @@ class ServeTests(unittest.TestCase):
                     for link in change["links"]
                 ))
 
+    def test_blank_proposal_actor_does_not_satisfy_decision_coverage(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="proposal-1",
+                kind="change.proposed",
+                actor={"id": " \t"},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                sequence=2,
+                kind="change.applied",
+                attributes={"change": {
+                    "path": "src/auth/session.py",
+                    "old_start": 84,
+                    "old_count": 18,
+                    "new_start": 84,
+                    "new_count": 19,
+                }},
+                relationships=[{"type": "applies", "event_id": "proposal-1"}],
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "context", "tool", "verification", "decision"],
+            "unresolved_count": 0,
+        })
+        self.assertEqual(change["links"][0]["target_actor_id"], " \t")
+
     def test_unrelated_missing_links_do_not_reduce_complete_coverage(self):
         hunk = {
             "path": "src/auth/session.py",
