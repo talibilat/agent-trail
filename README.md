@@ -148,6 +148,7 @@ Malformed optional verification metadata is omitted without rejecting the event,
 To record a later human change, emit a `human.corrected` event with a `corrects` relationship targeting the original `change.applied` event and set `attributes.correction.action` to `modified` or `reverted`.
 Each affected hunk exposes these inbound links in event order under `corrections`, including the human actor and validated action when available.
 The browser event inspector highlights each later human modification or reversion, together with the correcting actor, directly on the selected change hunk.
+Wrong-kind `corrects` targets remain inspectable as generic links and are also reported as invalid targets in the run-level unresolved diagnostics.
 Other inbound relationship types remain available as generic evidence links but are not attributed as human corrections.
 Malformed correction metadata is omitted without hiding the correction relationship.
 Unknown kinds, fields, and supported minor schema versions are retained so the canonical envelope can evolve.

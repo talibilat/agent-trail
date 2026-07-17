@@ -931,6 +931,12 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     invalid = {**item, "target_kind": target.kind}
                     unresolved.append(invalid)
                     source_unresolved.append(invalid)
+                elif (
+                    relationship.type == "corrects"
+                    and source.kind == "human.corrected"
+                    and target.kind != "change.applied"
+                ):
+                    unresolved.append({**item, "target_kind": target.kind})
         hunk = _change_hunk(source)
         if hunk is not None:
             changes.append({

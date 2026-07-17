@@ -1782,6 +1782,47 @@ class ServeTests(unittest.TestCase):
             "target_actor_id": "reviewer-1",
         })
 
+    def test_wrong_kind_human_correction_target_is_an_unresolved_diagnostic(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="context-1",
+                kind="context.read",
+                attributes={"context": {"path": "src/auth/config.py"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="correction-1",
+                span_id="span-2",
+                sequence=2,
+                kind="human.corrected",
+                actor={"id": "maintainer-1"},
+                attributes={"correction": {"action": "reverted"}},
+                relationships=[{"type": "corrects", "event_id": "context-1"}],
+            )) + "\n",
+        ])
+
+        evidence = store.run_detail("trace-1")["evidence_map"]
+
+        self.assertEqual(evidence["unresolved"], [{
+            "type": "corrects",
+            "source_event_id": "correction-1",
+            "target_event_id": "context-1",
+            "source_kind": "human.corrected",
+            "source_actor_id": "maintainer-1",
+            "target_kind": "context.read",
+        }])
+        self.assertEqual(evidence["links"], [{
+            "type": "corrects",
+            "source_event_id": "correction-1",
+            "target_event_id": "context-1",
+            "source_kind": "human.corrected",
+            "source_actor_id": "maintainer-1",
+            "target_kind": "context.read",
+            "target_actor_id": "reviewer-1",
+            "context": {"path": "src/auth/config.py"},
+            "correction": {"action": "reverted"},
+        }])
+        self.assertEqual(evidence["changes"], [])
+
     def test_http_server_serves_offline_shell_and_versioned_api(self):
         store = RunStore.from_lines([
             json.dumps(event_data(trace_id="trace/1", kind="<script>kind</script>")) + "\n"
