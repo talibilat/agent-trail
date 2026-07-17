@@ -1536,6 +1536,8 @@
           type.className = 'type';
           type.textContent = link.reason === 'invalid_correction_detail'
             ? `Invalid correction details · ${link.type}`
+            : link.reason === 'verification_chronology_undetermined'
+              ? `Verification chronology undetermined · ${link.type}`
             : link.target_kind
               ? `Invalid relationship target · ${link.type}`
               : `Missing relationship target · ${link.type}`;
@@ -1981,6 +1983,8 @@
             ? `Invalid verification result · ${link.type}`
             : link.reason === 'verification_precedes_change'
               ? `Verification finished before change · ${link.type}`
+            : link.reason === 'verification_chronology_undetermined'
+              ? `Verification chronology undetermined · ${link.type}`
             : link.reason === 'invalid_verification_exit_code'
               ? `Invalid verification exit code · ${link.type}`
             : link.reason === 'conflicting_verification_outcome'

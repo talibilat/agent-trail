@@ -532,6 +532,7 @@ class ServeTests(unittest.TestCase):
             event_data(
                 event_id="verification-1",
                 sequence=4,
+                timestamp="2026-07-13T11:03:00Z",
                 kind="verification.finished",
                 attributes={"verification": {
                     "command": "pytest",
@@ -2056,6 +2057,7 @@ class ServeTests(unittest.TestCase):
                 event_id="verification-finished-1",
                 span_id="span-2",
                 sequence=2,
+                timestamp="2026-07-13T11:03:00Z",
                 kind="verification.finished",
                 actor={"id": "result-reporter"},
                 attributes={"verification": {
@@ -2101,7 +2103,12 @@ class ServeTests(unittest.TestCase):
 
         before_detail = store.run_detail("trace-1")
         before_start = before_detail["evidence_map"]["changes"][0]
-        self.assertEqual(len(before_detail["events"][1]["relationships"]), 4)
+        finished_event = next(
+            event
+            for event in before_detail["events"]
+            if event["event_id"] == "verification-finished-1"
+        )
+        self.assertEqual(len(finished_event["relationships"]), 4)
         self.assertEqual(before_start["links"][0]["verification"], {
             "passed": True,
             "exit_code": 0,
@@ -2109,7 +2116,7 @@ class ServeTests(unittest.TestCase):
             "starts": [{
                 "event_id": "verification-started-without-command",
                 "actor_id": "commandless-runner",
-                "chronology": "undetermined",
+                "chronology": "before_finish",
                 "change_chronology": "undetermined",
             }],
             "unresolved": [
@@ -2157,13 +2164,13 @@ class ServeTests(unittest.TestCase):
             "starts": [{
                 "event_id": "verification-started-1",
                 "actor_id": "test-runner",
-                "chronology": "undetermined",
+                "chronology": "before_finish",
                 "change_chronology": "undetermined",
                 "command": "pytest tests/test_session.py",
             }, {
                 "event_id": "verification-started-without-command",
                 "actor_id": "commandless-runner",
-                "chronology": "undetermined",
+                "chronology": "before_finish",
                 "change_chronology": "undetermined",
             }],
             "unresolved": [
@@ -2250,6 +2257,7 @@ class ServeTests(unittest.TestCase):
                 event_id="verification-finished-1",
                 span_id="span-2",
                 sequence=2,
+                timestamp="2026-07-13T11:03:00Z",
                 kind="verification.finished",
                 attributes={"verification": {
                     "command": "pytest tests/test_b.py",
@@ -2632,16 +2640,22 @@ class ServeTests(unittest.TestCase):
                 "verification-before-change",
                 "verification-same-time",
                 "verification-clock-skew-before-change",
+                "verification-same-time-other-emitter",
             ],
         )
-        self.assertTrue(all(
-            item["reason"] == "verification_precedes_change"
-            for item in change["unresolved"]
-        ))
+        self.assertEqual(
+            [item["reason"] for item in change["unresolved"]],
+            [
+                "verification_precedes_change",
+                "verification_precedes_change",
+                "verification_precedes_change",
+                "verification_chronology_undetermined",
+            ],
+        )
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "decision"],
-            "unresolved_count": 3,
+            "unresolved_count": 4,
         })
 
     def test_conflicting_verification_outcomes_are_diagnostics(self):
@@ -3793,6 +3807,7 @@ class ServeTests(unittest.TestCase):
                     event_data(
                         event_id="verification-1",
                         sequence=4,
+                        timestamp="2026-07-13T11:03:00Z",
                         kind="verification.finished",
                         attributes={"verification": verification},
                     ),
@@ -4085,6 +4100,7 @@ class ServeTests(unittest.TestCase):
             event_data(
                 event_id="verification-1",
                 sequence=4,
+                timestamp="2026-07-13T11:03:00Z",
                 kind="verification.finished",
                 attributes={"verification": {
                     "command": "pytest",
@@ -4347,6 +4363,7 @@ class ServeTests(unittest.TestCase):
                     event_data(
                         event_id="verification-finished-1",
                         sequence=5,
+                        timestamp="2026-07-13T11:03:00Z",
                         kind="verification.finished",
                         attributes={"verification": finished_verification},
                         relationships=[{
@@ -4477,6 +4494,7 @@ class ServeTests(unittest.TestCase):
                     event_data(
                         event_id="verification-1",
                         sequence=5,
+                        timestamp="2026-07-13T11:03:00Z",
                         kind="verification.finished",
                         attributes={"verification": {
                             "command": "pytest",
@@ -4560,6 +4578,7 @@ class ServeTests(unittest.TestCase):
             event_data(
                 event_id="verification-1",
                 sequence=6,
+                timestamp="2026-07-13T11:03:00Z",
                 kind="verification.finished",
                 attributes={"verification": {
                     "command": "pytest",

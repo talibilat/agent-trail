@@ -1488,6 +1488,20 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     source_unresolved.append(invalid)
                 elif (
                     source.kind == "change.applied"
+                    and relationship.type == "verified_by"
+                    and target.kind == "verification.finished"
+                    and not _event_follows(source, target)
+                    and not _event_follows(target, source)
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "verification_chronology_undetermined",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
                     and relationship.type == "applies"
                     and target.kind == "change.proposed"
                     and _event_follows(target, source)
