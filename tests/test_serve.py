@@ -684,6 +684,63 @@ class ServeTests(unittest.TestCase):
             "unresolved_count": 1,
         })
 
+    def test_context_read_after_change_cannot_be_informing_evidence(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="context-after-change",
+                timestamp="2026-07-13T11:03:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/late-context.md"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-same-time",
+                span_id="span-same-time",
+                sequence=2,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/current-context.md"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="change-1",
+                span_id="span-2",
+                sequence=3,
+                timestamp="2026-07-13T11:02:00Z",
+                kind="change.applied",
+                attributes={"change": {
+                    "path": "src/auth/session.py",
+                    "old_start": 84,
+                    "old_count": 18,
+                    "new_start": 84,
+                    "new_count": 19,
+                }},
+                relationships=[
+                    {"type": "informed_by", "event_id": "context-after-change"},
+                    {"type": "informed_by", "event_id": "context-same-time"},
+                ],
+            )) + "\n",
+        ])
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(
+            [link["context"]["path"] for link in change["links"]],
+            ["docs/late-context.md", "docs/current-context.md"],
+        )
+        self.assertEqual(change["unresolved"], [{
+            "type": "informed_by",
+            "source_event_id": "change-1",
+            "target_event_id": "context-after-change",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+            "target_kind": "context.read",
+            "reason": "context_not_preceding_change",
+        }])
+        self.assertEqual(change["coverage"], {
+            "status": "incomplete",
+            "missing": ["requirement", "tool", "verification", "decision"],
+            "unresolved_count": 1,
+        })
+
     def test_proposal_after_change_cannot_be_decision_evidence(self):
         store = RunStore.from_lines([
             json.dumps(event_data(

@@ -97,6 +97,17 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="context-after-change",
+                    span_id="span-context-after-change",
+                    sequence=10,
+                    timestamp="2026-07-13T11:03:00Z",
+                    kind="context.read",
+                    actor={"id": "late-researcher"},
+                    attributes={"context": {
+                        "path": "docs/post-implementation.md",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="context-invalid-line-start",
                     span_id="span-context-invalid-line-start",
                     sequence=2,
@@ -362,6 +373,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "informed_by", "event_id": "context-1"},
                         {"type": "informed_by", "event_id": "context-end-only"},
                         {"type": "informed_by", "event_id": "context-unknown-actor"},
+                        {"type": "informed_by", "event_id": "context-after-change"},
                         {"type": "informed_by", "event_id": "context-invalid-line-start"},
                         {"type": "informed_by", "event_id": "context-invalid-line-end"},
                         {"type": "informed_by", "event_id": "context-invalid-symbol"},
@@ -762,6 +774,16 @@ class ServeEndToEndTests(unittest.TestCase):
                 unknown_context_actor = evidence.locator(".context-card").filter(has_text="docs/anonymous-research.md")
                 expect(unknown_context_actor).to_contain_text("reading actor unknown")
                 expect(unknown_context_actor).not_to_contain_text("read by")
+                late_context = evidence.locator(".context-card").filter(has_text="docs/post-implementation.md")
+                expect(late_context).to_contain_text("event context-after-change")
+                expect(late_context).to_contain_text("read by late-researcher")
+                late_context_diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="context-after-change"
+                )
+                expect(late_context_diagnostic).to_contain_text(
+                    "Context read after change · informed_by"
+                )
+                expect(late_context_diagnostic).to_contain_text("context.read")
                 expect(evidence).not_to_contain_text("docs/unrelated.md")
                 expect(evidence).not_to_contain_text("unrelated-researcher")
                 expect(evidence).to_contain_text("Context compacted before change")
@@ -1022,7 +1044,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(later_tool).to_contain_text("Tool occurred after change · preceded_by")
                 expect(later_tool).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("git diff --stat")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 32 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 33 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
