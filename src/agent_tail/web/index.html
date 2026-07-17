@@ -1702,7 +1702,7 @@
             startMeta.textContent = `started by ${start.actor_id}`;
             card.append(startMeta);
           });
-          if (!starts.length && verification.command) {
+          if (!starts.some((start) => start.command) && verification.command) {
             const command = document.createElement('div');
             command.className = 'command';
             command.textContent = verification.command;

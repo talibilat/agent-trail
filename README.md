@@ -133,6 +133,7 @@ For lifecycle attribution, emit the command as non-blank `attributes.verificatio
 Finished-only events can instead include the command directly for producers that do not emit a separate start event.
 Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
 Resolved links to the finished event include the validated result under `verification`, including each resolved start event and its actor, so each linked hunk exposes every known test command and outcome directly.
+The browser falls back to the command reported by the finished event when resolved start events do not identify a command, while retaining their starter attribution.
 An outcome-only finished event remains visible in the API and browser but leaves the verification coverage category missing because no test command is known.
 Any failed result linked by `verified_by` contributes to `failed_verification_count` and keeps coverage incomplete even when another linked verification passed; failures linked by unrelated relationship types remain generic evidence and do not affect coverage.
 Missing start events remain visible under `verification.unresolved` and contribute to incomplete hunk coverage until they arrive.

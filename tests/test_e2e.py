@@ -60,9 +60,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     sequence=3,
                     kind="verification.started",
                     actor={"id": "test-runner-1<img id=verification-starter-injected>"},
-                    attributes={"verification": {
-                        "command": "pytest tests/test_session.py<img id=verification-injected>",
-                    }},
+                    attributes={"verification": {}},
                 )) + "\n",
                 json.dumps(event_data(
                     event_id="verification-1",
@@ -71,6 +69,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     kind="verification.finished",
                     actor={"id": "result-reporter-1"},
                     attributes={"verification": {
+                        "command": "pytest tests/test_session.py<img id=verification-injected>",
                         "passed": True,
                         "exit_code": 0,
                         "test_origin": "same_agent",
