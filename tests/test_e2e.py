@@ -333,7 +333,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).not_to_contain_text("unrelated-maintainer")
                 expect(evidence).to_contain_text("Missing evidence · reviewed_by")
                 expect(evidence).to_contain_text("missing-review")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 3 unresolved references · 1 test with unknown provenance")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 2 unresolved references · 1 test with unknown provenance")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)

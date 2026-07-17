@@ -877,6 +877,75 @@ class ServeTests(unittest.TestCase):
                     for link in change["links"]
                 ))
 
+    def test_unrelated_missing_links_do_not_reduce_complete_coverage(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        targets = [
+            event_data(
+                event_id="requirement-1",
+                kind="requirement.observed",
+                attributes={"requirement": {"id": "R3", "text": "Reject expiry."}},
+            ),
+            event_data(
+                event_id="context-1",
+                sequence=2,
+                kind="context.read",
+                attributes={"context": {"path": "src/auth/config.py"}},
+            ),
+            event_data(
+                event_id="tool-1",
+                sequence=3,
+                kind="tool.call.completed",
+                attributes={"tool": {"command": "pytest"}},
+            ),
+            event_data(
+                event_id="verification-1",
+                sequence=4,
+                kind="verification.finished",
+                attributes={"verification": {
+                    "command": "pytest",
+                    "passed": True,
+                    "test_origin": "pre_existing",
+                }},
+            ),
+            event_data(event_id="proposal-1", sequence=5, kind="change.proposed"),
+            event_data(
+                event_id="change-1",
+                sequence=6,
+                kind="change.applied",
+                attributes={"change": hunk},
+                relationships=[
+                    {"type": "motivated_by", "event_id": "requirement-1"},
+                    {"type": "informed_by", "event_id": "context-1"},
+                    {"type": "preceded_by", "event_id": "tool-1"},
+                    {"type": "verified_by", "event_id": "verification-1"},
+                    {"type": "applies", "event_id": "proposal-1"},
+                    {"type": "references", "event_id": "missing-note"},
+                ],
+            ),
+        ]
+        store = RunStore.from_lines(json.dumps(event) + "\n" for event in targets)
+
+        change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+
+        self.assertEqual(change["coverage"], {
+            "status": "complete",
+            "missing": [],
+            "unresolved_count": 0,
+        })
+        self.assertEqual(change["unresolved"], [{
+            "type": "references",
+            "source_event_id": "change-1",
+            "target_event_id": "missing-note",
+            "source_kind": "change.applied",
+            "source_actor_id": "reviewer-1",
+        }])
+
     def test_bare_verification_start_does_not_satisfy_verification_coverage(self):
         hunk = {
             "path": "src/auth/session.py",

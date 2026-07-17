@@ -101,7 +101,8 @@ For repository changes, emit a `change.applied` event with a Git hunk locator un
 The four range values are non-negative integers and `symbol` is optional.
 Valid locators are exposed in event order under `evidence_map.changes`, together with the change event and actor IDs.
 Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
-It also includes factual `coverage` for requirement, context, tool, verification, and decision evidence, plus an unresolved count that includes missing compacted-context sources and verification-start events.
+It also includes factual `coverage` for requirement, context, tool, verification, and decision evidence, plus an unresolved count for missing targets on those canonical evidence relationships, missing compacted-context sources, and missing verification-start events.
+Unresolved generic relationships remain inspectable but do not reduce factual evidence coverage.
 A context category is present for direct context only when an `informed_by` relationship resolves to a `context.read` event with a validated locator; other links to context reads remain visible but do not identify what informed the applied hunk.
 A context locator among a compaction's resolved `summarizes` sources also satisfies the category when the change references that compaction with `informed_by`; unrelated outer or source links and empty compactions do not.
 A tool category is present only when a `preceded_by` relationship resolves to a tool call with a non-empty command or result; other links to tool calls remain visible, while operation identity and status alone do not satisfy it.

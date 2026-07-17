@@ -973,7 +973,16 @@ def _evidence_coverage(
         ),
     }
     missing = [kind for kind, is_present in present.items() if not is_present]
-    unresolved_count = len(unresolved) + sum(
+    unresolved_count = sum(
+        link.get("type") in {
+            "motivated_by",
+            "informed_by",
+            "preceded_by",
+            "verified_by",
+            "applies",
+        }
+        for link in unresolved
+    ) + sum(
         sum(
             isinstance(source, dict) and source.get("type") == "summarizes"
             for source in compaction.get("unresolved", [])
