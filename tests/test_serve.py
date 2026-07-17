@@ -164,7 +164,7 @@ class ServeTests(unittest.TestCase):
                 "corrections": [],
                 "coverage": {
                     "status": "incomplete",
-                    "missing": ["requirement", "context", "tool", "verification"],
+                    "missing": ["requirement", "context", "tool", "verification", "decision"],
                     "unresolved_count": 0,
                 },
             },
@@ -181,7 +181,7 @@ class ServeTests(unittest.TestCase):
                 "corrections": [],
                 "coverage": {
                     "status": "incomplete",
-                    "missing": ["requirement", "context", "tool", "verification"],
+                    "missing": ["requirement", "context", "tool", "verification", "decision"],
                     "unresolved_count": 0,
                 },
             },
@@ -273,7 +273,7 @@ class ServeTests(unittest.TestCase):
             "corrections": [],
             "coverage": {
                 "status": "incomplete",
-                "missing": ["context", "tool", "verification"],
+                "missing": ["context", "tool", "verification", "decision"],
                 "unresolved_count": 1,
             },
         }])
@@ -296,7 +296,7 @@ class ServeTests(unittest.TestCase):
             "corrections": [],
             "coverage": {
                 "status": "incomplete",
-                "missing": ["context", "tool"],
+                "missing": ["context", "tool", "decision"],
                 "unresolved_count": 0,
             },
         }])
@@ -389,7 +389,7 @@ class ServeTests(unittest.TestCase):
         })
         self.assertEqual(before_start["coverage"], {
             "status": "incomplete",
-            "missing": ["requirement", "context", "tool"],
+            "missing": ["requirement", "context", "tool", "decision"],
             "unresolved_count": 1,
         })
 
@@ -418,7 +418,7 @@ class ServeTests(unittest.TestCase):
         })
         self.assertEqual(after_start["coverage"], {
             "status": "incomplete",
-            "missing": ["requirement", "context", "tool"],
+            "missing": ["requirement", "context", "tool", "decision"],
             "unresolved_count": 0,
         })
 
@@ -680,7 +680,7 @@ class ServeTests(unittest.TestCase):
             store.run_detail("trace-1")["evidence_map"]["changes"][0]["coverage"],
             {
                 "status": "incomplete",
-                "missing": ["requirement", "tool", "verification"],
+                "missing": ["requirement", "tool", "verification", "decision"],
                 "unresolved_count": 1,
             },
         )
@@ -693,20 +693,25 @@ class ServeTests(unittest.TestCase):
             "new_start": 84,
             "new_count": 19,
         }
-        for test_origin, expected in (
-            (None, {
+        for test_origin, include_decision, expected in (
+            (None, True, {
                 "status": "incomplete",
                 "missing": [],
                 "unresolved_count": 0,
                 "unknown_test_origin_count": 1,
             }),
-            ("pre_existing", {
+            ("pre_existing", False, {
+                "status": "incomplete",
+                "missing": ["decision"],
+                "unresolved_count": 0,
+            }),
+            ("pre_existing", True, {
                 "status": "complete",
                 "missing": [],
                 "unresolved_count": 0,
             }),
         ):
-            with self.subTest(test_origin=test_origin):
+            with self.subTest(test_origin=test_origin, include_decision=include_decision):
                 verification = {"command": "pytest", "passed": True}
                 if test_origin is not None:
                     verification["test_origin"] = test_origin
@@ -738,8 +743,14 @@ class ServeTests(unittest.TestCase):
                         attributes={"verification": verification},
                     ),
                     event_data(
-                        event_id="change-1",
+                        event_id="proposal-1",
                         sequence=5,
+                        kind="change.proposed",
+                        actor={"id": "planner-1"},
+                    ),
+                    event_data(
+                        event_id="change-1",
+                        sequence=6,
                         kind="change.applied",
                         attributes={"change": hunk},
                         relationships=[
@@ -747,6 +758,8 @@ class ServeTests(unittest.TestCase):
                             {"type": "informed_by", "event_id": "context-1"},
                             {"type": "preceded_by", "event_id": "tool-1"},
                             {"type": "verified_by", "event_id": "verification-1"},
+                            *([{"type": "applies", "event_id": "proposal-1"}]
+                              if include_decision else []),
                         ],
                     ),
                 ]
