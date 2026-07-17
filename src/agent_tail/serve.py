@@ -915,8 +915,12 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 source_links.append(resolved)
                 if (
                     source.kind == "change.applied"
-                    and relationship.type == "verified_by"
-                    and target.kind != "verification.finished"
+                    and (
+                        relationship.type == "verified_by"
+                        and target.kind != "verification.finished"
+                        or relationship.type == "motivated_by"
+                        and target.kind != "requirement.observed"
+                    )
                 ):
                     invalid = {**item, "target_kind": target.kind}
                     unresolved.append(invalid)
