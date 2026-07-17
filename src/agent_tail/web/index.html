@@ -1638,7 +1638,9 @@
           unresolvedSources.forEach((source) => {
             const incomplete = document.createElement('div');
             incomplete.className = 'incomplete';
-            incomplete.textContent = `Missing ${source.type} source · ${source.event_id}`;
+            incomplete.textContent = source.target_kind
+              ? `Invalid ${source.type} source target · ${source.event_id} · ${source.target_kind}`
+              : `Missing ${source.type} source · ${source.event_id}`;
             card.append(incomplete);
           });
           const missingCount = unresolvedSources.length;

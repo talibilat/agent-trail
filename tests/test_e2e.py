@@ -106,6 +106,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[
                         {"type": "summarizes", "event_id": "context-1"},
                         {"type": "summarizes", "event_id": "missing-context<img id=compaction-missing-injected>"},
+                        {"type": "summarizes", "event_id": "tool-1"},
                         {"type": "references", "event_id": "unrelated-context"},
                         {"type": "references", "event_id": "irrelevant-missing-context"},
                     ],
@@ -316,8 +317,10 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(compaction).to_contain_text("Session expiry")
                 expect(evidence).to_contain_text("Missing summarizes source")
                 expect(evidence).to_contain_text("missing-context")
+                expect(compaction).to_contain_text("Invalid summarizes source target · tool-1 · tool.call.completed")
+                expect(compaction).not_to_contain_text("source from shell-1")
                 expect(evidence).not_to_contain_text("irrelevant-missing-context")
-                expect(evidence).to_contain_text("1 compacted source unresolved")
+                expect(evidence).to_contain_text("2 compacted sources unresolved")
                 expect(evidence).to_contain_text("Tool · shell")
                 expect(evidence).to_contain_text("git diff -- src/auth/session.py")
                 expect(evidence).to_contain_text("1 file changed")
@@ -356,7 +359,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("missing-review")
                 expect(evidence).to_contain_text("Invalid evidence target · verified_by")
                 expect(evidence).to_contain_text("context-1")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 4 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 5 unresolved references · 1 test with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)

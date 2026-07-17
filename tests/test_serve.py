@@ -925,6 +925,7 @@ class ServeTests(unittest.TestCase):
                 relationships=[
                     {"type": "summarizes", "event_id": "context-1"},
                     {"type": "summarizes", "event_id": "missing-context"},
+                    {"type": "summarizes", "event_id": "tool-1"},
                 ],
             )) + "\n",
             json.dumps(event_data(
@@ -939,9 +940,16 @@ class ServeTests(unittest.TestCase):
                     "line_end": 51,
                 }},
             )) + "\n",
+            json.dumps(event_data(
+                event_id="tool-1",
+                span_id="span-4",
+                sequence=4,
+                kind="tool.call.completed",
+            )) + "\n",
         ])
 
-        link = store.run_detail("trace-1")["evidence_map"]["changes"][0]["links"][0]
+        evidence_map = store.run_detail("trace-1")["evidence_map"]
+        link = evidence_map["changes"][0]["links"][0]
 
         self.assertEqual(link["target_kind"], "context.compacted")
         self.assertEqual(link["compaction"], {
@@ -959,14 +967,31 @@ class ServeTests(unittest.TestCase):
             "unresolved": [{
                 "type": "summarizes",
                 "event_id": "missing-context",
+            }, {
+                "type": "summarizes",
+                "event_id": "tool-1",
+                "target_kind": "tool.call.completed",
             }],
         })
+        self.assertIn(
+            {
+                "type": "summarizes",
+                "source_event_id": "compaction-1",
+                "source_kind": "context.compacted",
+                "source_actor_id": "reviewer-1",
+                "target_event_id": "tool-1",
+                "target_kind": "tool.call.completed",
+                "target_actor_id": "reviewer-1",
+                "tool": {"status": "running", "name": "read_file"},
+            },
+            evidence_map["links"],
+        )
         self.assertEqual(
-            store.run_detail("trace-1")["evidence_map"]["changes"][0]["coverage"],
+            evidence_map["changes"][0]["coverage"],
             {
                 "status": "incomplete",
                 "missing": ["requirement", "tool", "verification", "decision"],
-                "unresolved_count": 1,
+                "unresolved_count": 2,
             },
         )
 

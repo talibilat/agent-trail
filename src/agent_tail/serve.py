@@ -1239,6 +1239,10 @@ def _context_compaction_detail(
         if source is None:
             unresolved.append(item)
             continue
+        if relationship.type == "summarizes" and source.kind != "context.read":
+            item["target_kind"] = source.kind
+            unresolved.append(item)
+            continue
         item["kind"] = source.kind
         item["actor_id"] = source.actor["id"]
         context = _context_read_detail(source)
