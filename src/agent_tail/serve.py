@@ -1121,9 +1121,9 @@ def _requirement_detail(event: Event) -> dict[str, object] | None:
         return None
     requirement_id = requirement.get("id")
     text = requirement.get("text")
-    if not isinstance(requirement_id, str) or not requirement_id:
+    if not isinstance(requirement_id, str) or not requirement_id.strip():
         return None
-    if not isinstance(text, str) or not text:
+    if not isinstance(text, str) or not text.strip():
         return None
     return {"id": requirement_id, "text": text}
 

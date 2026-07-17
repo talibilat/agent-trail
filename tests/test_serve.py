@@ -468,33 +468,45 @@ class ServeTests(unittest.TestCase):
             "failed_verification_count": 1,
         })
 
-    def test_evidence_ignores_malformed_optional_requirement_details(self):
-        store = RunStore.from_lines([
-            json.dumps(event_data(
-                event_id="change-1",
-                kind="change.applied",
-                relationships=[{
-                    "type": "motivated_by",
-                    "event_id": "requirement-1",
-                }],
-            )) + "\n",
-            json.dumps(event_data(
-                event_id="requirement-1",
-                span_id="span-2",
-                sequence=2,
-                kind="requirement.observed",
-                actor={"id": "user"},
-                attributes={"requirement": {
-                    "id": "R3",
-                    "text": 3,
-                }},
-            )) + "\n",
-        ])
+    def test_evidence_ignores_malformed_or_blank_requirement_details(self):
+        hunk = {
+            "path": "src/auth/session.py",
+            "old_start": 84,
+            "old_count": 18,
+            "new_start": 84,
+            "new_count": 19,
+        }
+        for requirement_id, text in (("R3", 3), (" \t", "Reject expiry."), ("R3", "\n ")):
+            with self.subTest(requirement_id=requirement_id, text=text):
+                store = RunStore.from_lines([
+                    json.dumps(event_data(
+                        event_id="change-1",
+                        kind="change.applied",
+                        attributes={"change": hunk},
+                        relationships=[{
+                            "type": "motivated_by",
+                            "event_id": "requirement-1",
+                        }],
+                    )) + "\n",
+                    json.dumps(event_data(
+                        event_id="requirement-1",
+                        span_id="span-2",
+                        sequence=2,
+                        kind="requirement.observed",
+                        actor={"id": "user"},
+                        attributes={"requirement": {
+                            "id": requirement_id,
+                            "text": text,
+                        }},
+                    )) + "\n",
+                ])
 
-        link = store.run_detail("trace-1")["evidence_map"]["links"][0]
+                change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
+                link = change["links"][0]
 
-        self.assertNotIn("requirement", link)
-        self.assertEqual(link["target_kind"], "requirement.observed")
+                self.assertNotIn("requirement", link)
+                self.assertEqual(link["target_kind"], "requirement.observed")
+                self.assertIn("requirement", change["coverage"]["missing"])
 
     def test_change_hunks_include_context_read_locators(self):
         hunk = {
