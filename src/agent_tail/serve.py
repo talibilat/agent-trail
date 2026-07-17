@@ -885,6 +885,9 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                 verification = _verification_result(target)
                 if verification is not None:
                     resolved["verification"] = verification
+                requirement = _requirement_detail(target)
+                if requirement is not None:
+                    resolved["requirement"] = requirement
                 correction = _human_correction(source)
                 if relationship.type == "corrects" and correction is not None:
                     resolved["correction"] = correction
@@ -949,6 +952,21 @@ def _verification_result(event: Event) -> dict[str, object] | None:
     if test_origin in {"pre_existing", "same_agent"}:
         result["test_origin"] = test_origin
     return result
+
+
+def _requirement_detail(event: Event) -> dict[str, object] | None:
+    if event.kind != "requirement.observed":
+        return None
+    requirement = _attributes(event).get("requirement")
+    if not isinstance(requirement, dict):
+        return None
+    requirement_id = requirement.get("id")
+    text = requirement.get("text")
+    if not isinstance(requirement_id, str) or not requirement_id:
+        return None
+    if not isinstance(text, str) or not text:
+        return None
+    return {"id": requirement_id, "text": text}
 
 
 def _human_correction(event: Event) -> dict[str, object] | None:

@@ -192,6 +192,10 @@ class ServeTests(unittest.TestCase):
                 event_id="requirement-1",
                 kind="requirement.observed",
                 actor={"id": "user"},
+                attributes={"requirement": {
+                    "id": "R3",
+                    "text": "Expired sessions must be rejected.",
+                }},
             )) + "\n",
             json.dumps(event_data(
                 event_id="change-1",
@@ -238,6 +242,10 @@ class ServeTests(unittest.TestCase):
             "source_actor_id": "reviewer-1",
             "target_kind": "requirement.observed",
             "target_actor_id": "user",
+            "requirement": {
+                "id": "R3",
+                "text": "Expired sessions must be rejected.",
+            },
         }
         verified_by_unresolved = {
             "type": "verified_by",
@@ -312,6 +320,34 @@ class ServeTests(unittest.TestCase):
             "command": "pytest",
             "passed": True,
         })
+
+    def test_evidence_ignores_malformed_optional_requirement_details(self):
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                relationships=[{
+                    "type": "motivated_by",
+                    "event_id": "requirement-1",
+                }],
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="requirement-1",
+                span_id="span-2",
+                sequence=2,
+                kind="requirement.observed",
+                actor={"id": "user"},
+                attributes={"requirement": {
+                    "id": "R3",
+                    "text": 3,
+                }},
+            )) + "\n",
+        ])
+
+        link = store.run_detail("trace-1")["evidence_map"]["links"][0]
+
+        self.assertNotIn("requirement", link)
+        self.assertEqual(link["target_kind"], "requirement.observed")
 
     def test_change_hunks_include_later_human_corrections(self):
         hunk = {
