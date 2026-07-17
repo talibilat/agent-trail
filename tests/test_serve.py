@@ -1034,6 +1034,15 @@ class ServeTests(unittest.TestCase):
                 attributes={"correction": {"action": "edited"}},
                 relationships=[{"type": "corrects", "event_id": "change-1"}],
             )) + "\n",
+            json.dumps(event_data(
+                event_id="unrelated-correction",
+                span_id="span-5",
+                sequence=5,
+                kind="human.corrected",
+                actor={"id": "maintainer-unrelated"},
+                attributes={"correction": {"action": "reverted"}},
+                relationships=[{"type": "references", "event_id": "change-1"}],
+            )) + "\n",
         ])
 
         evidence = store.run_detail("trace-1")["evidence_map"]
@@ -1070,6 +1079,15 @@ class ServeTests(unittest.TestCase):
             },
         ])
         self.assertEqual(evidence["links"][0], evidence["changes"][0]["corrections"][0])
+        self.assertEqual(evidence["links"][-1], {
+            "type": "references",
+            "source_event_id": "unrelated-correction",
+            "target_event_id": "change-1",
+            "source_kind": "human.corrected",
+            "source_actor_id": "maintainer-unrelated",
+            "target_kind": "change.applied",
+            "target_actor_id": "reviewer-1",
+        })
 
     def test_http_server_serves_offline_shell_and_versioned_api(self):
         store = RunStore.from_lines([

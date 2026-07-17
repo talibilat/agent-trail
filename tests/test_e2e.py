@@ -226,6 +226,15 @@ class ServeEndToEndTests(unittest.TestCase):
                         "event_id": "unrelated-missing-start",
                     }],
                 )) + "\n",
+                json.dumps(event_data(
+                    event_id="unrelated-correction",
+                    span_id="span-unrelated-correction",
+                    sequence=17,
+                    kind="human.corrected",
+                    actor={"id": "unrelated-maintainer<img id=unrelated-correction-injected>"},
+                    attributes={"correction": {"action": "reverted"}},
+                    relationships=[{"type": "references", "event_id": "change-1"}],
+                )) + "\n",
             )), encoding="utf-8")
             port = _free_port()
             process = subprocess.Popen(
@@ -301,6 +310,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("corrected by maintainer-1")
                 expect(evidence).to_contain_text("Human reverted this change")
                 expect(evidence).to_contain_text("corrected by maintainer-2")
+                expect(evidence).not_to_contain_text("unrelated-maintainer")
                 expect(evidence).to_contain_text("Missing evidence · reviewed_by")
                 expect(evidence).to_contain_text("missing-review")
                 expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 3 unresolved references · 1 test with unknown provenance")
@@ -317,6 +327,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(page.locator("#unrelated-verification-injected")).to_have_count(0)
                 expect(page.locator("#unrelated-verification-reporter-injected")).to_have_count(0)
                 expect(page.locator("#correction-injected")).to_have_count(0)
+                expect(page.locator("#unrelated-correction-injected")).to_have_count(0)
                 expect(page.locator("#proposal-injected")).to_have_count(0)
                 expect(page.locator("#unrelated-proposal-injected")).to_have_count(0)
                 expect(page.locator("#compaction-missing-injected")).to_have_count(0)
