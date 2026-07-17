@@ -1699,7 +1699,13 @@
           card.className = 'compaction-card';
           const title = document.createElement('div');
           title.className = 'title';
-          title.textContent = 'Context compacted before change';
+          const compactionOccurredAfterChange = (changeEvidence.unresolved || []).some(
+            (item) => item.reason === 'compaction_not_preceding_change'
+              && item.target_event_id === link.target_event_id
+          );
+          title.textContent = compactionOccurredAfterChange
+            ? 'Context compacted after change'
+            : 'Context compacted before change';
           const meta = document.createElement('div');
           meta.className = 'meta';
           const compactionDetails = [`event ${link.target_event_id}`];
@@ -1918,6 +1924,8 @@
                 ? `Invalid requirement details · ${link.type}`
                 : link.reason === 'context_not_preceding_change'
                   ? `Context read after change · ${link.type}`
+                : link.reason === 'compaction_not_preceding_change'
+                  ? `Context compacted after change · ${link.type}`
                 : link.reason === 'invalid_context_detail'
                   ? `Invalid context details · ${link.type}`
                   : link.reason === 'invalid_context_line_start'

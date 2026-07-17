@@ -1018,6 +1018,19 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     source.kind == "change.applied"
                     and relationship.type == "informed_by"
                     and target.kind == "context.compacted"
+                    and target.timestamp > source.timestamp
+                ):
+                    invalid = {
+                        **item,
+                        "target_kind": target.kind,
+                        "reason": "compaction_not_preceding_change",
+                    }
+                    unresolved.append(invalid)
+                    source_unresolved.append(invalid)
+                elif (
+                    source.kind == "change.applied"
+                    and relationship.type == "informed_by"
+                    and target.kind == "context.compacted"
                     and not any(
                         candidate.type == "summarizes"
                         for candidate in target.relationships

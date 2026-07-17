@@ -238,6 +238,17 @@ class ServeEndToEndTests(unittest.TestCase):
                     actor={"id": "empty-summarizer"},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="compaction-after-change",
+                    span_id="span-compaction-after-change",
+                    sequence=10,
+                    timestamp="2026-07-13T11:03:00Z",
+                    kind="context.compacted",
+                    actor={"id": "late-summarizer"},
+                    relationships=[
+                        {"type": "summarizes", "event_id": "context-1"},
+                    ],
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="tool-1",
                     span_id="span-4",
                     sequence=7,
@@ -382,6 +393,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "informed_by", "event_id": "compaction-1"},
                         {"type": "informed_by", "event_id": "compaction-unknown-actor"},
                         {"type": "informed_by", "event_id": "empty-compaction<img id=invalid-compaction-injected>"},
+                        {"type": "informed_by", "event_id": "compaction-after-change"},
                         {"type": "preceded_by", "event_id": "tool-1"},
                         {"type": "preceded_by", "event_id": "tool-unknown-actor"},
                         {"type": "preceded_by", "event_id": "tool-invalid-detail<img id=invalid-tool-injected>"},
@@ -807,6 +819,16 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(unknown_compaction_actor).not_to_contain_text("compacted by")
                 expect(unknown_compaction_actor).to_contain_text("source actor unknown")
                 expect(unknown_compaction_actor).not_to_contain_text("source from")
+                late_compaction = evidence.locator(".compaction-card").filter(has_text="late-summarizer")
+                expect(late_compaction).to_contain_text("Context compacted after change")
+                expect(late_compaction).to_contain_text("event compaction-after-change")
+                late_compaction_diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="compaction-after-change"
+                )
+                expect(late_compaction_diagnostic).to_contain_text(
+                    "Context compacted after change · informed_by"
+                )
+                expect(late_compaction_diagnostic).to_contain_text("context.compacted")
                 tool = evidence.locator(".tool-card").filter(has_text="git diff -- src/auth/session.py")
                 expect(tool).to_contain_text("Tool · shell")
                 expect(tool).to_contain_text("1 file changed")
@@ -1044,7 +1066,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(later_tool).to_contain_text("Tool occurred after change · preceded_by")
                 expect(later_tool).to_contain_text("tool.call.completed")
                 expect(evidence).to_contain_text("git diff --stat")
-                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 33 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
+                expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 34 unresolved references · 0 change integrity issues · 2 tests with unknown provenance · 1 same-agent test · 2 failed verifications")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
