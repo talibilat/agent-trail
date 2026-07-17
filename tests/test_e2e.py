@@ -135,6 +135,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         "old_count": 18,
                         "new_start": 84,
                         "new_count": 19,
+                        "symbol": "reject_expired_session<img id=hunk-symbol-injected>",
                     }},
                     relationships=[
                         {"type": "applies", "event_id": "proposal-1"},
@@ -187,6 +188,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 evidence = page.locator(".change-evidence")
                 expect(evidence).to_contain_text("CHANGE EVIDENCE")
                 expect(evidence).to_contain_text("src/auth/session.py:84-102")
+                expect(evidence).to_contain_text("symbol reject_expired_session")
                 expect(evidence).to_contain_text("implementer-1")
                 expect(evidence).to_contain_text("Change proposed")
                 expect(evidence).to_contain_text("proposed by planner-1")
@@ -225,6 +227,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text("missing-review")
                 expect(evidence).to_contain_text("Evidence incomplete · 0 missing categories · 3 unresolved references")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
+                expect(page.locator("#hunk-symbol-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
                 expect(page.locator("#tool-command-injected")).to_have_count(0)
                 expect(page.locator("#tool-result-injected")).to_have_count(0)

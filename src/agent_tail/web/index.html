@@ -1526,10 +1526,18 @@
         const locator = document.createElement('div');
         locator.className = 'hunk';
         locator.textContent = `${hunk.path}:${hunk.new_start}-${hunkEnd}`;
+        if (hunk.symbol) {
+          const symbol = document.createElement('div');
+          symbol.className = 'actor';
+          symbol.textContent = `symbol ${hunk.symbol}`;
+          block.append(locator, symbol);
+        } else {
+          block.append(locator);
+        }
         const actor = document.createElement('div');
         actor.className = 'actor';
         actor.textContent = `applied by ${changeEvidence.actor_id}`;
-        block.append(locator, actor);
+        block.append(actor);
 
         (changeEvidence.links || []).filter((link) => link.target_kind === 'change.proposed').forEach((link) => {
           const card = document.createElement('div');
