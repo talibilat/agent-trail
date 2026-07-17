@@ -2160,12 +2160,20 @@ def _context_compaction_detail(
                 "compaction",
             )
         sources.append(item)
+        source_chronology = item.get("chronology")
         if relationship.type == "summarizes" and _event_follows(source, event):
             unresolved.append({
                 "type": relationship.type,
                 "event_id": relationship.event_id,
                 "target_kind": source.kind,
                 "reason": "context_not_preceding_compaction",
+            })
+        elif relationship.type == "summarizes" and source_chronology == "undetermined":
+            unresolved.append({
+                "type": relationship.type,
+                "event_id": relationship.event_id,
+                "target_kind": source.kind,
+                "reason": "context_source_chronology_undetermined",
             })
         elif relationship.type == "summarizes" and _has_invalid_context_line_start(source):
             unresolved.append({

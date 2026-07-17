@@ -1804,6 +1804,8 @@
               ? `Invalid ${source.type} source details · ${source.event_id} · ${source.target_kind}`
               : source.reason === 'context_not_preceding_compaction'
                 ? `Context read after compaction · ${source.event_id} · ${source.target_kind}`
+              : source.reason === 'context_source_chronology_undetermined'
+                ? `Context source chronology undetermined · ${source.event_id} · ${source.target_kind}`
               : source.reason === 'invalid_context_line_start'
                 ? `Invalid ${source.type} source line start · ${source.event_id} · ${source.target_kind}`
               : source.reason === 'invalid_context_line_end'

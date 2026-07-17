@@ -1760,11 +1760,17 @@ class ServeTests(unittest.TestCase):
                 "target_kind": "context.read",
                 "reason": "context_not_preceding_compaction",
             },
+            {
+                "type": "summarizes",
+                "event_id": "context-same-time-independent",
+                "target_kind": "context.read",
+                "reason": "context_source_chronology_undetermined",
+            },
         ])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "tool", "verification", "decision"],
-            "unresolved_count": 3,
+            "unresolved_count": 4,
         })
 
     def test_proposal_after_change_cannot_be_decision_evidence(self):
@@ -3683,6 +3689,11 @@ class ServeTests(unittest.TestCase):
             }],
             "unresolved": [{
                 "type": "summarizes",
+                "event_id": "context-1",
+                "target_kind": "context.read",
+                "reason": "context_source_chronology_undetermined",
+            }, {
+                "type": "summarizes",
                 "event_id": "missing-context",
             }, {
                 "type": "summarizes",
@@ -3708,7 +3719,7 @@ class ServeTests(unittest.TestCase):
             {
                 "status": "incomplete",
                 "missing": ["requirement", "tool", "verification", "decision"],
-                "unresolved_count": 2,
+                "unresolved_count": 3,
             },
         )
 
@@ -3759,8 +3770,8 @@ class ServeTests(unittest.TestCase):
 
         self.assertEqual(detail["events"][1]["relationships"], relationships)
         self.assertEqual(len(compaction["sources"]), 1)
-        self.assertEqual(len(compaction["unresolved"]), 1)
-        self.assertEqual(change["coverage"]["unresolved_count"], 1)
+        self.assertEqual(len(compaction["unresolved"]), 2)
+        self.assertEqual(change["coverage"]["unresolved_count"], 2)
 
     def test_change_hunk_coverage_reports_complete_core_evidence(self):
         hunk = {
