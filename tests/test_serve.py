@@ -1051,9 +1051,26 @@ class ServeTests(unittest.TestCase):
                 attributes={"context": {"path": "docs/late.md"}},
             )) + "\n",
             json.dumps(event_data(
+                event_id="context-clock-skew",
+                span_id="span-skewed-context",
+                sequence=4,
+                timestamp="2026-07-13T11:00:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/skewed.md"}},
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="context-other-emitter",
+                emitter_id="worker-2",
+                span_id="span-other-emitter-context",
+                sequence=1,
+                timestamp="2026-07-13T11:01:00Z",
+                kind="context.read",
+                attributes={"context": {"path": "docs/concurrent.md"}},
+            )) + "\n",
+            json.dumps(event_data(
                 event_id="change-1",
                 span_id="span-change",
-                sequence=4,
+                sequence=5,
                 timestamp="2026-07-13T11:03:00Z",
                 kind="change.applied",
                 attributes={"change": {
@@ -1067,26 +1084,50 @@ class ServeTests(unittest.TestCase):
                     {"type": "applies", "event_id": "proposal-1"},
                     {"type": "informed_by", "event_id": "context-same-time"},
                     {"type": "informed_by", "event_id": "context-after-decision"},
+                    {"type": "informed_by", "event_id": "context-clock-skew"},
+                    {"type": "informed_by", "event_id": "context-other-emitter"},
                 ],
             )) + "\n",
         ])
 
         change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
-        self.assertEqual(change["unresolved"], [{
-            "type": "informed_by",
-            "source_event_id": "change-1",
-            "target_event_id": "context-after-decision",
-            "source_kind": "change.applied",
-            "source_actor_id": "reviewer-1",
-            "target_kind": "context.read",
-            "reason": "context_follows_decision",
-            "decision_event_id": "proposal-1",
-        }])
+        self.assertEqual(change["unresolved"], [
+            {
+                "type": "informed_by",
+                "source_event_id": "change-1",
+                "target_event_id": "context-same-time",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "context.read",
+                "reason": "context_follows_decision",
+                "decision_event_id": "proposal-1",
+            },
+            {
+                "type": "informed_by",
+                "source_event_id": "change-1",
+                "target_event_id": "context-after-decision",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "context.read",
+                "reason": "context_follows_decision",
+                "decision_event_id": "proposal-1",
+            },
+            {
+                "type": "informed_by",
+                "source_event_id": "change-1",
+                "target_event_id": "context-clock-skew",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "context.read",
+                "reason": "context_follows_decision",
+                "decision_event_id": "proposal-1",
+            },
+        ])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "tool", "verification"],
-            "unresolved_count": 1,
+            "unresolved_count": 3,
         })
 
     def test_context_compacted_after_decision_is_incomplete_evidence(self):
@@ -3381,6 +3422,7 @@ class ServeTests(unittest.TestCase):
             ),
             event_data(
                 event_id="invalid-context-1",
+                emitter_id="invalid-context-worker",
                 sequence=8,
                 kind="context.read",
                 attributes={"context": {"path": " \t"}},

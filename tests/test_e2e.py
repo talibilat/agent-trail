@@ -698,6 +698,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 json.dumps(event_data(
                     event_id="context-invalid-detail<img id=invalid-context-injected>",
                     span_id="span-context-invalid-detail",
+                    emitter_id="invalid-context-worker",
                     sequence=25,
                     kind="context.read",
                     attributes={"context": {"path": " \t"}},
@@ -1376,6 +1377,13 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(late).to_contain_text("Context compacted after decision")
                 expect(evidence.locator(".context-card").filter(has_text="docs/current.md")).to_be_visible()
                 expect(evidence.locator(".context-card").filter(has_text="docs/late.md")).to_be_visible()
+                current_context_diagnostic = evidence.locator(".unresolved-evidence").filter(
+                    has_text="context-same-time"
+                )
+                expect(current_context_diagnostic).to_contain_text(
+                    "Context read after decision · informed_by"
+                )
+                expect(current_context_diagnostic).to_contain_text("context.read")
                 late_context_diagnostic = evidence.locator(".unresolved-evidence").filter(
                     has_text="context-after-decision"
                 )
@@ -1404,7 +1412,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 )
                 expect(diagnostic).to_contain_text("Context compacted after decision · informed_by")
                 expect(diagnostic).to_contain_text("context.compacted")
-                expect(evidence).to_contain_text("4 unresolved references")
+                expect(evidence).to_contain_text("5 unresolved references")
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):
