@@ -1223,16 +1223,23 @@ class ServeTests(unittest.TestCase):
                 "context-after-change",
                 "context-same-time-after-change",
                 "context-clock-skew-after-change",
+                "context-same-time-other-emitter",
             ],
         )
-        self.assertTrue(all(
-            item["reason"] == "context_not_preceding_change"
-            for item in change["unresolved"]
-        ))
+        self.assertEqual(
+            [item["reason"] for item in change["unresolved"]],
+            [
+                "context_not_preceding_change",
+                "context_not_preceding_change",
+                "context_not_preceding_change",
+                "context_chronology_undetermined",
+            ],
+        )
+        self.assertNotIn("decision_event_id", change["unresolved"][-1])
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": ["requirement", "tool", "verification", "decision"],
-            "unresolved_count": 3,
+            "unresolved_count": 4,
         })
 
     def test_context_compacted_after_change_cannot_be_informing_evidence(self):
