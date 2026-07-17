@@ -1783,9 +1783,10 @@
           }
           const meta = document.createElement('div');
           meta.className = 'meta';
-          const metaParts = [typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
+          const metaParts = [`event ${link.target_event_id}`];
+          metaParts.push(typeof link.target_actor_id === 'string' && link.target_actor_id.trim()
             ? `result reported by ${link.target_actor_id}`
-            : 'reporting actor unknown'];
+            : 'reporting actor unknown');
           if (verification.exit_code !== undefined) metaParts.push(`exit ${verification.exit_code}`);
           meta.textContent = metaParts.join(' · ');
           card.append(meta);
