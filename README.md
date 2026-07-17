@@ -117,6 +117,7 @@ This preserves the observable compaction boundary without capturing private reas
 To attach a test result, emit a `verification.finished` event with `attributes.verification.command` and boolean `attributes.verification.passed` fields, plus an optional integer `exit_code`.
 Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
 Resolved links to that event include the validated result under `verification`, so each linked hunk exposes its test command and outcome directly.
+The browser event inspector presents the command, pass or fail outcome, verifier, optional exit code, and whether the test predates the change or was written by the same agent.
 Malformed optional verification metadata is omitted without rejecting the event, its relationship, or other valid verification details.
 To record a later human change, emit a `human.corrected` event with a `corrects` relationship targeting the original `change.applied` event and set `attributes.correction.action` to `modified` or `reverted`.
 Each affected hunk exposes these inbound links in event order under `corrections`, including the human actor and validated action when available.

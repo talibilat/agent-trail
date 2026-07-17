@@ -303,6 +303,12 @@
     .context-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--run); background: rgba(51,201,255,.06); }
     .context-card .path { font: 600 10.5px "IBM Plex Mono", monospace; color: var(--run); word-break: break-word; }
     .context-card .meta { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
+    .verification-card { margin-top: 8px; padding: 9px 10px; border-left: 2px solid var(--ok); background: rgba(73,209,125,.06); }
+    .verification-card.failed, .verification-card.same-agent { border-left-color: var(--warn); background: rgba(255,190,92,.06); }
+    .verification-card .outcome { font: 600 10px "IBM Plex Mono", monospace; color: var(--ok); }
+    .verification-card.failed .outcome, .verification-card.same-agent .provenance { color: var(--warn); }
+    .verification-card .command { margin-top: 4px; font: 500 10.5px "IBM Plex Mono", monospace; color: var(--text); word-break: break-word; }
+    .verification-card .meta, .verification-card .provenance { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
     .evidence-completeness { margin-top: 9px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--faint); }
     .evidence-completeness.incomplete { color: var(--warn); }
     .usage-inline-row { display: flex; gap: 16px; }
@@ -1530,6 +1536,34 @@
           meta.className = 'meta';
           meta.textContent = details.join(' · ');
           card.append(path, meta);
+          block.append(card);
+        });
+
+        (changeEvidence.links || []).filter((link) => link.verification).forEach((link) => {
+          const verification = link.verification;
+          const sameAgent = verification.test_origin === 'same_agent';
+          const card = document.createElement('div');
+          card.className = `verification-card${verification.passed ? '' : ' failed'}${sameAgent ? ' same-agent' : ''}`;
+          const outcome = document.createElement('div');
+          outcome.className = 'outcome';
+          outcome.textContent = verification.passed ? 'PASS' : 'FAIL';
+          const command = document.createElement('div');
+          command.className = 'command';
+          command.textContent = verification.command;
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          const metaParts = [`verified by ${link.target_actor_id}`];
+          if (verification.exit_code !== undefined) metaParts.push(`exit ${verification.exit_code}`);
+          meta.textContent = metaParts.join(' · ');
+          card.append(outcome, command, meta);
+          if (verification.test_origin) {
+            const provenance = document.createElement('div');
+            provenance.className = 'provenance';
+            provenance.textContent = sameAgent
+              ? 'Warning: implementation and test written by the same agent'
+              : 'Test existed before this change';
+            card.append(provenance);
+          }
           block.append(card);
         });
 

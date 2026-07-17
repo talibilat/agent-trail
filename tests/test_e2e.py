@@ -28,7 +28,7 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
-    def test_change_inspector_shows_requirement_and_context_safely(self):
+    def test_change_inspector_shows_requirement_context_and_verification_safely(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "change-evidence.jsonl")
             source.write_text("".join((
@@ -55,9 +55,22 @@ class ServeEndToEndTests(unittest.TestCase):
                     }},
                 )) + "\n",
                 json.dumps(event_data(
-                    event_id="change-1",
+                    event_id="verification-1",
                     span_id="span-3",
                     sequence=3,
+                    kind="verification.finished",
+                    actor={"id": "implementer-1"},
+                    attributes={"verification": {
+                        "command": "pytest tests/test_session.py<img id=verification-injected>",
+                        "passed": True,
+                        "exit_code": 0,
+                        "test_origin": "same_agent",
+                    }},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="change-1",
+                    span_id="span-4",
+                    sequence=4,
                     kind="change.applied",
                     actor={"id": "implementer-1"},
                     attributes={"change": {
@@ -70,6 +83,7 @@ class ServeEndToEndTests(unittest.TestCase):
                     relationships=[
                         {"type": "motivated_by", "event_id": "requirement-1"},
                         {"type": "informed_by", "event_id": "context-1"},
+                        {"type": "verified_by", "event_id": "verification-1"},
                     ],
                 )) + "\n",
             )), encoding="utf-8")
@@ -89,7 +103,7 @@ class ServeEndToEndTests(unittest.TestCase):
                 page = browser.new_page()
                 page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
                 page.locator(".node-wrap").filter(has_text="implementer-1").click()
-                page.locator(".event-row").click()
+                page.locator(".event-row").filter(has_text="change.applied").click()
 
                 evidence = page.locator(".change-evidence")
                 expect(evidence).to_contain_text("CHANGE EVIDENCE")
@@ -101,8 +115,14 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(evidence).to_contain_text(":42-47")
                 expect(evidence).to_contain_text("researcher-1")
                 expect(evidence).to_contain_text("Session expiry")
+                expect(evidence).to_contain_text("PASS")
+                expect(evidence).to_contain_text("pytest tests/test_session.py")
+                expect(evidence).to_contain_text("verified by implementer-1")
+                expect(evidence).to_contain_text("exit 0")
+                expect(evidence).to_contain_text("implementation and test written by the same agent")
                 expect(page.locator("#evidence-injected")).to_have_count(0)
                 expect(page.locator("#context-injected")).to_have_count(0)
+                expect(page.locator("#verification-injected")).to_have_count(0)
                 browser.close()
 
     def test_multi_trace_run_picker_stays_within_top_bar(self):
