@@ -1530,6 +1530,11 @@ class ServeTests(unittest.TestCase):
                 actor={"id": " \t"},
             ),
             event_data(
+                event_id="empty-compaction-1",
+                sequence=8,
+                kind="context.compacted",
+            ),
+            event_data(
                 event_id="commandless-verification-1",
                 sequence=8,
                 kind="verification.finished",
@@ -1552,6 +1557,7 @@ class ServeTests(unittest.TestCase):
                     {"type": "verified_by", "event_id": "invalid-verification-1"},
                     {"type": "motivated_by", "event_id": "invalid-requirement-1"},
                     {"type": "informed_by", "event_id": "invalid-context-1"},
+                    {"type": "informed_by", "event_id": "empty-compaction-1"},
                     {"type": "preceded_by", "event_id": "invalid-tool-1"},
                     {
                         "type": "verified_by",
@@ -1570,7 +1576,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(change["coverage"], {
             "status": "incomplete",
             "missing": [],
-            "unresolved_count": 7,
+            "unresolved_count": 8,
         })
         self.assertEqual(change["unresolved"], [
             {
@@ -1607,6 +1613,15 @@ class ServeTests(unittest.TestCase):
                 "source_actor_id": "reviewer-1",
                 "target_kind": "context.read",
                 "reason": "invalid_context_detail",
+            },
+            {
+                "type": "informed_by",
+                "source_event_id": "change-1",
+                "target_event_id": "empty-compaction-1",
+                "source_kind": "change.applied",
+                "source_actor_id": "reviewer-1",
+                "target_kind": "context.compacted",
+                "reason": "invalid_compaction_detail",
             },
             {
                 "type": "preceded_by",
@@ -1788,10 +1803,10 @@ class ServeTests(unittest.TestCase):
             "new_start": 84,
             "new_count": 19,
         }
-        for outer_type, inner_type, expected_status, expected_missing in (
-            ("references", "summarizes", "incomplete", ["context"]),
-            ("informed_by", "references", "incomplete", ["context"]),
-            ("informed_by", "summarizes", "complete", []),
+        for outer_type, inner_type, expected_status, expected_missing, unresolved_count in (
+            ("references", "summarizes", "incomplete", ["context"], 0),
+            ("informed_by", "references", "incomplete", ["context"], 1),
+            ("informed_by", "summarizes", "complete", [], 0),
         ):
             with self.subTest(outer_type=outer_type, inner_type=inner_type):
                 events = [
@@ -1863,7 +1878,7 @@ class ServeTests(unittest.TestCase):
                 self.assertEqual(coverage, {
                     "status": expected_status,
                     "missing": expected_missing,
-                    "unresolved_count": 0,
+                    "unresolved_count": unresolved_count,
                 })
 
     def test_invalid_compacted_context_detail_reduces_complete_coverage(self):
