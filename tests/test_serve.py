@@ -465,6 +465,7 @@ class ServeTests(unittest.TestCase):
             "status": "incomplete",
             "missing": ["requirement", "context", "tool", "verification", "decision"],
             "unresolved_count": 0,
+            "failed_verification_count": 1,
         })
 
     def test_evidence_ignores_malformed_optional_requirement_details(self):
@@ -738,55 +739,61 @@ class ServeTests(unittest.TestCase):
             "new_start": 84,
             "new_count": 19,
         }
-        for test_origin, requirement_relationship, context_relationship, tool_relationship, verification_relationship, decision_relationship, include_tool_detail, expected in (
-            (None, "motivated_by", "informed_by", "preceded_by", "verified_by", "applies", True, {
+        for test_origin, passed, requirement_relationship, context_relationship, tool_relationship, verification_relationship, decision_relationship, include_tool_detail, expected in (
+            (None, True, "motivated_by", "informed_by", "preceded_by", "verified_by", "applies", True, {
                 "status": "incomplete",
                 "missing": [],
                 "unresolved_count": 0,
                 "unknown_test_origin_count": 1,
             }),
-            ("same_agent", "motivated_by", "informed_by", "preceded_by", "verified_by", "applies", True, {
+            ("same_agent", True, "motivated_by", "informed_by", "preceded_by", "verified_by", "applies", True, {
                 "status": "incomplete",
                 "missing": [],
                 "unresolved_count": 0,
                 "same_agent_test_count": 1,
             }),
-            ("pre_existing", "motivated_by", "informed_by", "preceded_by", "verified_by", None, True, {
+            ("pre_existing", True, "motivated_by", "informed_by", "preceded_by", "verified_by", None, True, {
                 "status": "incomplete",
                 "missing": ["decision"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "motivated_by", "informed_by", "preceded_by", "verified_by", "references", True, {
+            ("pre_existing", True, "motivated_by", "informed_by", "preceded_by", "verified_by", "references", True, {
                 "status": "incomplete",
                 "missing": ["decision"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "references", "informed_by", "preceded_by", "verified_by", "applies", True, {
+            ("pre_existing", True, "references", "informed_by", "preceded_by", "verified_by", "applies", True, {
                 "status": "incomplete",
                 "missing": ["requirement"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "motivated_by", "references", "preceded_by", "verified_by", "applies", True, {
+            ("pre_existing", True, "motivated_by", "references", "preceded_by", "verified_by", "applies", True, {
                 "status": "incomplete",
                 "missing": ["context"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "motivated_by", "informed_by", "references", "verified_by", "applies", True, {
+            ("pre_existing", True, "motivated_by", "informed_by", "references", "verified_by", "applies", True, {
                 "status": "incomplete",
                 "missing": ["tool"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "motivated_by", "informed_by", "preceded_by", "references", "applies", True, {
+            ("pre_existing", False, "motivated_by", "informed_by", "preceded_by", "references", "applies", True, {
                 "status": "incomplete",
                 "missing": ["verification"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "motivated_by", "informed_by", "preceded_by", "verified_by", "applies", False, {
+            ("pre_existing", True, "motivated_by", "informed_by", "preceded_by", "verified_by", "applies", False, {
                 "status": "incomplete",
                 "missing": ["tool"],
                 "unresolved_count": 0,
             }),
-            ("pre_existing", "motivated_by", "informed_by", "preceded_by", "verified_by", "applies", True, {
+            ("pre_existing", False, "motivated_by", "informed_by", "preceded_by", "verified_by", "applies", True, {
+                "status": "incomplete",
+                "missing": [],
+                "unresolved_count": 0,
+                "failed_verification_count": 1,
+            }),
+            ("pre_existing", True, "motivated_by", "informed_by", "preceded_by", "verified_by", "applies", True, {
                 "status": "complete",
                 "missing": [],
                 "unresolved_count": 0,
@@ -794,6 +801,7 @@ class ServeTests(unittest.TestCase):
         ):
             with self.subTest(
                 test_origin=test_origin,
+                passed=passed,
                 requirement_relationship=requirement_relationship,
                 context_relationship=context_relationship,
                 tool_relationship=tool_relationship,
@@ -801,7 +809,7 @@ class ServeTests(unittest.TestCase):
                 decision_relationship=decision_relationship,
                 include_tool_detail=include_tool_detail,
             ):
-                verification = {"command": "pytest", "passed": True}
+                verification = {"command": "pytest", "passed": passed}
                 if test_origin is not None:
                     verification["test_origin"] = test_origin
                 targets = [

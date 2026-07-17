@@ -1775,11 +1775,12 @@
           : coverage.unresolved_count;
         const unknownTestOriginCount = coverage.unknown_test_origin_count || 0;
         const sameAgentTestCount = coverage.same_agent_test_count || 0;
+        const failedVerificationCount = coverage.failed_verification_count || 0;
         const completeness = document.createElement('div');
-        const incomplete = missing.length || unresolvedCount || unknownTestOriginCount || sameAgentTestCount;
+        const incomplete = missing.length || unresolvedCount || unknownTestOriginCount || sameAgentTestCount || failedVerificationCount;
         completeness.className = `evidence-completeness${incomplete ? ' incomplete' : ''}`;
         completeness.textContent = incomplete
-          ? `Evidence incomplete · ${missing.length} missing categor${missing.length === 1 ? 'y' : 'ies'} · ${unresolvedCount} unresolved reference${unresolvedCount === 1 ? '' : 's'} · ${unknownTestOriginCount} test${unknownTestOriginCount === 1 ? '' : 's'} with unknown provenance · ${sameAgentTestCount} same-agent test${sameAgentTestCount === 1 ? '' : 's'}`
+          ? `Evidence incomplete · ${missing.length} missing categor${missing.length === 1 ? 'y' : 'ies'} · ${unresolvedCount} unresolved reference${unresolvedCount === 1 ? '' : 's'} · ${unknownTestOriginCount} test${unknownTestOriginCount === 1 ? '' : 's'} with unknown provenance · ${sameAgentTestCount} same-agent test${sameAgentTestCount === 1 ? '' : 's'} · ${failedVerificationCount} failed verification${failedVerificationCount === 1 ? '' : 's'}`
           : 'Core evidence complete';
         block.append(completeness);
         wrap.append(block);
