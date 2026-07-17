@@ -730,6 +730,17 @@ class ServeTests(unittest.TestCase):
 
         change = store.run_detail("trace-1")["evidence_map"]["changes"][0]
 
+        chronology_by_event = {
+            link["target_event_id"]: link["chronology"]
+            for link in change["links"]
+            if link["target_kind"].startswith("tool.call.")
+        }
+        self.assertEqual(chronology_by_event, {
+            "tool-same-time": "after_decision",
+            "tool-clock-skew": "after_decision",
+            "tool-other-emitter": "undetermined",
+            "tool-after-decision": "after_decision",
+        })
         self.assertEqual(change["unresolved"], [
             {
                 "type": "preceded_by",

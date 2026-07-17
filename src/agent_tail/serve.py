@@ -967,6 +967,18 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
                     resolved["context"] = context
                 tool = _tool_call_detail(target)
                 if tool is not None:
+                    if (
+                        source.kind == "change.applied"
+                        and relationship.type == "preceded_by"
+                        and target.kind.startswith("tool.call.")
+                    ):
+                        boundary = earliest_decision or source
+                        boundary_name = "decision" if earliest_decision else "change"
+                        resolved["chronology"] = _evidence_chronology(
+                            target,
+                            boundary,
+                            boundary_name,
+                        )
                     resolved["tool"] = tool
                 compaction = _context_compaction_detail(target, events_by_id)
                 if compaction is not None:

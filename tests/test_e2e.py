@@ -1332,6 +1332,16 @@ class ServeEndToEndTests(unittest.TestCase):
                     attributes={"tool": {"command": "git diff --check"}},
                 )) + "\n",
                 json.dumps(event_data(
+                    event_id="tool-undetermined",
+                    emitter_id="concurrent-tool-worker",
+                    span_id="span-concurrent-tool",
+                    sequence=1,
+                    timestamp="2026-07-13T11:01:00Z",
+                    kind="tool.call.completed",
+                    actor={"id": "concurrent-runner"},
+                    attributes={"tool": {"command": "git status --short"}},
+                )) + "\n",
+                json.dumps(event_data(
                     event_id="compaction-before-decision",
                     emitter_id="early-compaction-worker",
                     span_id="span-early-compaction",
@@ -1374,6 +1384,7 @@ class ServeEndToEndTests(unittest.TestCase):
                         {"type": "informed_by", "event_id": "compaction-before-decision"},
                         {"type": "informed_by", "event_id": "compaction-after-decision"},
                         {"type": "preceded_by", "event_id": "tool-after-decision"},
+                        {"type": "preceded_by", "event_id": "tool-undetermined"},
                     ],
                 )) + "\n",
             )), encoding="utf-8")
@@ -1442,6 +1453,11 @@ class ServeEndToEndTests(unittest.TestCase):
                 expect(late_requirement_diagnostic).to_contain_text("requirement.observed")
                 late_tool = evidence.locator(".tool-card").filter(has_text="git diff --check")
                 expect(late_tool).to_contain_text("late-runner")
+                undetermined_tool = evidence.locator(".tool-card").filter(
+                    has_text="git status --short"
+                )
+                expect(undetermined_tool).to_contain_text("concurrent-runner")
+                expect(undetermined_tool).to_contain_text("tool chronology undetermined")
                 late_tool_diagnostic = evidence.locator(".unresolved-evidence").filter(
                     has_text="tool-after-decision"
                 )
