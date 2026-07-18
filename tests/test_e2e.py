@@ -1,4 +1,5 @@
 import json
+import importlib.util
 from pathlib import Path
 import socket
 import subprocess
@@ -28,6 +29,155 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
+    def test_langgraph_adapter_process_to_browser_change_and_failure_journey(self):
+        if importlib.util.find_spec("langgraph") is None:
+            self.skipTest("LangGraph extra is not installed")
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "langgraph.jsonl")
+            producer = """
+import sys
+from uuid import UUID
+from agent_tail import AgentTailCallbackHandler
+from langgraph.graph import END, START, StateGraph
+from typing_extensions import TypedDict
+
+output = sys.argv[1]
+root = UUID(int=700)
+class State(TypedDict):
+    value: int
+
+def failing_node(state):
+    context_id = callback.emit_context_read(
+        run_id=root,
+        evidence_id="browser-context",
+        path="src/browser.py",
+        line_start=5,
+        line_end=8,
+    )
+    verification_id = callback.event_id(
+        root, "verification.finished", "browser-verification-finished"
+    )
+    callback.emit_change_applied(
+        run_id=root,
+        evidence_id="browser-change",
+        path="src/browser.py",
+        old_start=5,
+        old_count=2,
+        new_start=5,
+        new_count=3,
+        relationships=[
+            {"type": "informed_by", "event_id": context_id},
+            {"type": "verified_by", "event_id": verification_id},
+        ],
+    )
+    start_id = callback.emit_verification_started(
+        run_id=root,
+        evidence_id="browser-verification-started",
+        command="pytest tests/test_browser.py",
+        test_origin="pre_existing",
+    )
+    callback.emit_verification_finished(
+        run_id=root,
+        evidence_id="browser-verification-finished",
+        passed=True,
+        start_event_id=start_id,
+        exit_code=0,
+        test_origin="pre_existing",
+    )
+    raise RuntimeError("Bearer browser-boundary-secret")
+
+builder = StateGraph(State)
+builder.add_node("failing-node", failing_node)
+builder.add_edge(START, "failing-node")
+builder.add_edge("failing-node", END)
+graph = builder.compile()
+with AgentTailCallbackHandler(output) as callback:
+    try:
+        graph.invoke(
+            {"value": 1},
+            {"callbacks": [callback], "run_id": root},
+        )
+    except RuntimeError:
+        pass
+"""
+            produced = subprocess.run(
+                [sys.executable, "-c", producer, str(source)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(produced.returncode, 0, produced.stderr)
+            self.assertIn("browser-boundary-secret", source.read_text(encoding="utf-8"))
+
+            port = _free_port()
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "agent_tail",
+                    "serve",
+                    str(source),
+                    "--port",
+                    str(port),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+            base_url = f"http://127.0.0.1:{port}"
+            runs = json.loads(urlopen(base_url + "/api/v1/runs", timeout=3).read())
+            trace_id = runs["runs"][0]["trace_id"]
+            detail = json.loads(
+                urlopen(base_url + f"/api/v1/runs/{trace_id}", timeout=3).read()
+            )
+            self.assertNotIn("browser-boundary-secret", json.dumps(detail))
+            self.assertIn("[REDACTED]", json.dumps(detail))
+            self.assertEqual(len(detail["evidence_map"]["changes"]), 1)
+            failed_event = next(
+                event
+                for event in detail["events"]
+                if event["kind"] == "agent.failed"
+                and event["operation"]["name"] == "failing-node"
+            )
+            change_event = next(
+                event for event in detail["events"]
+                if event["kind"] == "change.applied"
+            )
+            self.assertEqual(
+                next(
+                    actor["status"]
+                    for actor in detail["actors"]
+                    if actor["id"] == failed_event["actor"]["id"]
+                ),
+                "failed",
+            )
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.goto(base_url, wait_until="domcontentloaded")
+                expect(page.locator(".node-wrap")).to_have_count(2)
+                self.assertNotIn("browser-boundary-secret", page.content())
+                page.locator(".node-wrap").filter(
+                    has_text=failed_event["actor"]["id"]
+                ).click()
+                expect(page.locator("#inspector")).to_contain_text("error")
+                page.locator(".node-wrap").filter(
+                    has_text=change_event["actor"]["id"]
+                ).click()
+                page.evaluate("""() => {
+                  [...document.querySelectorAll('.event-row')]
+                    .find((row) => row.textContent.includes('change.applied')).click();
+                }""")
+                evidence = page.locator(".change-evidence")
+                expect(evidence).to_contain_text("CHANGE EVIDENCE")
+                expect(evidence).to_contain_text("src/browser.py:5-7")
+                expect(evidence).to_contain_text("pytest tests/test_browser.py")
+                browser.close()
+
     def test_change_inspector_shows_evidence_and_human_corrections_safely(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "change-evidence.jsonl")

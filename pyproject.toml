@@ -9,6 +9,7 @@ description = "Local causal timeline for agent runs"
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
+langgraph = ["langgraph>=1.0.1,<2"]
 test = ["playwright>=1.45"]
 
 [project.scripts]

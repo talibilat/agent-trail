@@ -5,6 +5,8 @@ Version 1 directly supports the canonical JSONL emitted by this runtime from a f
 
 Import standard OpenTelemetry OTLP JSON with `agent-tail import otel traces.json --output run.jsonl`.
 See [OpenTelemetry OTLP JSON import](docs/opentelemetry-import.md) for mapping, stream, diagnostics, and artifact-safety details.
+Capture LangGraph runs directly with the optional `AgentTailCallbackHandler` adapter.
+See [LangGraph callback adapter](docs/langgraph-adapter.md) for installation, callback mapping, evidence helpers, and a complete local workflow.
 
 ## Install
 
