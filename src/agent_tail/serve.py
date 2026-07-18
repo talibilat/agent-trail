@@ -4,6 +4,7 @@ from collections import deque
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import json
+import os
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -131,8 +132,10 @@ class RunStore:
                 line,
                 full_payloads=full_payloads,
                 unsafe_unredacted=unsafe_unredacted,
+                defer_uncertainty_projection=True,
             )
         store.set_source_status(connected=False, state="disconnected")
+        store.finalize_initial_uncertainty()
         return store
 
     @property
@@ -146,6 +149,7 @@ class RunStore:
         *,
         full_payloads: bool = False,
         unsafe_unredacted: bool = False,
+        defer_uncertainty_projection: bool = False,
     ) -> Event | None:
         with self._condition:
             prior_error_count = len(self._reader.all_errors)
@@ -172,7 +176,7 @@ class RunStore:
             self._index.add(safe)
             eviction_count = self._index.eviction_count
             if eviction_count != self._last_eviction_count:
-                self._sync_payload_details()
+                self._sync_payload_details(self._index.recent_evictions)
                 self._last_eviction_count = eviction_count
             terminal_state = _terminal_state(safe)
             if terminal_state:
@@ -185,8 +189,29 @@ class RunStore:
                     event_id=safe.event_id,
                     trace_id=safe.trace_id,
                 )
-            self._publish("event", self._event_message(safe))
+            uncertainty = False if defer_uncertainty_projection else None
+            self._publish("event", self._event_message(safe, uncertainty))
             return safe
+
+    def finalize_initial_uncertainty(self) -> None:
+        with self._condition:
+            uncertainty_by_event_id = {}
+            trace_ids = dict.fromkeys(event.trace_id for event in self._index.events)
+            for trace_id in trace_ids:
+                view = self._index.trace(trace_id)
+                uncertainty_by_event_id.update(
+                    (event.event_id, event.event_id in view.uncertain_event_ids)
+                    for event in view.events
+                )
+            for update in self._updates:
+                if update.get("type") != "event":
+                    continue
+                data = update.get("data")
+                if not isinstance(data, dict):
+                    continue
+                event_id = data.get("event_id")
+                if event_id in uncertainty_by_event_id:
+                    data["uncertain"] = uncertainty_by_event_id[event_id]
 
     def add_finding(
         self,
@@ -389,16 +414,12 @@ class RunStore:
                     }
             return None
 
-    def _sync_payload_details(self) -> None:
-        retained_keys = set()
-        for event in self._index.events:
-            key = (event.trace_id, event.event_id)
-            retained_keys.add(key)
-            payload = event.raw.get("payload")
-            if isinstance(payload, dict) and set(payload) == {"_agent_tail"}:
-                self._payload_details.pop(key, None)
-        for key in set(self._payload_details) - retained_keys:
-            self._payload_details.pop(key, None)
+    def _sync_payload_details(
+        self,
+        evictions: Iterable[tuple[str, str, str]],
+    ) -> None:
+        for trace_id, event_id, _ in evictions:
+            self._payload_details.pop((trace_id, event_id), None)
 
     def _warning_now(self, events: Iterable[Event]) -> datetime:
         event_list = list(events)
@@ -537,7 +558,6 @@ def serve_file(
     config: ServeConfig,
     open_url: Callable[[str], object] | None = None,
 ) -> int:
-    path.open(encoding="utf-8").close()
     store = RunStore(
         TraceIndex(
             loop_threshold=config.loop_threshold,
@@ -549,8 +569,38 @@ def serve_file(
         metadata_only=config.metadata_only,
         max_live_updates=config.max_live_updates,
     )
+    store.set_source_status(connected=True, state="reading")
+    initial_position = 0
+    with path.open(encoding="utf-8") as source:
+        initial_stat = os.fstat(source.fileno())
+        initial_identity = (initial_stat.st_dev, initial_stat.st_ino)
+        while True:
+            position = source.tell()
+            line = source.readline()
+            if not line:
+                initial_position = position
+                break
+            if not line.endswith("\n"):
+                initial_position = position
+                break
+            initial_position = source.tell()
+            store.feed_line(
+                line,
+                full_payloads=config.full_payloads,
+                unsafe_unredacted=config.unsafe_unredacted,
+                defer_uncertainty_projection=True,
+            )
+    store.set_source_status(connected=True, state="caught_up")
+    store.finalize_initial_uncertainty()
     stop = threading.Event()
-    reader = start_file_follower(path, store, config=config, stop=stop)
+    reader = start_file_follower(
+        path,
+        store,
+        config=config,
+        stop=stop,
+        initial_position=initial_position,
+        initial_identity=initial_identity,
+    )
     try:
         return _serve_store(store, config=config, open_url=open_url)
     finally:
@@ -597,11 +647,21 @@ def start_file_follower(
     config: ServeConfig,
     stop: threading.Event | None = None,
     poll_seconds: float = 0.05,
+    initial_position: int = 0,
+    initial_identity: tuple[int, int] | None = None,
 ) -> threading.Thread:
     stop = stop or threading.Event()
     thread = threading.Thread(
         target=_follow_file,
-        args=(path, store, config, stop, poll_seconds),
+        args=(
+            path,
+            store,
+            config,
+            stop,
+            poll_seconds,
+            initial_position,
+            initial_identity,
+        ),
         daemon=True,
     )
     thread.start()
@@ -614,12 +674,15 @@ def _follow_file(
     config: ServeConfig,
     stop: threading.Event,
     poll_seconds: float,
+    initial_position: int = 0,
+    initial_identity: tuple[int, int] | None = None,
 ) -> None:
     store.set_source_status(connected=True, state="reading")
     source = path.open(encoding="utf-8")
-    position = 0
     stat = path.stat()
     identity = (stat.st_dev, stat.st_ino)
+    position = initial_position if initial_identity in {None, identity} else 0
+    source.seek(position)
     try:
         while not stop.is_set():
             line = source.readline()

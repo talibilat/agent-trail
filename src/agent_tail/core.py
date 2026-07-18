@@ -437,16 +437,26 @@ class TraceIndex:
         self._events: list[Event] = []
         self._event_ids: set[str] = set()
         self._sizes: dict[str, int] = {}
+        self._retained_bytes = 0
+        self._payload_eviction_position = 0
         self._eviction_warning: Warning | None = None
         self._eviction_count = 0
+        self._recent_evictions: tuple[tuple[str, str, str], ...] = ()
+        self._trace_cache: dict[str, TraceView] = {}
 
     def add(self, event: Event) -> None:
         if event.event_id in self._event_ids:
             raise ValueError(f"duplicate event ID: {event.event_id}")
         self._events.append(event)
         self._event_ids.add(event.event_id)
-        self._sizes[event.event_id] = self._event_size(event)
+        self._trace_cache.pop(event.trace_id, None)
+        size = self._event_size(event)
+        self._sizes[event.event_id] = size
+        self._retained_bytes += size
+        self._recent_evictions = ()
         self._evict()
+        if self._recent_evictions:
+            self._trace_cache.clear()
 
     @property
     def event_count(self) -> int:
@@ -457,6 +467,10 @@ class TraceIndex:
         return self._eviction_count
 
     @property
+    def recent_evictions(self) -> tuple[tuple[str, str, str], ...]:
+        return self._recent_evictions
+
+    @property
     def events(self) -> tuple[Event, ...]:
         return tuple(self._events)
 
@@ -464,6 +478,9 @@ class TraceIndex:
         return tuple(self._order(self._events)[0])
 
     def trace(self, trace_id: str) -> TraceView:
+        cached = self._trace_cache.get(trace_id)
+        if cached is not None:
+            return cached
         events = [event for event in self._events if event.trace_id == trace_id]
         ordered, uncertain, (_, descendants) = self._order(events)
         spans: dict[str, SpanState] = {}
@@ -543,7 +560,9 @@ class TraceIndex:
                 len(maxima) != 1,
             )
 
-        return TraceView(tuple(ordered), frozenset(uncertain), actors, spans)
+        view = TraceView(tuple(ordered), frozenset(uncertain), actors, spans)
+        self._trace_cache[trace_id] = view
+        return view
 
     def warnings(self, *, now: str | datetime | None = None) -> tuple[Warning, ...]:
         return self.warning_analysis(now=now).warnings
@@ -866,9 +885,13 @@ class TraceIndex:
         )
 
     def _evict(self) -> None:
-        while sum(self._sizes.values()) > self.max_bytes:
+        recent_evictions = []
+        while self._retained_bytes > self.max_bytes:
             changed = False
-            for position, event in enumerate(self._events):
+            while self._payload_eviction_position < len(self._events):
+                position = self._payload_eviction_position
+                self._payload_eviction_position += 1
+                event = self._events[position]
                 raw = event.raw
                 payload = raw.get("payload")
                 if not isinstance(payload, dict) or set(payload) == {"_agent_tail"}:
@@ -882,17 +905,24 @@ class TraceIndex:
                     continue
                 self._events[position] = smaller
                 self._sizes[event.event_id] = smaller_size
+                self._retained_bytes -= old_size - smaller_size
                 self._record_eviction(
                     event, "payload", old_size - self._sizes[event.event_id]
                 )
+                recent_evictions.append((event.trace_id, event.event_id, "payload"))
                 changed = True
                 break
             if changed:
                 continue
             event = self._events.pop(0)
+            if self._payload_eviction_position:
+                self._payload_eviction_position -= 1
             size = self._sizes.pop(event.event_id)
+            self._retained_bytes -= size
             self._event_ids.remove(event.event_id)
             self._record_eviction(event, "metadata", size)
+            recent_evictions.append((event.trace_id, event.event_id, "metadata"))
+        self._recent_evictions = tuple(recent_evictions)
 
     def _record_eviction(self, event: Event, evicted: str, bytes_freed: int) -> None:
         self._eviction_count += 1

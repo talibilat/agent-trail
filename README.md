@@ -51,6 +51,7 @@ PYTHONPATH=src python -m unittest tests.test_e2e
 
 The automated release matrix drives installed stable Chrome plus Playwright Firefox and WebKit.
 Stable Safari must allow JavaScript from Apple Events or SafariDriver automation before its full installed-browser journey can be automated; without that local setting, release verification is limited to loading the dashboard in installed Safari and the passing WebKit journey.
+See [10,000-event performance envelope](docs/performance-envelope.md) for release thresholds, fixture semantics, and exact reproduction commands.
 
 ## Read Events
 

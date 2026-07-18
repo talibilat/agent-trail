@@ -7,9 +7,17 @@ import sys
 import tempfile
 import time
 import unittest
+import venv
 from urllib.request import urlopen
 
 from playwright.sync_api import expect, sync_playwright
+
+from tests.performance_fixture import (
+    HIGH_BUDGET_BYTES,
+    LATE_EVENT_ID,
+    TRACE_ID,
+    write_fixture,
+)
 
 def event_data(**changes):
     data = {
@@ -2462,46 +2470,109 @@ with AgentTailCallbackHandler(output) as callback:
         self.assertIn("event evt-1", result.stdout)
 
     def test_large_projection_performance_envelope(self):
-        with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory, "large.jsonl")
-            lines = []
-            for sequence in range(500):
-                actor_id = f"agent-{sequence % 300:03d}"
-                lines.append(json.dumps(event_data(
-                    event_id=f"evt-{sequence}",
-                    span_id=f"span-{sequence}",
-                    actor={"id": actor_id},
-                    sequence=sequence,
-                    timestamp=f"2026-07-13T11:{sequence // 60 % 60:02d}:{sequence % 60:02d}Z",
-                )) + "\n")
-            source.write_text("".join(lines), encoding="utf-8")
+        project_root = Path(__file__).parents[1]
+        with tempfile.TemporaryDirectory() as directory, sync_playwright() as playwright:
+            temporary = Path(directory)
+            source = temporary / "performance-10k.jsonl"
+            write_fixture(source)
+            environment = temporary / "installed"
+            venv.EnvBuilder(with_pip=True).create(environment)
+            installed_python = environment / "bin" / "python"
+            installed_command = environment / "bin" / "agent-tail"
+            installation = subprocess.run(
+                [str(installed_python), "-m", "pip", "install", "--no-deps", str(project_root)],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            self.assertEqual(installation.returncode, 0, installation.stderr)
+
+            browser = playwright.chromium.launch(headless=True)
             port = _free_port()
+            started = time.perf_counter()
             process = subprocess.Popen(
-                [sys.executable, "-m", "agent_tail", "serve", str(source), "--port", str(port)],
+                [
+                    str(installed_command),
+                    "serve",
+                    str(source),
+                    "--port",
+                    str(port),
+                    "--max-bytes",
+                    str(HIGH_BUDGET_BYTES),
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
+                cwd=temporary,
             )
             self.addCleanup(_stop_process, process)
             _wait_for_server_line(process)
+            base_url = f"http://127.0.0.1:{port}"
+            deadline = started + 10.0
+            while time.perf_counter() < deadline:
+                runs = json.loads(urlopen(base_url + "/api/v1/runs", timeout=2).read())
+                if runs["runs"] and runs["runs"][0]["event_count"] == 10_000:
+                    break
+                time.sleep(0.05)
+            else:
+                self.fail("installed serve command did not ingest 10,000 events in 10 seconds")
 
-            with sync_playwright() as playwright:
-                browser = playwright.chromium.launch(headless=True)
-                page = browser.new_page()
-                started = time.perf_counter()
-                page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
-                expect(page.locator(".node-wrap")).to_have_count(160, timeout=10_000)
-                first_useful_paint = time.perf_counter() - started
-                page.locator('[data-action="show-more"]').click()
-                expect(page.locator(".node-wrap")).to_have_count(200)
-                page.locator('[data-action="show-more"]').click()
-                expect(page.locator(".node-wrap")).to_have_count(240)
-                page.get_by_role("button", name="Tree", exact=True).click()
-                expect(page.locator(".node-wrap")).to_have_count(240)
-                browser.close()
+            page = browser.new_page(viewport={"width": 700, "height": 900})
+            page.goto(base_url, wait_until="domcontentloaded")
+            expect(page.locator(".node-wrap")).to_have_count(40, timeout=10_000)
+            first_useful_view_seconds = time.perf_counter() - started
+            self.assertLess(first_useful_view_seconds, 10.0)
 
-        self.assertLess(first_useful_paint, 10.0)
+            reveal_started = time.perf_counter()
+            page.locator('[data-action="show-more"]').click()
+            expect(page.locator(".node-wrap")).to_have_count(80)
+            progressive_reveal_seconds = time.perf_counter() - reveal_started
+
+            search_started = time.perf_counter()
+            page.set_viewport_size({"width": 1280, "height": 900})
+            page.get_by_role("button", name="Swimlane", exact=True).click()
+            page.locator("#search").fill(LATE_EVENT_ID)
+            expect(page.locator(".lane-row")).to_have_count(1)
+            page.locator(".lane-row").click()
+            page.locator(".event-row").first.click()
+            expect(page.locator("#inspector")).to_contain_text(LATE_EVENT_ID)
+            late_search_and_inspector_seconds = time.perf_counter() - search_started
+
+            switch_started = time.perf_counter()
+            page.locator("#search").fill("")
+            page.get_by_role("button", name="Tree", exact=True).click()
+            expect(page.locator(".node-wrap")).to_have_count(80)
+            view_switch_seconds = time.perf_counter() - switch_started
+
+            playback_started = time.perf_counter()
+            page.locator("#scrubber").evaluate(
+                "element => { element.value = '0'; element.dispatchEvent(new Event('input', { bubbles: true })); }"
+            )
+            expect(page.get_by_role("button", name="Jump to live")).to_be_visible()
+            page.locator("#scrubber").evaluate(
+                "element => { element.value = '1000'; element.dispatchEvent(new Event('input', { bubbles: true })); }"
+            )
+            expect(page.locator(".node-wrap")).to_have_count(80)
+            playback_to_end_seconds = time.perf_counter() - playback_started
+
+            for measured in (
+                progressive_reveal_seconds,
+                late_search_and_inspector_seconds,
+                view_switch_seconds,
+                playback_to_end_seconds,
+            ):
+                self.assertLess(measured, 10.0)
+            self.assertEqual(TRACE_ID, runs["runs"][0]["trace_id"])
+            print("browser performance envelope: " + json.dumps({
+                "first_useful_view_seconds": first_useful_view_seconds,
+                "late_search_and_inspector_seconds": late_search_and_inspector_seconds,
+                "playback_to_end_seconds": playback_to_end_seconds,
+                "progressive_reveal_seconds": progressive_reveal_seconds,
+                "view_switch_seconds": view_switch_seconds,
+            }, sort_keys=True))
+            browser.close()
 
     def test_otlp_import_opens_with_parentage_and_source_attributes(self):
         fixture = Path(__file__).parent / "fixtures" / "otel-traces.json"

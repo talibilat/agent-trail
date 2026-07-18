@@ -13,7 +13,14 @@ from unittest import mock
 
 from agent_tail import cli
 import agent_tail.serve as serve_module
-from agent_tail.serve import RunStore, ServeConfig, make_server, serve, start_file_follower
+from agent_tail.serve import (
+    RunStore,
+    ServeConfig,
+    make_server,
+    serve,
+    serve_file,
+    start_file_follower,
+)
 
 
 def event_data(**changes):
@@ -34,6 +41,80 @@ def event_data(**changes):
 
 
 class ServeTests(unittest.TestCase):
+    def _initial_uncertainty_lines(self):
+        return [
+            json.dumps(event_data(
+                event_id="causal-1",
+                trace_id="trace-causal",
+                span_id="causal-span-1",
+                emitter_id="causal-emitter",
+                sequence=1,
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="causal-2",
+                trace_id="trace-causal",
+                span_id="causal-span-2",
+                emitter_id="causal-emitter",
+                sequence=2,
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="uncertain-1",
+                trace_id="trace-uncertain",
+                span_id="uncertain-span-1",
+                emitter_id="uncertain-emitter-1",
+                sequence=1,
+            )) + "\n",
+            json.dumps(event_data(
+                event_id="uncertain-2",
+                trace_id="trace-uncertain",
+                span_id="uncertain-span-2",
+                emitter_id="uncertain-emitter-2",
+                sequence=1,
+            )) + "\n",
+        ]
+
+    def _assert_replayed_uncertainty_matches_detail(self, store):
+        stream = store.stream_updates(after=0)
+        replayed = [next(stream) for _ in range(store.cursor)]
+        replayed_uncertainty = {
+            update["data"]["event_id"]: update["data"]["uncertain"]
+            for update in replayed
+            if update["type"] == "event"
+        }
+        detail_uncertainty = {
+            event["event_id"]: event["uncertain"]
+            for trace_id in ("trace-causal", "trace-uncertain")
+            for event in store.run_detail(trace_id)["events"]
+        }
+
+        self.assertEqual(replayed_uncertainty, detail_uncertainty)
+        self.assertEqual(replayed_uncertainty["causal-1"], False)
+        self.assertEqual(replayed_uncertainty["causal-2"], False)
+        self.assertEqual(replayed_uncertainty["uncertain-1"], True)
+        self.assertEqual(replayed_uncertainty["uncertain-2"], True)
+
+    def test_from_lines_reconciles_replayed_initial_uncertainty(self):
+        store = RunStore.from_lines(self._initial_uncertainty_lines())
+
+        self._assert_replayed_uncertainty_matches_detail(store)
+
+    def test_serve_file_reconciles_replayed_initial_uncertainty(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "initial.jsonl")
+            source.write_text(
+                "".join(self._initial_uncertainty_lines()), encoding="utf-8"
+            )
+            captured = []
+            with mock.patch.object(
+                serve_module,
+                "_serve_store",
+                side_effect=lambda store, **_: captured.append(store) or 0,
+            ):
+                result = serve_file(source, config=ServeConfig(port=0))
+
+        self.assertEqual(result, 0)
+        self._assert_replayed_uncertainty_matches_detail(captured[0])
+
     def test_store_lists_and_details_sanitized_runs(self):
         secret = "ghp_" + "a" * 36
         store = RunStore.from_lines([
