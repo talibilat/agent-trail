@@ -512,6 +512,7 @@
     let playbackSpeed = 1;
     let cursor = 0;
     let events = null;
+    let reconnectTimer = null;
     let runMenuOpen = false;
     let dragPoint = null;
     let fitDone = { view: null, trace: null };
@@ -602,7 +603,7 @@
     }
 
     function renderRuns(data) {
-      cursor = data.cursor;
+      cursor = Math.max(cursor, data.cursor);
       if (selectedTraceId === null && data.runs.length) selectedTraceId = data.runs[0].trace_id;
       const current = data.runs.find((run) => run.trace_id === selectedTraceId) || data.runs[0];
       if (!current) {
@@ -2377,32 +2378,59 @@
 
     async function init() {
       try {
-        const data = await fetchJson('/api/v1/runs');
-        renderRuns(data);
-        if (selectedTraceId) {
-          const detail = await fetchJson(`/api/v1/runs/${encodeURIComponent(selectedTraceId)}`);
-          renderDetail(detail);
-        }
+        await refreshAuthoritative();
         connectEvents();
       } catch (error) {
         warningCountEl.textContent = '!';
         console.error('Failed to load runs', error);
-        setTimeout(init, 1500);
+        scheduleInit(1500);
       }
+    }
+
+    async function refreshAuthoritative() {
+      const data = await fetchJson('/api/v1/runs');
+      renderRuns(data);
+      if (selectedTraceId) {
+        const detail = await fetchJson(`/api/v1/runs/${encodeURIComponent(selectedTraceId)}`);
+        renderDetail(detail);
+      }
+    }
+
+    function scheduleInit(delay) {
+      if (reconnectTimer) return;
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        init();
+      }, delay);
     }
 
     function connectEvents() {
       if (events) events.close();
-      events = new EventSource(apiPath(`/api/v1/events?cursor=${cursor}`));
+      const stream = new EventSource(apiPath(`/api/v1/events?cursor=${cursor}`));
+      events = stream;
       const refresh = () => init();
-      events.addEventListener('event', refresh);
-      events.addEventListener('finding', refresh);
-      events.addEventListener('source', refresh);
-      events.addEventListener('heartbeat', refresh);
-      events.onerror = () => {
-        events.close();
+      stream.addEventListener('event', refresh);
+      stream.addEventListener('finding', refresh);
+      stream.addEventListener('source', refresh);
+      stream.addEventListener('heartbeat', refresh);
+      stream.addEventListener('reset', async (message) => {
+        if (events !== stream) return;
+        stream.close();
         events = null;
-        setTimeout(init, 1000);
+        cursor = JSON.parse(message.data).current_cursor;
+        try {
+          await refreshAuthoritative();
+          if (!events) connectEvents();
+        } catch (error) {
+          console.error('Failed to reset live history', error);
+          scheduleInit(1000);
+        }
+      });
+      stream.onerror = () => {
+        if (events !== stream) return;
+        stream.close();
+        events = null;
+        scheduleInit(1000);
       };
     }
 

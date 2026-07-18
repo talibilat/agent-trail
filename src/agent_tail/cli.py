@@ -48,6 +48,7 @@ def serve_parser() -> argparse.ArgumentParser:
     result.add_argument("--loop-threshold", type=int, default=4)
     result.add_argument("--stall-seconds", type=float, default=30.0)
     result.add_argument("--max-bytes", type=_positive_int, default=16 * 1024 * 1024)
+    result.add_argument("--max-live-updates", type=_positive_int, default=10_000)
     return result
 
 
@@ -147,6 +148,7 @@ def _serve_main(argv: list[str]) -> int:
         loop_threshold=arguments.loop_threshold,
         stall_seconds=arguments.stall_seconds,
         max_bytes=arguments.max_bytes,
+        max_live_updates=arguments.max_live_updates,
     )
     try:
         if arguments.input == "-":

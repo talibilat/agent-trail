@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import json
@@ -28,6 +29,15 @@ class ServeConfig:
     loop_threshold: int = 4
     stall_seconds: float = 30.0
     max_bytes: int = 16 * 1024 * 1024
+    max_live_updates: int = 10_000
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.max_live_updates, int)
+            or isinstance(self.max_live_updates, bool)
+            or self.max_live_updates <= 0
+        ):
+            raise ValueError("max_live_updates must be a positive integer")
 
 
 class RunStore:
@@ -37,7 +47,14 @@ class RunStore:
         errors: Iterable[IngestionError] = (),
         *,
         source_kind: str = "snapshot",
+        max_live_updates: int = 10_000,
     ) -> None:
+        if (
+            not isinstance(max_live_updates, int)
+            or isinstance(max_live_updates, bool)
+            or max_live_updates <= 0
+        ):
+            raise ValueError("max_live_updates must be a positive integer")
         self._reader = JSONLReader(retain_events=False)
         self._index = index
         if self._index is None:
@@ -54,7 +71,7 @@ class RunStore:
             "state": "idle",
         }
         self._cursor = 0
-        self._updates: list[dict[str, object]] = []
+        self._updates: deque[dict[str, object]] = deque(maxlen=max_live_updates)
         self._lock = threading.RLock()
         self._condition = threading.Condition(self._lock)
 
@@ -68,13 +85,18 @@ class RunStore:
         loop_threshold: int = 4,
         stall_seconds: float = 30.0,
         max_bytes: int = 16 * 1024 * 1024,
+        max_live_updates: int = 10_000,
     ) -> "RunStore":
         index = TraceIndex(
             loop_threshold=loop_threshold,
             stall_seconds=stall_seconds,
             max_bytes=max_bytes,
         )
-        store = cls(index, source_kind="snapshot")
+        store = cls(
+            index,
+            source_kind="snapshot",
+            max_live_updates=max_live_updates,
+        )
         for line in lines:
             store.feed_line(
                 line,
@@ -174,8 +196,26 @@ class RunStore:
         next_cursor = after + 1
         while True:
             heartbeat = None
+            reset = None
             with self._condition:
-                while self._cursor < next_cursor:
+                oldest = (
+                    int(self._updates[0]["cursor"])
+                    if self._updates
+                    else self._cursor + 1
+                )
+                if next_cursor < oldest or next_cursor > self._cursor + 1:
+                    reset = {
+                        "cursor": self._cursor,
+                        "type": "reset",
+                        "data": {
+                            "requested_cursor": next_cursor - 1,
+                            "oldest_retained_cursor": oldest,
+                            "current_cursor": self._cursor,
+                            "reason": "history_gap",
+                        },
+                    }
+                    pending = []
+                elif self._cursor < next_cursor:
                     self._condition.wait(timeout=15)
                     if self._cursor < next_cursor:
                         heartbeat = {
@@ -183,14 +223,15 @@ class RunStore:
                             "type": "heartbeat",
                             "data": {},
                         }
-                        break
-                if heartbeat is not None:
                     pending = []
                 else:
                     pending = [
                         update for update in self._updates
                         if update["cursor"] >= next_cursor
                     ]
+            if reset is not None:
+                yield reset
+                return
             if heartbeat is not None:
                 yield heartbeat
                 continue
@@ -440,6 +481,7 @@ def serve(
             max_bytes=config.max_bytes,
         ),
         source_kind="stdin",
+        max_live_updates=config.max_live_updates,
     )
     reader = threading.Thread(
         target=_read_stream,
@@ -464,6 +506,7 @@ def serve_file(
             max_bytes=config.max_bytes,
         ),
         source_kind="file",
+        max_live_updates=config.max_live_updates,
     )
     stop = threading.Event()
     reader = start_file_follower(path, store, config=config, stop=stop)

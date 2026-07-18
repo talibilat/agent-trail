@@ -1,6 +1,8 @@
 import io
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -69,6 +71,48 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(detail["events"][0]["relationships"], expected)
         self.assertEqual(update["type"], "event")
         self.assertEqual(update["data"]["relationships"], expected)
+
+    def test_live_update_journal_bounds_history_and_replays_retained_boundary(self):
+        store = RunStore(max_live_updates=3)
+        for number in range(1, 5):
+            store.add_finding("test", f"FINDING_{number}", f"finding {number}")
+
+        retained = store.stream_updates(after=1)
+
+        self.assertEqual(
+            [next(retained)["cursor"] for _ in range(3)],
+            [2, 3, 4],
+        )
+        self.assertEqual(len(store._updates), 3)
+        self.assertEqual(store.cursor, 4)
+
+    def test_stale_and_future_cursors_reset_without_advancing_cursor(self):
+        store = RunStore(max_live_updates=2)
+        for number in range(1, 4):
+            store.add_finding("test", f"FINDING_{number}", f"finding {number}")
+
+        for requested in (0, 4):
+            with self.subTest(requested=requested):
+                update = next(store.stream_updates(after=requested))
+                self.assertEqual(update, {
+                    "cursor": 3,
+                    "type": "reset",
+                    "data": {
+                        "requested_cursor": requested,
+                        "oldest_retained_cursor": 2,
+                        "current_cursor": 3,
+                        "reason": "history_gap",
+                    },
+                })
+                self.assertEqual(store.cursor, 3)
+
+    def test_live_update_limits_must_be_positive_in_config_and_store(self):
+        for value in (0, -1, True, 1.5, "10"):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "positive integer"):
+                    ServeConfig(max_live_updates=value)
+                with self.assertRaisesRegex(ValueError, "positive integer"):
+                    RunStore(max_live_updates=value)
 
     def test_run_evidence_map_resolves_forward_references_and_reports_missing(self):
         store = RunStore()
@@ -5105,7 +5149,10 @@ class ServeTests(unittest.TestCase):
         self.assertIn('Load retained payload', html)
         self.assertIn('cost_usd', html)
         self.assertIn('detected_at', html)
-        self.assertIn("events.addEventListener('heartbeat'", html)
+        self.assertIn("stream.addEventListener('heartbeat'", html)
+        self.assertIn("stream.addEventListener('reset'", html)
+        self.assertIn("await refreshAuthoritative()", html)
+        self.assertIn("if (!events) connectEvents()", html)
         self.assertIn('renderWarningsDrawer', html)
         self.assertIn('renderSwimlane', html)
         self.assertIn('renderSequence', html)
@@ -5212,6 +5259,31 @@ class ServeTests(unittest.TestCase):
             len({event["event_id"] for event in reconnected_detail["events"]}),
             3,
         )
+
+    def test_http_sse_returns_typed_reset_for_history_gap(self):
+        store = RunStore(max_live_updates=2)
+        for number in range(1, 4):
+            store.add_finding("test", f"FINDING_{number}", f"finding {number}")
+        server = make_server(store, host="127.0.0.1", port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        base_url = f"http://{server.server_address[0]}:{server.server_address[1]}"
+
+        response = urlopen(base_url + "/api/v1/events?cursor=0", timeout=2)
+        frame = _read_sse_frame(response)
+        response.close()
+
+        self.assertEqual(frame["id"], "3")
+        self.assertEqual(frame["event"], "reset")
+        self.assertEqual(frame["data"], {
+            "requested_cursor": 0,
+            "oldest_retained_cursor": 2,
+            "current_cursor": 3,
+            "reason": "history_gap",
+        })
+        self.assertEqual(store.cursor, 3)
 
     def test_file_follower_waits_for_complete_jsonl_lines(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -5475,6 +5547,16 @@ class ServeTests(unittest.TestCase):
         serve.assert_called_once()
         self.assertEqual(serve.call_args.kwargs["config"].host, "127.0.0.1")
         self.assertEqual(serve.call_args.kwargs["config"].port, 0)
+        self.assertEqual(serve.call_args.kwargs["config"].max_live_updates, 10_000)
+
+        with mock.patch.object(cli, "serve", return_value=0) as configured_serve:
+            result = cli.main(["serve", "-", "--max-live-updates", "25"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            configured_serve.call_args.kwargs["config"].max_live_updates,
+            25,
+        )
 
     def test_serve_prints_generated_token_url_and_honors_browser_open(self):
         class FakeServer:
@@ -5514,6 +5596,27 @@ class ServeTests(unittest.TestCase):
 
         self.assertEqual(result, 2)
 
+    def test_serve_cli_max_live_updates_must_be_positive(self):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "agent_tail",
+                "serve",
+                "-",
+                "--max-live-updates",
+                "0",
+            ],
+            input="",
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("must be a positive integer", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_default_cli_path_still_accepts_file_input(self):
         source = Path(__file__).parent / "fixtures" / "runtime.jsonl"
         stdout = io.StringIO()
@@ -5543,6 +5646,19 @@ def _read_sse_data(response) -> dict[str, object]:
         if line.startswith("data: "):
             return json.loads(line.removeprefix("data: "))
     raise AssertionError("SSE data frame was not received")
+
+
+def _read_sse_frame(response) -> dict[str, object]:
+    frame = {}
+    for _ in range(50):
+        line = response.readline().decode("utf-8").rstrip("\n")
+        if not line:
+            if frame:
+                return frame
+            continue
+        key, value = line.split(": ", 1)
+        frame[key] = json.loads(value) if key == "data" else value
+    raise AssertionError("SSE frame was not received")
 
 
 if __name__ == "__main__":

@@ -1795,6 +1795,85 @@ class ServeEndToEndTests(unittest.TestCase):
                 page.get_by_role("button", name="Jump to live").click()
                 browser.close()
 
+    def test_browser_reset_preserves_selection_and_reconnects_without_duplicates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "reset.jsonl")
+            source.write_text("".join((
+                json.dumps(event_data()) + "\n",
+                json.dumps(event_data(
+                    event_id="trace-2-event",
+                    trace_id="trace-2",
+                    span_id="trace-2-span",
+                )) + "\n",
+            )), encoding="utf-8")
+            port = _free_port()
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "agent_tail",
+                    "serve",
+                    str(source),
+                    "--port",
+                    str(port),
+                    "--max-live-updates",
+                    "2",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page()
+                event_stream_urls = []
+                page.on(
+                    "request",
+                    lambda request: event_stream_urls.append(request.url)
+                    if "/api/v1/events?cursor=" in request.url
+                    else None,
+                )
+                page.goto(
+                    f"http://127.0.0.1:{port}",
+                    wait_until="domcontentloaded",
+                )
+                page.locator("#run-picker-btn").click()
+                page.locator(".run-menu button.run-row").filter(
+                    has_text="trace-2"
+                ).click()
+                expect(page.locator("#run-picker-btn")).to_contain_text("trace-2")
+
+                page.evaluate("() => { cursor = 999; connectEvents(); }")
+                page.wait_for_function("cursor < 999 && events !== null")
+
+                expect(page.locator("#run-picker-btn")).to_contain_text("trace-2")
+                self.assertEqual(
+                    sum("cursor=999" in url for url in event_stream_urls),
+                    1,
+                )
+                with source.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(event_data(
+                        event_id="trace-2-live",
+                        trace_id="trace-2",
+                        span_id="trace-2-live-span",
+                        sequence=2,
+                    )) + "\n")
+                page.wait_for_function(
+                    "currentDetail.events.some((event) => event.event_id === 'trace-2-live')"
+                )
+                self.assertEqual(
+                    page.evaluate(
+                        "currentDetail.events.map((event) => event.event_id)"
+                    ),
+                    ["trace-2-event", "trace-2-live"],
+                )
+                expect(page.locator("#run-picker-btn")).to_contain_text("trace-2")
+                browser.close()
+
     def test_primary_journey_in_chrome_firefox_and_webkit(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "cross-browser.jsonl")

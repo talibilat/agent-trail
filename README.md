@@ -24,6 +24,8 @@ agent-tail serve run.jsonl
 
 Use `--open` to open the printed URL automatically, or choose a loopback port with `--port`.
 The server follows regular files after reaching the current EOF and receives new standard-input events until stdin disconnects.
+Live reconnect history is bounded to 10,000 updates by default and can be tuned with the positive `--max-live-updates` option.
+Clients outside retained history receive a reset signal and reload authoritative run state; see [Bounded live history](docs/bounded-live-history.md).
 
 The server binds to `127.0.0.1` by default.
 A non-loopback host requires `--remote-access`, prints a prominent warning, and generates a token-protected launch URL.
