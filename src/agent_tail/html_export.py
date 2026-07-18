@@ -33,8 +33,14 @@ def render_html(
     errors: Iterable[IngestionError],
     *,
     generated_at: str | None = None,
+    metadata_only: bool = False,
 ) -> str:
-    store = RunStore(index, errors, source_kind="export")
+    store = RunStore(
+        index,
+        errors,
+        source_kind="export",
+        metadata_only=metadata_only,
+    )
     store.set_source_status(connected=False, state="embedded")
     runs = store.list_runs()
     details: dict[str, object] = {}
@@ -49,7 +55,11 @@ def render_html(
         "agent_tail_version": _package_version(),
         "schema_versions": sorted({event.schema_version for event in index.events}),
         "redaction_ruleset": "1",
-        "export_mode": "sanitized embedded snapshot",
+        "export_mode": (
+            "metadata-only sanitized embedded snapshot"
+            if metadata_only
+            else "sanitized embedded snapshot"
+        ),
         "payload_retention": _payload_retention(index),
         "generated_at": generated_at,
     }
@@ -134,7 +144,9 @@ def _payload_retention(index: TraceIndex) -> dict[str, int]:
             counts["absent"] += 1
             continue
         metadata = payload.get("_agent_tail") if isinstance(payload, dict) else None
-        if isinstance(payload, dict) and set(payload) == {"_agent_tail"}:
+        if isinstance(metadata, dict) and metadata.get("omitted") is True:
+            counts["omitted"] = counts.get("omitted", 0) + 1
+        elif isinstance(payload, dict) and set(payload) == {"_agent_tail"}:
             counts["evicted"] += 1
         elif isinstance(metadata, dict) and metadata.get("truncated"):
             counts["truncated"] += 1

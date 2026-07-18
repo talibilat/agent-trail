@@ -156,6 +156,20 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(index.events[0].raw, before)
         self.assertIn("_agent_tail", index.events[0].raw["payload"])
 
+    def test_metadata_only_snapshot_labels_omitted_payload(self):
+        index = TraceIndex()
+        index.add(sanitize_event(
+            Event.from_dict(event_data(payload={"text": "hidden sentinel"})),
+            metadata_only=True,
+        ))
+
+        output = render_snapshot(index, width=200, metadata_only=True)
+
+        self.assertIn("PAYLOAD MODE: metadata-only", output)
+        self.assertIn("payload: omitted (metadata-only)", output)
+        self.assertIn('"omitted": true', output)
+        self.assertNotIn("hidden sentinel", output)
+
     def test_snapshot_applies_plain_state_filters(self):
         index = TraceIndex()
         index.add(Event.from_dict(event_data()))

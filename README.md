@@ -241,6 +241,8 @@ Review every terminal view and exported report before sharing it.
 Payloads larger than the preview limit are truncated on a UTF-8 boundary while recording their original byte count and SHA-256 digest.
 Use `--full-payloads` to retain full accepted payloads in the in-memory inspector when the input is trusted.
 Use `--unsafe-unredacted` only for trusted local data when accepted non-structural values must remain visible.
+Use `--metadata-only` to omit every payload body before indexing, serving, rendering, or export while retaining deterministic omission metadata.
+Read the [metadata-only mode guide](docs/metadata-only.md) before relying on or sharing metadata-only output.
 
 Structural identifiers remain protected in unsafe mode because they drive indexing and can appear throughout output.
 Rejected-data diagnostics also remain redacted because malformed data never reaches the accepted-event safety boundary.

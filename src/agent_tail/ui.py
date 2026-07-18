@@ -113,6 +113,7 @@ def render_snapshot(
     selected: int = 0,
     now: str | datetime | None = None,
     state: UiState | None = None,
+    metadata_only: bool = False,
 ) -> str:
     indexed_events = index.events
     if isinstance(now, str):
@@ -169,7 +170,10 @@ def render_snapshot(
             f"errors={'on' if state.errors_only else 'off'}",
             f"warnings={'on' if state.warnings_only else 'off'}",
         ))
-    lines = [" ".join(filters), "AGENT LANES"]
+    lines = [" ".join(filters)]
+    if metadata_only:
+        lines.append("PAYLOAD MODE: metadata-only (payload bodies omitted)")
+    lines.append("AGENT LANES")
     latest_by_actor = {
         (event.trace_id, event.actor["id"]): event for event in events
     }
@@ -238,6 +242,13 @@ def render_snapshot(
         ))
         if "payload" in event.raw:
             payload = event.raw["payload"]
+            metadata = payload.get("_agent_tail") if isinstance(payload, dict) else None
+            if isinstance(metadata, dict) and metadata.get("omitted") is True:
+                lines.append(
+                    "payload: omitted (metadata-only) "
+                    + json.dumps(metadata, ensure_ascii=False, sort_keys=True)
+                )
+                return "\n".join(_truncate_cells(line, width) for line in lines)
             if isinstance(payload, dict):
                 payload.pop("_agent_tail", None)
             lines.append(
@@ -249,13 +260,19 @@ def render_snapshot(
 
 
 def run(
-    index: TraceIndex, events: Iterable[Event] | None = None
+    index: TraceIndex,
+    events: Iterable[Event] | None = None,
+    *,
+    metadata_only: bool = False,
 ) -> Exception | None:
-    return curses.wrapper(_curses_loop, index, events)
+    return curses.wrapper(_curses_loop, index, events, metadata_only)
 
 
 def _curses_loop(
-    screen, index: TraceIndex, events: Iterable[Event] | None
+    screen,
+    index: TraceIndex,
+    events: Iterable[Event] | None,
+    metadata_only: bool = False,
 ) -> Exception | None:
     updates = start_event_reader(events) if events is not None else None
     state = UiState(event_count=index.event_count)
@@ -283,6 +300,7 @@ def _curses_loop(
             width=content_width,
             now=frozen_now if eof else datetime.now().astimezone(),
             state=state,
+            metadata_only=metadata_only,
         )
         screen.erase()
         for row, line in enumerate(text.splitlines()[:height]):

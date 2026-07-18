@@ -29,6 +29,76 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
+    def test_metadata_only_serve_omits_payload_from_api_sse_lazy_and_browser(self):
+        initial_sentinel = "payload-only-browser-sentinel"
+        live_sentinel = "payload-only-sse-sentinel"
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "metadata-only.jsonl")
+            source.write_text(json.dumps(event_data(
+                payload={"text": initial_sentinel},
+            )) + "\n", encoding="utf-8")
+            port = _free_port()
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "agent_tail",
+                    "serve",
+                    str(source),
+                    "--metadata-only",
+                    "--port",
+                    str(port),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+            base_url = f"http://127.0.0.1:{port}"
+            detail = _wait_for_event(base_url, "evt-1")
+            lazy_text = urlopen(
+                base_url + "/api/v1/runs/trace-1/events/evt-1/payload",
+                timeout=3,
+            ).read().decode()
+            cursor = detail["cursor"]
+            response = urlopen(
+                base_url + f"/api/v1/events?cursor={cursor}", timeout=3
+            )
+            with source.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(event_data(
+                    event_id="evt-2",
+                    span_id="span-2",
+                    sequence=2,
+                    payload={"text": live_sentinel},
+                )) + "\n")
+            update = _read_sse_data(response)
+            response.close()
+
+            self.assertEqual(detail["payload_mode"], "metadata-only")
+            self.assertEqual(detail["events"][0]["payload"]["state"], "omitted")
+            self.assertNotIn(initial_sentinel, json.dumps(detail) + lazy_text)
+            self.assertNotIn(live_sentinel, json.dumps(update))
+            self.assertEqual(update["payload"]["state"], "omitted")
+            self.assertNotIn("preview", lazy_text)
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.goto(base_url, wait_until="domcontentloaded")
+                expect(page.locator("#inspector")).to_contain_text(
+                    "metadata-only · payload bodies omitted"
+                )
+                page.locator(".node-wrap").filter(has_text="reviewer-1").click()
+                page.locator(".event-row").first.click()
+                expect(page.locator("#inspector")).to_contain_text(
+                    "payload omitted (metadata-only)"
+                )
+                expect(page.locator(".io-load-btn")).to_have_count(0)
+                self.assertNotIn(initial_sentinel, page.content())
+                browser.close()
+
     def test_coding_agent_hostile_fixture_is_sanitized_at_browser_boundary(self):
         fixture = Path(__file__).parent / "fixtures" / "sessions" / "claude-code-hostile.jsonl"
         with tempfile.TemporaryDirectory() as directory:

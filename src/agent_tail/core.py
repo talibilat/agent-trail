@@ -262,6 +262,7 @@ def sanitize_event(
     event: Event,
     *,
     full_payloads: bool = False,
+    metadata_only: bool = False,
     unsafe_unredacted: bool = False,
 ) -> Event:
     def redact(value: object, path: tuple[str, ...] = ()) -> object:
@@ -288,10 +289,25 @@ def sanitize_event(
             return value if unsafe_unredacted else redact_text(value)
         return value
 
+    if full_payloads and metadata_only:
+        raise ValueError("full_payloads and metadata_only cannot both be enabled")
+
     original_raw = event.raw
+    has_omitted_payload = metadata_only and "payload" in original_raw
+    original_payload = original_raw.pop("payload", None) if has_omitted_payload else None
     raw = redact(original_raw)
 
-    if "payload" in raw:
+    if has_omitted_payload:
+        original = json.dumps(
+            original_payload, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+        raw["payload"] = {"_agent_tail": {
+            "original_bytes": len(original),
+            "sha256": hashlib.sha256(original).hexdigest(),
+            "omitted": True,
+            "ruleset": "1",
+        }}
+    elif "payload" in raw:
         payload = original_raw["payload"]
         original = json.dumps(
             payload, ensure_ascii=False, separators=(",", ":")

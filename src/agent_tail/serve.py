@@ -23,6 +23,7 @@ class ServeConfig:
     port: int = 8765
     open_browser: bool = False
     full_payloads: bool = False
+    metadata_only: bool = False
     unsafe_unredacted: bool = False
     remote_access: bool = False
     access_token: str | None = None
@@ -32,6 +33,8 @@ class ServeConfig:
     max_live_updates: int = 10_000
 
     def __post_init__(self) -> None:
+        if self.full_payloads and self.metadata_only:
+            raise ValueError("full_payloads and metadata_only cannot both be enabled")
         if (
             not isinstance(self.max_live_updates, int)
             or isinstance(self.max_live_updates, bool)
@@ -47,6 +50,7 @@ class RunStore:
         errors: Iterable[IngestionError] = (),
         *,
         source_kind: str = "snapshot",
+        metadata_only: bool = False,
         max_live_updates: int = 10_000,
     ) -> None:
         if (
@@ -56,6 +60,7 @@ class RunStore:
         ):
             raise ValueError("max_live_updates must be a positive integer")
         self._reader = JSONLReader(retain_events=False)
+        self._metadata_only = metadata_only
         self._index = index
         if self._index is None:
             self._index = TraceIndex()
@@ -98,6 +103,7 @@ class RunStore:
         lines: Iterable[str],
         *,
         full_payloads: bool = False,
+        metadata_only: bool = False,
         unsafe_unredacted: bool = False,
         loop_threshold: int = 4,
         stall_seconds: float = 30.0,
@@ -112,6 +118,7 @@ class RunStore:
         store = cls(
             index,
             source_kind="snapshot",
+            metadata_only=metadata_only,
             max_live_updates=max_live_updates,
         )
         for line in lines:
@@ -144,14 +151,18 @@ class RunStore:
             safe = sanitize_event(
                 event,
                 full_payloads=full_payloads,
+                metadata_only=self._metadata_only,
                 unsafe_unredacted=unsafe_unredacted,
             )
-            retained = sanitize_event(
-                event,
-                full_payloads=True,
-                unsafe_unredacted=unsafe_unredacted,
-            )
-            self._payload_details[(safe.trace_id, safe.event_id)] = _payload_preview(retained)
+            if self._metadata_only:
+                self._payload_details[(safe.trace_id, safe.event_id)] = _payload_preview(safe)
+            else:
+                retained = sanitize_event(
+                    event,
+                    full_payloads=True,
+                    unsafe_unredacted=unsafe_unredacted,
+                )
+                self._payload_details[(safe.trace_id, safe.event_id)] = _payload_preview(retained)
             prior_terminal_state = self._terminal_traces.get(safe.trace_id)
             self._index.add(safe)
             eviction_count = self._index.eviction_count
@@ -286,6 +297,7 @@ class RunStore:
                 "api_version": "v1",
                 "cursor": self._cursor,
                 "run": self._summary(trace_id, projection=projection),
+                **({"payload_mode": "metadata-only"} if self._metadata_only else {}),
                 "duration_seconds": _duration_seconds(view.events),
                 "usage": _usage_summary(view.events),
                 "events": [
@@ -352,6 +364,7 @@ class RunStore:
             "uncertain_event_count": len(view.uncertain_event_ids),
             "warning_count": runtime_warning_count + len(projection["warnings"]),
             "state": self._lifecycle_state(trace_id),
+            **({"payload_mode": "metadata-only"} if self._metadata_only else {}),
         }
 
     def event_payload(self, trace_id: str, event_id: str) -> dict[str, object] | None:
@@ -498,6 +511,7 @@ def serve(
             max_bytes=config.max_bytes,
         ),
         source_kind="stdin",
+        metadata_only=config.metadata_only,
         max_live_updates=config.max_live_updates,
     )
     reader = threading.Thread(
@@ -523,6 +537,7 @@ def serve_file(
             max_bytes=config.max_bytes,
         ),
         source_kind="file",
+        metadata_only=config.metadata_only,
         max_live_updates=config.max_live_updates,
     )
     stop = threading.Event()
@@ -796,6 +811,10 @@ def _payload_preview(event: Event) -> object:
     if isinstance(payload, dict):
         payload = dict(payload)
         metadata = payload.pop("_agent_tail", None)
+        if isinstance(metadata, dict) and metadata.get("omitted") is True:
+            return {"state": "omitted", "metadata": metadata}
+        if not payload and metadata is not None:
+            return {"state": "evicted", "metadata": metadata}
         return {"preview": payload, "metadata": metadata}
     return {"preview": payload, "metadata": None}
 

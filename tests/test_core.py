@@ -515,6 +515,65 @@ class RedactionTests(unittest.TestCase):
         self.assertLessEqual(len(preview.encode("utf-8")), 4096)
         preview.encode("utf-8").decode("utf-8")
 
+    def test_metadata_only_omits_deterministic_payload_shapes_exactly(self):
+        payloads = [
+            "scalar payload sentinel",
+            {"nested": {"secret": "object payload sentinel"}},
+            [1, "array payload sentinel", None],
+            {"unicode": "caf\N{LATIN SMALL LETTER E WITH ACUTE} \N{EURO SIGN}"},
+            "",
+            {"large": "large payload sentinel" + "x" * 5000},
+        ]
+
+        for sequence, payload in enumerate(payloads, 1):
+            with self.subTest(sequence=sequence):
+                original = json.dumps(
+                    payload, ensure_ascii=False, separators=(",", ":")
+                ).encode("utf-8")
+                event = Event.from_dict(event_data(
+                    event_id=f"evt-{sequence}",
+                    span_id=f"span-{sequence}",
+                    sequence=sequence,
+                    payload=payload,
+                ))
+
+                first = sanitize_event(event, metadata_only=True)
+                second = sanitize_event(event, metadata_only=True)
+
+                self.assertEqual(first.raw, second.raw)
+                self.assertEqual(first.raw["payload"], {"_agent_tail": {
+                    "original_bytes": len(original),
+                    "sha256": hashlib.sha256(original).hexdigest(),
+                    "omitted": True,
+                    "ruleset": "1",
+                }})
+                self.assertNotIn("preview", json.dumps(first.raw))
+
+    def test_metadata_only_redacts_retained_metadata_unless_unsafe(self):
+        event = Event.from_dict(event_data(
+            attributes={"note": "Bearer retained-metadata-secret"},
+            payload={"text": "payload-only-unique-sentinel"},
+        ))
+
+        safe = sanitize_event(event, metadata_only=True)
+        unsafe = sanitize_event(
+            event,
+            metadata_only=True,
+            unsafe_unredacted=True,
+        )
+
+        self.assertNotIn("retained-metadata-secret", json.dumps(safe.raw))
+        self.assertIn("retained-metadata-secret", json.dumps(unsafe.raw))
+        self.assertNotIn("payload-only-unique-sentinel", json.dumps(unsafe.raw))
+
+    def test_metadata_only_rejects_full_payload_retention(self):
+        with self.assertRaisesRegex(ValueError, "cannot both be enabled"):
+            sanitize_event(
+                Event.from_dict(event_data(payload="secret")),
+                full_payloads=True,
+                metadata_only=True,
+            )
+
 
 class IngestionTests(unittest.TestCase):
     def test_streaming_reader_retains_no_events_and_bounds_errors(self):
@@ -1103,6 +1162,22 @@ class WarningTests(unittest.TestCase):
         self.assertEqual(evidence["count"], 6)
         self.assertEqual(evidence["latest"]["event_id"], "evt-3")
         self.assertEqual(evidence["latest"]["evicted"], "metadata")
+
+    def test_omitted_payload_is_not_treated_as_retained_or_payload_evicted(self):
+        event = sanitize_event(
+            Event.from_dict(event_data(payload={"text": "x" * 5000})),
+            metadata_only=True,
+        )
+        event_size = len(json.dumps(
+            event.raw, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8"))
+        index = TraceIndex(max_bytes=event_size)
+
+        index.add(event)
+
+        self.assertEqual(index.event_count, 1)
+        self.assertEqual(index.eviction_count, 0)
+        self.assertEqual(index.events[0].raw["payload"]["_agent_tail"]["omitted"], True)
 
 
 if __name__ == "__main__":

@@ -131,6 +131,33 @@ class HtmlExportTests(unittest.TestCase):
         self.assertEqual(metadata["payload_retention"]["evicted"], 1)
         self.assertEqual(metadata["payload_retention"]["truncated"], 0)
 
+    def test_metadata_only_export_labels_mode_and_retains_no_payload_body(self):
+        sentinel = "payload-only-html-sentinel"
+        event = sanitize_event(
+            Event.from_dict(event_data(payload={"text": sentinel})),
+            metadata_only=True,
+        )
+        index = TraceIndex()
+        index.add(event)
+
+        first = render_html(index, (), metadata_only=True)
+        second = render_html(index, (), metadata_only=True)
+        encoded = first.split(
+            'id="agent-tail-export-data" hidden>', 1
+        )[1].split("</div>", 1)[0]
+        snapshot = json.loads(base64.b64decode(encoded))
+
+        self.assertEqual(first.encode(), second.encode())
+        self.assertNotIn(sentinel, first)
+        self.assertEqual(
+            snapshot["metadata"]["export_mode"],
+            "metadata-only sanitized embedded snapshot",
+        )
+        self.assertEqual(snapshot["metadata"]["payload_retention"]["omitted"], 1)
+        payload = snapshot["details"]["trace-1"]["events"][0]["payload"]
+        self.assertEqual(payload["state"], "omitted")
+        self.assertNotIn("preview", payload)
+
 
 if __name__ == "__main__":
     unittest.main()

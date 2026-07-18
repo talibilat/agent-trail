@@ -37,6 +37,7 @@ def parser() -> argparse.ArgumentParser:
     exports.add_argument("--export-html", metavar="PATH")
     result.add_argument("--export-html-generated-at", metavar="TIMESTAMP")
     result.add_argument("--full-payloads", action="store_true")
+    result.add_argument("--metadata-only", action="store_true")
     result.add_argument("--unsafe-unredacted", action="store_true")
     result.add_argument("--loop-threshold", type=int, default=4)
     result.add_argument("--stall-seconds", type=float, default=30.0)
@@ -55,6 +56,7 @@ def serve_parser() -> argparse.ArgumentParser:
     result.add_argument("--open", action="store_true", dest="open_browser")
     result.add_argument("--remote-access", action="store_true")
     result.add_argument("--full-payloads", action="store_true")
+    result.add_argument("--metadata-only", action="store_true")
     result.add_argument("--unsafe-unredacted", action="store_true")
     result.add_argument("--loop-threshold", type=int, default=4)
     result.add_argument("--stall-seconds", type=float, default=30.0)
@@ -101,6 +103,8 @@ def main(argv: list[str] | None = None) -> int:
         argument_parser.error("--snapshot-stream requires standard input")
     if arguments.export_html_generated_at and not arguments.export_html:
         argument_parser.error("--export-html-generated-at requires --export-html")
+    if arguments.metadata_only and arguments.full_payloads:
+        argument_parser.error("--metadata-only cannot be combined with --full-payloads")
     try:
         generated_at = (
             normalize_generation_time(arguments.export_html_generated_at)
@@ -131,6 +135,7 @@ def main(argv: list[str] | None = None) -> int:
                 yield sanitize_event(
                     event,
                     full_payloads=arguments.full_payloads,
+                    metadata_only=arguments.metadata_only,
                     unsafe_unredacted=arguments.unsafe_unredacted,
                 )
 
@@ -153,24 +158,42 @@ def main(argv: list[str] | None = None) -> int:
                 index.add(event)
             if arguments.export:
                 Path(arguments.export).write_text(
-                    _markdown(index, reader.all_errors), encoding="utf-8"
+                    _markdown(
+                        index,
+                        reader.all_errors,
+                        metadata_only=arguments.metadata_only,
+                    ),
+                    encoding="utf-8",
                 )
             else:
                 write_html_atomic(
                     Path(arguments.export_html),
-                    render_html(index, reader.all_errors, generated_at=generated_at),
+                    render_html(
+                        index,
+                        reader.all_errors,
+                        generated_at=generated_at,
+                        metadata_only=arguments.metadata_only,
+                    ),
                 )
         elif sys.stdout.isatty():
             if arguments.input == "-":
-                reader_error = run(index, events())
+                reader_error = run(
+                    index,
+                    events(),
+                    metadata_only=arguments.metadata_only,
+                )
             else:
                 for event in events():
                     index.add(event)
-                run(index)
+                run(index, metadata_only=arguments.metadata_only)
         else:
             for event in events():
                 index.add(event)
-            print(render_snapshot(index, width=120))
+            print(render_snapshot(
+                index,
+                width=120,
+                metadata_only=arguments.metadata_only,
+            ))
     except (OSError, UnicodeError, ValueError) as error:
         print(f"agent-tail: {error}", file=sys.stderr)
         return 2
@@ -242,12 +265,15 @@ def _serve_main(argv: list[str]) -> int:
     arguments = argument_parser.parse_args(argv)
     if arguments.port < 0 or arguments.port > 65535:
         argument_parser.error("--port must be between 0 and 65535")
+    if arguments.metadata_only and arguments.full_payloads:
+        argument_parser.error("--metadata-only cannot be combined with --full-payloads")
 
     config = ServeConfig(
         host=arguments.host,
         port=arguments.port,
         open_browser=arguments.open_browser,
         full_payloads=arguments.full_payloads,
+        metadata_only=arguments.metadata_only,
         unsafe_unredacted=arguments.unsafe_unredacted,
         remote_access=arguments.remote_access,
         loop_threshold=arguments.loop_threshold,
@@ -270,7 +296,12 @@ def _print_errors(errors: Iterable[IngestionError]) -> None:
         print(prefix + error.message, file=sys.stderr)
 
 
-def _markdown(index: TraceIndex, errors: Iterable[IngestionError]) -> str:
+def _markdown(
+    index: TraceIndex,
+    errors: Iterable[IngestionError],
+    *,
+    metadata_only: bool = False,
+) -> str:
     events = index.events
     now = max(
         (event.timestamp for event in events),
@@ -281,8 +312,10 @@ def _markdown(index: TraceIndex, errors: Iterable[IngestionError]) -> str:
         "# Agent Tail Trace Report",
         "",
         "Redaction ruleset: `1`",
-        "",
     ]
+    if metadata_only:
+        lines.append("Payload mode: `metadata-only` (payload bodies omitted)")
+    lines.append("")
 
     for trace_id in dict.fromkeys(event.trace_id for event in events):
         view = index.trace(trace_id)
@@ -366,6 +399,8 @@ def _payload_retention(payload: object) -> str:
     if not isinstance(payload, dict):
         return "retained"
     metadata = payload.get("_agent_tail")
+    if isinstance(metadata, dict) and metadata.get("omitted") is True:
+        return "omitted (metadata-only)"
     if set(payload) == {"_agent_tail"}:
         return "evicted"
     if isinstance(metadata, dict) and metadata.get("truncated"):

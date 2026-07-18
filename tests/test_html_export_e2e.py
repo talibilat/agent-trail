@@ -26,6 +26,48 @@ def event_data(sequence, **changes):
 
 
 class HtmlExportEndToEndTests(unittest.TestCase):
+    def test_metadata_only_report_exposes_mode_and_omission_offline(self):
+        sentinel = "payload-only-offline-sentinel"
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "fixture.jsonl")
+            report = Path(directory, "report.html")
+            source.write_text(json.dumps(event_data(
+                1, payload={"text": sentinel}
+            )) + "\n", encoding="utf-8")
+            exported = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "agent_tail",
+                    str(source),
+                    "--metadata-only",
+                    "--export-html",
+                    str(report),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(exported.returncode, 0, exported.stderr)
+            self.assertNotIn(sentinel.encode(), report.read_bytes())
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.goto(report.as_uri(), wait_until="load")
+                expect(page.locator("#export-info")).to_contain_text(
+                    "metadata-only sanitized embedded snapshot"
+                )
+                expect(page.locator("#export-info")).to_contain_text("omitted 1")
+                page.locator(".node-wrap").filter(has_text="implementer").click()
+                page.locator(".event-row").click()
+                expect(page.locator("#inspector")).to_contain_text(
+                    "payload omitted (metadata-only)"
+                )
+                expect(page.locator(".io-load-btn")).to_have_count(0)
+                self.assertNotIn(sentinel, page.content())
+                browser.close()
+
     def test_file_report_is_complete_hostile_safe_and_offline(self):
         secret = "ghp_" + "a" * 36
         hostile = '<img id="export-injected" src="https://evil.invalid/pixel">'

@@ -5385,6 +5385,162 @@ class ServeTests(unittest.TestCase):
         self.assertIn("x" * 100, payload["payload"]["preview"]["text"])
         self.assertNotIn("hidden", json.dumps(payload))
 
+    def test_metadata_only_precedes_index_store_projection_sse_and_lazy_payload(self):
+        sentinel = "payload-only-store-sentinel"
+        store = RunStore.from_lines([
+            json.dumps(event_data(
+                attributes={
+                    "change": {
+                        "path": "src/retained.py",
+                        "old_start": 1,
+                        "old_count": 1,
+                        "new_start": 1,
+                        "new_count": 2,
+                    },
+                    "note": "Bearer retained-secret",
+                },
+                kind="change.applied",
+                payload={"body": sentinel},
+            )) + "\n"
+        ], metadata_only=True)
+
+        detail = store.run_detail("trace-1")
+        update = next(store.stream_updates(after=0))
+        lazy = store.event_payload("trace-1", "evt-1")
+        indexed = json.dumps(store._index.events[0].raw)
+        combined = json.dumps((detail, update, lazy))
+
+        self.assertNotIn(sentinel, indexed + combined)
+        self.assertNotIn("retained-secret", combined)
+        self.assertEqual(detail["payload_mode"], "metadata-only")
+        self.assertEqual(detail["run"]["payload_mode"], "metadata-only")
+        self.assertEqual(detail["events"][0]["payload"]["state"], "omitted")
+        self.assertEqual(update["data"]["payload"]["state"], "omitted")
+        self.assertEqual(lazy["payload"]["state"], "omitted")
+        self.assertNotIn("preview", lazy["payload"])
+        self.assertEqual(
+            detail["evidence_map"]["changes"][0]["hunk"]["path"],
+            "src/retained.py",
+        )
+        self.assertFalse(any(
+            warning["code"] == "EVICT" for warning in detail["warnings"]
+        ))
+
+    def test_metadata_only_preserves_complete_change_evidence_attributes(self):
+        events = [
+            event_data(
+                event_id="requirement-1",
+                kind="requirement.observed",
+                attributes={"requirement": {"id": "R1", "text": "Keep evidence."}},
+            ),
+            event_data(
+                event_id="context-1",
+                span_id="span-context",
+                sequence=2,
+                kind="context.read",
+                attributes={"context": {
+                    "path": "src/context.py",
+                    "line_start": 4,
+                    "line_end": 8,
+                    "symbol": "target",
+                }},
+            ),
+            event_data(
+                event_id="tool-1",
+                span_id="span-tool",
+                sequence=3,
+                kind="tool.call.completed",
+                attributes={"tool": {
+                    "command": "git diff --check",
+                    "result": "clean",
+                    "exit_code": 0,
+                }},
+            ),
+            event_data(
+                event_id="proposal-1",
+                span_id="span-proposal",
+                sequence=4,
+                kind="change.proposed",
+            ),
+            event_data(
+                event_id="change-1",
+                span_id="span-change",
+                sequence=5,
+                kind="change.applied",
+                attributes={"change": {
+                    "path": "src/change.py",
+                    "old_start": 10,
+                    "old_count": 1,
+                    "new_start": 10,
+                    "new_count": 2,
+                }},
+                relationships=[
+                    {"type": "motivated_by", "event_id": "requirement-1"},
+                    {"type": "informed_by", "event_id": "context-1"},
+                    {"type": "preceded_by", "event_id": "tool-1"},
+                    {"type": "applies", "event_id": "proposal-1"},
+                    {"type": "verified_by", "event_id": "verification-1"},
+                ],
+            ),
+            event_data(
+                event_id="verification-1",
+                span_id="span-verification",
+                sequence=6,
+                kind="verification.finished",
+                attributes={"verification": {
+                    "command": "pytest",
+                    "passed": True,
+                    "exit_code": 0,
+                    "test_origin": "same_agent",
+                }},
+            ),
+            event_data(
+                event_id="correction-1",
+                span_id="span-correction",
+                sequence=7,
+                kind="human.corrected",
+                attributes={"correction": {"action": "modified"}},
+                relationships=[{"type": "corrects", "event_id": "change-1"}],
+            ),
+        ]
+        for event in events:
+            event["payload"] = {"sentinel": f"payload-{event['event_id']}"}
+        store = RunStore.from_lines(
+            (json.dumps(event) + "\n" for event in events),
+            metadata_only=True,
+        )
+
+        evidence = store.run_detail("trace-1")["evidence_map"]
+        change = evidence["changes"][0]
+
+        self.assertEqual(change["hunk"]["path"], "src/change.py")
+        self.assertEqual(
+            change["coverage"]["status"],
+            "incomplete",
+            change["coverage"],
+        )
+        self.assertEqual(change["coverage"]["missing"], [])
+        self.assertEqual(change["coverage"]["same_agent_test_count"], 1)
+        self.assertEqual(change["corrections"][0]["correction"]["action"], "modified")
+        self.assertEqual(
+            next(link["requirement"] for link in change["links"] if "requirement" in link)["id"],
+            "R1",
+        )
+        self.assertEqual(
+            next(link["context"] for link in change["links"] if "context" in link)["symbol"],
+            "target",
+        )
+        self.assertEqual(
+            next(link["tool"] for link in change["links"] if "tool" in link)["command"],
+            "git diff --check",
+        )
+        self.assertTrue(next(
+            link["verification"]["passed"]
+            for link in change["links"]
+            if "verification" in link
+        ))
+        self.assertNotIn("payload-", json.dumps(store.run_detail("trace-1")))
+
     def test_lazy_payload_detail_respects_payload_eviction(self):
         store = RunStore.from_lines([
             json.dumps(event_data(payload={"text": "x" * 5000})) + "\n"

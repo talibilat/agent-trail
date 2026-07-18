@@ -1544,6 +1544,7 @@
       const isStart = event.kind.endsWith('.started') || event.kind === 'model.request';
       const isEnd = event.kind.endsWith('.completed') || event.kind.endsWith('.failed');
       const hasPayloadPreview = !!(payload && payload.preview !== undefined);
+      const payloadOmitted = !!(payload && payload.state === 'omitted');
       let input = null;
       let inputFromPayload = false;
       if (isStart) {
@@ -2200,6 +2201,13 @@
         wrap.append(block);
       }
       const attachPayloadFooter = (block) => {
+        if (payloadOmitted) {
+          const note = document.createElement('div');
+          note.className = 'io-truncated';
+          note.textContent = `payload omitted (metadata-only) · ${meta.original_bytes || 0} original bytes · sha256 ${String(meta.sha256 || '').slice(0, 12)}…`;
+          block.append(note);
+          return;
+        }
         if (meta && meta.truncated) {
           const note = document.createElement('div');
           note.className = 'io-truncated';
@@ -2251,6 +2259,13 @@
         attachPayloadFooter(block);
         wrap.append(block);
       }
+      if (payloadOmitted) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block';
+        block.innerHTML = `<div class="io-title in">▸ PAYLOAD</div><pre class="io-pre">omitted (metadata-only)</pre>`;
+        attachPayloadFooter(block);
+        wrap.append(block);
+      }
       inspectorEl.replaceChildren(wrap);
     }
 
@@ -2277,6 +2292,7 @@
       const rows = wrap.querySelector('.overview-rows');
       [
         ['Trace', run.trace_id, '--text'],
+        ...(detail.payload_mode === 'metadata-only' ? [['Payload mode', 'metadata-only · payload bodies omitted', '--warn']] : []),
         ['Agents spawned', `${horizonAgents.length} / ${run.actor_count}`, '--orch'],
         ['Total requests', String(modelReq + toolReq), '--run'],
         ['Tokens (in/out)', `${usageValue(usage.input_tokens)} / ${usageValue(usage.output_tokens)}`, '--ok'],

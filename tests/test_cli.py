@@ -142,6 +142,77 @@ class CliTests(unittest.TestCase):
         self.assertEqual(timestamp_only.returncode, 2)
         self.assertIn("requires --export-html", timestamp_only.stderr)
 
+    def test_metadata_only_conflicts_with_full_payloads_in_cli_and_serve(self):
+        normal = run_cli("-", "--metadata-only", "--full-payloads", input="")
+        served = run_cli(
+            "serve", "-", "--metadata-only", "--full-payloads", input=""
+        )
+
+        for result in (normal, served):
+            self.assertEqual(result.returncode, 2)
+            self.assertIn(
+                "--metadata-only cannot be combined with --full-payloads",
+                result.stderr,
+            )
+
+    def test_metadata_only_file_and_stdin_cover_terminal_markdown_and_html(self):
+        sentinel = "payload-only-process-sentinel"
+        payload = {"text": sentinel, "unicode": "caf\N{LATIN SMALL LETTER E WITH ACUTE}"}
+        original = json.dumps(
+            payload, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+        line = json.dumps(event_data(
+            attributes={"note": "retained metadata"},
+            payload=payload,
+        ), ensure_ascii=False) + "\n"
+        digest = hashlib.sha256(original).hexdigest()
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "run.jsonl")
+            markdown_file = Path(directory, "file.md")
+            markdown_stdin = Path(directory, "stdin.md")
+            html_file = Path(directory, "file.html")
+            html_stdin = Path(directory, "stdin.html")
+            source.write_text(line, encoding="utf-8")
+
+            terminal_file = run_cli(source, "--metadata-only")
+            terminal_stdin = run_cli("-", "--metadata-only", input=line)
+            markdown_file_result = run_cli(
+                source, "--metadata-only", "--export", markdown_file
+            )
+            markdown_stdin_result = run_cli(
+                "-", "--metadata-only", "--export", markdown_stdin, input=line
+            )
+            html_file_result = run_cli(
+                source, "--metadata-only", "--export-html", html_file
+            )
+            html_stdin_result = run_cli(
+                "-", "--metadata-only", "--export-html", html_stdin, input=line
+            )
+            markdown_text = markdown_file.read_text(encoding="utf-8")
+            html_bytes = html_file.read_bytes()
+            self.assertEqual(markdown_file.read_bytes(), markdown_stdin.read_bytes())
+            self.assertEqual(html_file.read_bytes(), html_stdin.read_bytes())
+
+        for result in (
+            terminal_file,
+            terminal_stdin,
+            markdown_file_result,
+            markdown_stdin_result,
+            html_file_result,
+            html_stdin_result,
+        ):
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn(sentinel, result.stdout + result.stderr)
+        self.assertEqual(terminal_file.stdout, terminal_stdin.stdout)
+        self.assertIn("PAYLOAD MODE: metadata-only", terminal_file.stdout)
+        self.assertIn("payload: omitted (metadata-only)", terminal_file.stdout)
+        self.assertIn("Payload mode: `metadata-only`", markdown_text)
+        self.assertIn("omitted (metadata-only)", markdown_text)
+        self.assertNotIn(sentinel.encode(), html_bytes)
+        self.assertNotIn(sentinel, markdown_text)
+        self.assertIn(digest[:20], terminal_file.stdout)
+
     def test_file_and_stdin_export_the_same_redacted_report(self):
         line = json.dumps(event_data(
             attributes={"authorization": "Bearer attribute-secret"},
