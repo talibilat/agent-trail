@@ -10,6 +10,7 @@ import unicodedata
 import webbrowser
 
 from .core import IngestionError, JSONLReader, TraceIndex, redact_text, sanitize_event
+from .html_export import normalize_generation_time, render_html, write_html_atomic
 from .otel import OTLPDocumentError, canonical_jsonl as otel_jsonl, parse_otlp_json
 from .session_import import (
     SOURCES,
@@ -31,7 +32,10 @@ def _positive_int(value: str) -> int:
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(prog="agent-tail")
     result.add_argument("input", help="JSONL file or - for standard input")
-    result.add_argument("--export", metavar="PATH")
+    exports = result.add_mutually_exclusive_group()
+    exports.add_argument("--export", metavar="PATH")
+    exports.add_argument("--export-html", metavar="PATH")
+    result.add_argument("--export-html-generated-at", metavar="TIMESTAMP")
     result.add_argument("--full-payloads", action="store_true")
     result.add_argument("--unsafe-unredacted", action="store_true")
     result.add_argument("--loop-threshold", type=int, default=4)
@@ -95,6 +99,16 @@ def main(argv: list[str] | None = None) -> int:
     arguments = argument_parser.parse_args(argv)
     if arguments.snapshot_stream and arguments.input != "-":
         argument_parser.error("--snapshot-stream requires standard input")
+    if arguments.export_html_generated_at and not arguments.export_html:
+        argument_parser.error("--export-html-generated-at requires --export-html")
+    try:
+        generated_at = (
+            normalize_generation_time(arguments.export_html_generated_at)
+            if arguments.export_html_generated_at
+            else None
+        )
+    except ValueError as error:
+        argument_parser.error(str(error))
 
     source: TextIO
     close_source = False
@@ -134,12 +148,18 @@ def main(argv: list[str] | None = None) -> int:
                     f"SNAPSHOT {index.event_count} {event.actor['id']} {event.event_id}",
                     flush=True,
                 )
-        elif arguments.export:
+        elif arguments.export or arguments.export_html:
             for event in events():
                 index.add(event)
-            Path(arguments.export).write_text(
-                _markdown(index, reader.all_errors), encoding="utf-8"
-            )
+            if arguments.export:
+                Path(arguments.export).write_text(
+                    _markdown(index, reader.all_errors), encoding="utf-8"
+                )
+            else:
+                write_html_atomic(
+                    Path(arguments.export_html),
+                    render_html(index, reader.all_errors, generated_at=generated_at),
+                )
         elif sys.stdout.isatty():
             if arguments.input == "-":
                 reader_error = run(index, events())

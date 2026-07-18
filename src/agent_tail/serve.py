@@ -61,6 +61,23 @@ class RunStore:
             self._index = TraceIndex()
         self._errors = tuple(errors)
         self._findings: list[dict[str, object]] = []
+        for error in self._errors:
+            message = error.message
+            if message.startswith("duplicate event ID"):
+                code = "DUPLICATE_EVENT"
+            elif message.startswith("invalid JSON"):
+                code = "INVALID_JSON"
+            else:
+                code = "INVALID_EVENT"
+            self._findings.append({
+                "kind": "ingestion",
+                "code": code,
+                "message": message,
+                "line": error.line,
+                "event_id": None,
+                "trace_id": None,
+                "detected_at": _epoch().isoformat(),
+            })
         self._payload_details: dict[tuple[str, str], object] = {}
         self._last_eviction_count = 0
         self._warning_history: dict[tuple[str, str, str], dict[str, object]] = {}

@@ -249,7 +249,7 @@ Neither option makes arbitrary untrusted input safe to disclose.
 The index defaults to a 16 MiB memory budget controlled by `--max-bytes`.
 When necessary it evicts payloads before event metadata and records an `EVICT` warning.
 
-## Markdown Export
+## Exports
 
 Export a deterministic Markdown report with actor states, ordered timelines, heuristic evidence, payload-retention status, and ingestion errors:
 
@@ -257,7 +257,16 @@ Export a deterministic Markdown report with actor states, ordered timelines, heu
 agent-tail run.jsonl --export report.md
 ```
 
-Markdown is the only v1 export format.
+Markdown output remains the compact text export format.
+
+Export a self-contained sanitized interactive HTML report that opens offline without a server or external resources:
+
+```bash
+agent-tail run.jsonl --export-html report.html
+```
+
+Use `--export-html-generated-at` when the visible export metadata needs a fixed generation timestamp, or omit it for deterministic output with no timestamp.
+Read the [HTML export usage and security guide](docs/html-export.md) before sharing an artifact.
 
 ## Keyboard Controls
 
@@ -281,7 +290,7 @@ The interactive terminal UI provides these controls:
 
 ## Deferred Scope
 
-Version 1 defers sockets, public harness adapters, HTML and Mermaid exports, persistence, replay, hosting, fan-out warnings, per-tool policies, and custom keybindings.
+Version 1 defers sockets, public harness adapters, Mermaid exports, persistence, replay, hosting, fan-out warnings, per-tool policies, and custom keybindings.
 
 Serve mode remains process-local and does not persist run history across restarts.
 One actor ID represents one logical agent invocation, and primary parentage uses the first causal cross-actor relationship that introduces the actor.

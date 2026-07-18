@@ -113,6 +113,10 @@ class CliTests(unittest.TestCase):
             with self.subTest(evidence=evidence):
                 self.assertIn(evidence, report)
         self.assertNotIn(secret, report)
+        self.assertEqual(
+            hashlib.sha256(report.encode()).hexdigest(),
+            "e88cfab80643e2a678337b9088d02a8c2daabc9651404c69a80f3f1c60ffa5b2",
+        )
 
     def test_help_names_file_and_stdin_inputs_without_internal_options(self):
         result = run_cli("--help")
@@ -121,6 +125,22 @@ class CliTests(unittest.TestCase):
         self.assertIn("JSONL file or - for standard input", result.stdout)
         self.assertIn("--max-bytes", result.stdout)
         self.assertNotIn("snapshot-stream", result.stdout)
+
+    def test_html_export_options_are_documented_mutually_exclusive_and_scoped(self):
+        help_result = run_cli("--help")
+        exclusive = run_cli(
+            "-", "--export", "report.md", "--export-html", "report.html", input=""
+        )
+        timestamp_only = run_cli(
+            "-", "--export-html-generated-at", "2026-07-18T12:00:00Z", input=""
+        )
+
+        self.assertIn("--export-html PATH", help_result.stdout)
+        self.assertIn("--export-html-generated-at TIMESTAMP", help_result.stdout)
+        self.assertEqual(exclusive.returncode, 2)
+        self.assertIn("not allowed with argument", exclusive.stderr)
+        self.assertEqual(timestamp_only.returncode, 2)
+        self.assertIn("requires --export-html", timestamp_only.stderr)
 
     def test_file_and_stdin_export_the_same_redacted_report(self):
         line = json.dumps(event_data(

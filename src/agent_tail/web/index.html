@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Agent Tail</title>
+  <!-- AGENT_TAIL_EXPORT_HEAD -->
   <style>
     :root {
       color-scheme: dark;
@@ -66,6 +67,14 @@
     input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: none; border-radius: 50%; background: var(--run); cursor: pointer; }
 
     .at-root { display: flex; flex-direction: column; width: 100vw; height: 100vh; }
+    .export-info {
+      flex: none; display: flex; align-items: center; gap: 14px; padding: 7px 16px;
+      border-bottom: 1px solid var(--line); background: rgba(122,162,255,.08);
+      color: var(--dim); font: 500 10px "IBM Plex Mono", monospace; overflow-x: auto;
+    }
+    .export-info strong { color: var(--accent2); white-space: nowrap; }
+    .export-info span { white-space: nowrap; }
+    .export-info[hidden], #jump-live[hidden] { display: none; }
 
     /* ===== TOP BAR ===== */
     header.topbar {
@@ -427,6 +436,7 @@
       </button>
       <button type="button" id="theme-button" class="theme-button" aria-label="Theme">&#9728;</button>
     </header>
+    <section id="export-info" class="export-info" aria-label="Export information" hidden></section>
 
     <div id="metrics" class="metric-row"></div>
 
@@ -465,6 +475,7 @@
     <div id="warnings-backdrop" class="warnings-backdrop" hidden></div>
     <section id="warnings-drawer" class="warnings-drawer" hidden role="dialog" aria-modal="true" aria-label="Warnings drawer"></section>
   </div>
+  <!-- AGENT_TAIL_EXPORT_DATA -->
   <script>
     const runPickerBtnEl = document.querySelector('#run-picker-btn');
     const runMenuEl = document.querySelector('#run-menu');
@@ -490,6 +501,7 @@
     const warningsDrawerEl = document.querySelector('#warnings-drawer');
     const warningsBackdropEl = document.querySelector('#warnings-backdrop');
     const themeButtonEl = document.querySelector('#theme-button');
+    const exportInfoEl = document.querySelector('#export-info');
     const svgNamespace = `http${'://'}www.w3.org/2000/svg`;
 
     const STATUS_COLOR = { idle: '--idle', running: '--run', waiting: '--warn', done: '--ok', error: '--err', stalled: '--warn' };
@@ -517,6 +529,40 @@
     let dragPoint = null;
     let fitDone = { view: null, trace: null };
     const accessToken = new URLSearchParams(window.location.search).get('token');
+    const embeddedDataEl = document.querySelector('#agent-tail-export-data');
+
+    class ApiDataProvider {
+      constructor() { this.live = true; this.supportsLazyPayload = true; this.metadata = null; }
+      async getJson(path) {
+        const response = await fetch(apiPath(path), { headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+        return response.json();
+      }
+    }
+
+    class EmbeddedDataProvider {
+      constructor(element) {
+        const bytes = Uint8Array.from(atob(element.textContent.trim()), (character) => character.charCodeAt(0));
+        this.snapshot = JSON.parse(new TextDecoder().decode(bytes));
+        this.live = false;
+        this.supportsLazyPayload = false;
+        this.metadata = this.snapshot.metadata;
+      }
+      async getJson(path) {
+        if (path === '/api/v1/runs') return this.snapshot.runs;
+        const match = path.match(/^\/api\/v1\/runs\/([^/]+)$/);
+        if (match) return this.snapshot.details[decodeURIComponent(match[1])];
+        throw new Error('Embedded exports do not support server operations');
+      }
+    }
+
+    const dataProvider = embeddedDataEl
+      ? new EmbeddedDataProvider(embeddedDataEl)
+      : new ApiDataProvider();
+    if (!dataProvider.live) {
+      jumpLiveEl.hidden = true;
+      renderExportInfo(dataProvider.metadata);
+    }
 
     [...viewTabsEl.querySelectorAll('button[data-view]')].forEach((button) => {
       button.addEventListener('click', () => { selectedView = button.dataset.view; renderDetail(currentDetail); });
@@ -583,9 +629,27 @@
     stageEl.addEventListener('pointercancel', () => { dragPoint = null; });
 
     async function fetchJson(path) {
-      const response = await fetch(apiPath(path), { headers: { Accept: 'application/json' } });
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-      return response.json();
+      return dataProvider.getJson(path);
+    }
+
+    function renderExportInfo(metadata) {
+      exportInfoEl.hidden = false;
+      const generated = metadata.generated_at || 'omitted for deterministic output';
+      const retention = Object.entries(metadata.payload_retention)
+        .map(([state, count]) => `${state} ${count}`).join(' · ');
+      const values = [
+        ['Agent Tail', metadata.agent_tail_version],
+        ['mode', metadata.export_mode],
+        ['schemas', metadata.schema_versions.join(', ') || 'none'],
+        ['redaction', `ruleset ${metadata.redaction_ruleset}`],
+        ['payloads', retention],
+        ['generated', generated],
+      ];
+      exportInfoEl.replaceChildren(...values.map(([label, value], index) => {
+        const item = document.createElement(index === 0 ? 'strong' : 'span');
+        item.textContent = `${label}: ${value}`;
+        return item;
+      }));
     }
 
     function text(value) {
@@ -2142,6 +2206,7 @@
           note.textContent = `payload truncated on UTF-8 boundary · sha256 ${String(meta.sha256 || '').slice(0, 12)}…`;
           block.append(note);
         }
+        if (!dataProvider.supportsLazyPayload) return;
         const loadBtn = document.createElement('button');
         loadBtn.type = 'button';
         loadBtn.className = 'io-load-btn';
@@ -2328,6 +2393,7 @@
       playbackToggleEl.textContent = playing ? '❚❚' : '▶';
       playbackClockEl.textContent = `${clock(playbackTime)} / ${clock(duration)}`;
       playbackModeEl.textContent = liveFollow ? 'streaming' : (playbackTime >= duration ? 'EOF · frozen' : (playing ? `${playbackSpeed}× replay` : 'paused'));
+      if (!dataProvider.live && liveFollow) playbackModeEl.textContent = 'offline snapshot';
       jumpLiveEl.classList.toggle('live', playbackTime >= duration);
       [...speedGroupEl.querySelectorAll('button')].forEach((button) => {
         button.setAttribute('aria-current', Number(button.dataset.speed) === playbackSpeed ? 'true' : 'false');
@@ -2379,11 +2445,11 @@
     async function init() {
       try {
         await refreshAuthoritative();
-        connectEvents();
+        if (dataProvider.live) connectEvents();
       } catch (error) {
         warningCountEl.textContent = '!';
         console.error('Failed to load runs', error);
-        scheduleInit(1500);
+        if (dataProvider.live) scheduleInit(1500);
       }
     }
 

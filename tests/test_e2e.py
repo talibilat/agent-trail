@@ -2161,7 +2161,11 @@ with AgentTailCallbackHandler(output) as callback:
                         for view in ("Tree", "Swimlane", "Sequence", "Graph"):
                             page.get_by_role("button", name=view, exact=True).click()
                             expect(page.locator(".stage-content")).to_be_visible()
-                        page.locator(".node-wrap").first.click()
+                        agent_node = page.locator(".node-wrap").first
+                        agent_node.click()
+                        if "Focus subtree" not in page.locator("#inspector").inner_text():
+                            # A live refresh can replace the node between WebKit pointer events.
+                            agent_node.click()
                         expect(page.locator("#inspector")).to_contain_text("Focus subtree")
                         page.get_by_role("button", name="Warnings", exact=True).click()
                         expect(page.locator("#warnings-drawer")).to_be_visible()
