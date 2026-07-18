@@ -75,6 +75,22 @@
     .export-info strong { color: var(--accent2); white-space: nowrap; }
     .export-info span { white-space: nowrap; }
     .export-info[hidden], #jump-live[hidden] { display: none; }
+    .review-banner {
+      flex: none; display: grid; grid-template-columns: minmax(180px, .7fr) minmax(360px, 2fr) auto;
+      gap: 14px; align-items: center; padding: 10px 16px; border-bottom: 1px solid #8b6729;
+      background: #2a2113; color: #fff3d6;
+    }
+    .review-banner[hidden] { display: none; }
+    .review-title strong { display: block; font: 700 13px "IBM Plex Sans", sans-serif; }
+    .review-title span { display: block; margin-top: 3px; color: #d6bd8a; font: 500 10px "IBM Plex Mono", monospace; }
+    .review-inventory { display: flex; flex-wrap: wrap; gap: 4px 12px; min-width: 0; }
+    .review-inventory span { color: #d6bd8a; font: 500 9.5px "IBM Plex Mono", monospace; overflow-wrap: anywhere; }
+    .review-inventory strong { color: #fff3d6; }
+    .review-actions { display: flex; gap: 8px; }
+    .review-actions button { border-radius: 7px; padding: 8px 12px; cursor: pointer; font: 700 11px "IBM Plex Sans", sans-serif; }
+    .review-approve { border: 1px solid var(--ok); background: var(--ok); color: #07170f; }
+    .review-cancel { border: 1px solid #d6bd8a; background: transparent; color: #fff3d6; }
+    .review-actions button:disabled { opacity: .55; cursor: default; }
 
     /* ===== TOP BAR ===== */
     header.topbar {
@@ -411,6 +427,8 @@
       .inspector-shell { display: block; width: 100%; min-height: 320px; max-height: none; overflow: visible; border-left: 0; border-top: 1px solid var(--line); }
       .transport { min-height: 60px; height: auto; padding: 8px; flex-wrap: wrap; }
       .warnings-drawer { width: min(420px, 100vw); }
+      .review-banner { grid-template-columns: 1fr; }
+      .review-actions button { flex: 1; }
     }
   </style>
 </head>
@@ -437,6 +455,14 @@
       <button type="button" id="theme-button" class="theme-button" aria-label="Theme">&#9728;</button>
     </header>
     <section id="export-info" class="export-info" aria-label="Export information" hidden></section>
+    <section id="review-banner" class="review-banner" aria-label="Export review" hidden>
+      <div class="review-title"><strong>REVIEW BEFORE EXPORT</strong><span id="review-target"></span></div>
+      <div id="review-inventory" class="review-inventory"></div>
+      <div class="review-actions">
+        <button type="button" id="review-cancel" class="review-cancel">Cancel</button>
+        <button type="button" id="review-approve" class="review-approve">Approve export</button>
+      </div>
+    </section>
 
     <div id="metrics" class="metric-row"></div>
 
@@ -502,6 +528,11 @@
     const warningsBackdropEl = document.querySelector('#warnings-backdrop');
     const themeButtonEl = document.querySelector('#theme-button');
     const exportInfoEl = document.querySelector('#export-info');
+    const reviewBannerEl = document.querySelector('#review-banner');
+    const reviewTargetEl = document.querySelector('#review-target');
+    const reviewInventoryEl = document.querySelector('#review-inventory');
+    const reviewApproveEl = document.querySelector('#review-approve');
+    const reviewCancelEl = document.querySelector('#review-cancel');
     const svgNamespace = `http${'://'}www.w3.org/2000/svg`;
 
     const STATUS_COLOR = { idle: '--idle', running: '--run', waiting: '--warn', done: '--ok', error: '--err', stalled: '--warn' };
@@ -529,10 +560,14 @@
     let dragPoint = null;
     let fitDone = { view: null, trace: null };
     const accessToken = new URLSearchParams(window.location.search).get('token');
+    const reviewMode = new URLSearchParams(window.location.search).get('review') === '1';
+    let reviewFinished = false;
+    let reviewCancelSent = false;
+    let reviewHeartbeat = null;
     const embeddedDataEl = document.querySelector('#agent-tail-export-data');
 
     class ApiDataProvider {
-      constructor() { this.live = true; this.supportsLazyPayload = true; this.metadata = null; }
+      constructor() { this.live = !reviewMode; this.supportsLazyPayload = true; this.metadata = null; }
       async getJson(path) {
         const response = await fetch(apiPath(path), { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
@@ -561,7 +596,7 @@
       : new ApiDataProvider();
     if (!dataProvider.live) {
       jumpLiveEl.hidden = true;
-      renderExportInfo(dataProvider.metadata);
+      if (dataProvider.metadata) renderExportInfo(dataProvider.metadata);
     }
 
     [...viewTabsEl.querySelectorAll('button[data-view]')].forEach((button) => {
@@ -651,6 +686,69 @@
         return item;
       }));
     }
+
+    async function initReview() {
+      if (!reviewMode) return;
+      const review = await fetchJson('/api/v1/review');
+      reviewBannerEl.hidden = false;
+      if (!reviewHeartbeat) {
+        reviewHeartbeat = window.setInterval(() => {
+          fetchJson('/api/v1/review/heartbeat').catch(() => {});
+        }, 500);
+      }
+      reviewTargetEl.textContent = `${review.target_format} · ${review.target_path}`;
+      const values = [
+        ['sha256', review.candidate_digest],
+        ['candidate', `${review.candidate_bytes} bytes`],
+        ['events', review.event_count],
+        ['actors', review.actor_count],
+        ['warnings', review.warning_count],
+        ['ingestion errors', review.ingestion_errors],
+        ['attributes', review.retained_attribute_paths.join(', ') || 'none'],
+        ['payloads', Object.entries(review.payload_states).map(([state, count]) => `${state} ${count}`).join(', ') || 'none'],
+        ['original payload', `${review.original_payload_bytes} bytes`],
+        ['redaction', `ruleset ${review.redaction_ruleset}`],
+        ['metadata-only', review.metadata_only ? 'yes · bodies omitted' : 'no'],
+      ];
+      reviewInventoryEl.replaceChildren(...values.map(([label, value]) => {
+        const item = document.createElement('span');
+        const key = document.createElement('strong');
+        key.textContent = `${label}: `;
+        item.append(key, document.createTextNode(String(value)));
+        return item;
+      }));
+    }
+
+    async function finishReview(action) {
+      if (reviewFinished) return;
+      reviewApproveEl.disabled = true;
+      reviewCancelEl.disabled = true;
+      try {
+        const response = await fetch(apiPath(`/api/v1/review/${action}`), {
+          method: 'POST',
+          headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+        reviewFinished = true;
+        if (reviewHeartbeat) window.clearInterval(reviewHeartbeat);
+        reviewTargetEl.textContent = action === 'approve' ? 'Approved. The exact candidate is being written.' : 'Cancelled. The destination is unchanged.';
+      } catch (error) {
+        reviewApproveEl.disabled = false;
+        reviewCancelEl.disabled = false;
+        reviewTargetEl.textContent = `Decision failed: ${error.message}`;
+      }
+    }
+
+    reviewApproveEl.addEventListener('click', () => finishReview('approve'));
+    reviewCancelEl.addEventListener('click', () => finishReview('cancel'));
+    function cancelReviewOnClose() {
+      if (!reviewMode || reviewFinished || reviewCancelSent) return;
+      reviewCancelSent = true;
+      if (reviewHeartbeat) window.clearInterval(reviewHeartbeat);
+      navigator.sendBeacon(apiPath('/api/v1/review/cancel'), '');
+    }
+    window.addEventListener('pagehide', cancelReviewOnClose);
+    window.addEventListener('beforeunload', cancelReviewOnClose);
 
     function text(value) {
       return value === null || value === undefined ? '—' : String(value);
@@ -2460,6 +2558,7 @@
 
     async function init() {
       try {
+        await initReview();
         await refreshAuthoritative();
         if (dataProvider.live) connectEvents();
       } catch (error) {

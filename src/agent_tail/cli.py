@@ -12,6 +12,7 @@ import webbrowser
 from .core import IngestionError, JSONLReader, TraceIndex, redact_text, sanitize_event
 from .html_export import normalize_generation_time, render_html, write_html_atomic
 from .otel import OTLPDocumentError, canonical_jsonl as otel_jsonl, parse_otlp_json
+from .review import ExportCandidate, review_export, write_bytes_atomic
 from .session_import import (
     SOURCES,
     SessionDocumentError,
@@ -36,6 +37,9 @@ def parser() -> argparse.ArgumentParser:
     exports.add_argument("--export", metavar="PATH")
     exports.add_argument("--export-html", metavar="PATH")
     result.add_argument("--export-html-generated-at", metavar="TIMESTAMP")
+    result.add_argument("--review", action="store_true")
+    result.add_argument("--open", action="store_true", dest="open_browser")
+    result.add_argument("--review-timeout", type=float, default=600.0, metavar="SECONDS")
     result.add_argument("--full-payloads", action="store_true")
     result.add_argument("--metadata-only", action="store_true")
     result.add_argument("--unsafe-unredacted", action="store_true")
@@ -103,6 +107,12 @@ def main(argv: list[str] | None = None) -> int:
         argument_parser.error("--snapshot-stream requires standard input")
     if arguments.export_html_generated_at and not arguments.export_html:
         argument_parser.error("--export-html-generated-at requires --export-html")
+    if arguments.review and not (arguments.export or arguments.export_html):
+        argument_parser.error("--review requires --export or --export-html")
+    if arguments.open_browser and not arguments.review:
+        argument_parser.error("--open requires --review")
+    if arguments.review_timeout <= 0:
+        argument_parser.error("--review-timeout must be positive")
     if arguments.metadata_only and arguments.full_payloads:
         argument_parser.error("--metadata-only cannot be combined with --full-payloads")
     try:
@@ -157,24 +167,41 @@ def main(argv: list[str] | None = None) -> int:
             for event in events():
                 index.add(event)
             if arguments.export:
-                Path(arguments.export).write_text(
-                    _markdown(
-                        index,
-                        reader.all_errors,
-                        metadata_only=arguments.metadata_only,
-                    ),
-                    encoding="utf-8",
+                destination = Path(arguments.export)
+                content = _markdown(
+                    index,
+                    reader.all_errors,
+                    metadata_only=arguments.metadata_only,
                 )
+                export_format = "Markdown"
             else:
-                write_html_atomic(
-                    Path(arguments.export_html),
-                    render_html(
-                        index,
-                        reader.all_errors,
-                        generated_at=generated_at,
-                        metadata_only=arguments.metadata_only,
-                    ),
+                destination = Path(arguments.export_html)
+                content = render_html(
+                    index,
+                    reader.all_errors,
+                    generated_at=generated_at,
+                    metadata_only=arguments.metadata_only,
                 )
+                export_format = "HTML"
+            if arguments.review:
+                candidate = ExportCandidate.create(
+                    content,
+                    format=export_format,
+                    destination=destination,
+                )
+                return review_export(
+                    index,
+                    reader.all_errors,
+                    candidate,
+                    metadata_only=arguments.metadata_only,
+                    timeout=arguments.review_timeout,
+                    open_browser=arguments.open_browser,
+                    open_url=webbrowser.open,
+                )
+            if arguments.export:
+                write_bytes_atomic(destination, content.encode("utf-8"))
+            else:
+                write_html_atomic(destination, content)
         elif sys.stdout.isatty():
             if arguments.input == "-":
                 reader_error = run(

@@ -270,6 +270,9 @@ agent-tail run.jsonl --export-html report.html
 Use `--export-html-generated-at` when the visible export metadata needs a fixed generation timestamp, or omit it for deterministic output with no timestamp.
 Read the [HTML export usage and security guide](docs/html-export.md) before sharing an artifact.
 
+Add `--review` to either export command to inspect the exact frozen sanitized candidate and its inclusion inventory in a temporary loopback-only browser session before the destination is changed.
+Read the [pre-export review guide](docs/export-review.md) for approval, cancellation, digest, metadata-only, and local security behavior.
+
 ## Keyboard Controls
 
 The interactive terminal UI provides these controls:
