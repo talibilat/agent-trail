@@ -37,6 +37,42 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
+    def test_parallel_coordination_fixture_surfaces_shared_warnings_everywhere(self):
+        fixture = Path(__file__).parent / "fixtures" / "parallel-coordination.jsonl"
+        port = _free_port()
+        process = subprocess.Popen(
+            [
+                sys.executable, "-m", "agent_tail", "serve", str(fixture),
+                "--port", str(port), "--fan-out-threshold", "2",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+        self.addCleanup(_stop_process, process)
+        _wait_for_server_line(process)
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
+
+            expect(page.locator(".node-warn").filter(has_text="HIGH_FAN_OUT")).to_have_count(1)
+            expect(page.locator(".node-warn").filter(has_text="OVERLAPPING_CHANGE")).to_have_count(1)
+            page.get_by_role("button", name="Warnings", exact=True).click()
+            drawer = page.locator("#warnings-drawer")
+            expect(drawer).to_contain_text("HIGH_FAN_OUT")
+            expect(drawer).to_contain_text("OVERLAPPING_CHANGE")
+            expect(drawer).to_contain_text('"path":"src/shared.py"')
+            expect(drawer).to_contain_text('"causal_order":"unknown"')
+            drawer.locator(".warn-card").filter(has_text="OVERLAPPING_CHANGE").click()
+            inspector = page.locator("#inspector")
+            expect(inspector).to_contain_text("OVERLAPPING_CHANGE")
+            expect(inspector).to_contain_text("uncertain")
+            expect(inspector).to_contain_text("yes")
+            browser.close()
+
     def test_growing_file_warning_resolves_and_navigates_to_change_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "verification-gaps.jsonl")

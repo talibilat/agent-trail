@@ -427,6 +427,7 @@ class TraceIndex:
         retry_threshold: int = 3,
         stall_seconds: float = 30.0,
         orphan_grace_seconds: float = 5.0,
+        fan_out_threshold: int = 8,
         max_bytes: int = 16 * 1024 * 1024,
         warning_policy: WarningPolicy | None = None,
     ) -> None:
@@ -435,6 +436,7 @@ class TraceIndex:
             ("retry_threshold", retry_threshold, int),
             ("stall_seconds", stall_seconds, (int, float)),
             ("orphan_grace_seconds", orphan_grace_seconds, (int, float)),
+            ("fan_out_threshold", fan_out_threshold, int),
             ("max_bytes", max_bytes, int),
         ):
             if isinstance(value, bool) or not isinstance(value, expected_type):
@@ -444,6 +446,7 @@ class TraceIndex:
             ("retry_threshold", retry_threshold >= 3),
             ("stall_seconds", stall_seconds >= 0),
             ("orphan_grace_seconds", orphan_grace_seconds >= 0),
+            ("fan_out_threshold", fan_out_threshold > 0),
             ("max_bytes", max_bytes > 0),
         ):
             if not valid:
@@ -452,6 +455,7 @@ class TraceIndex:
         self.retry_threshold = retry_threshold
         self.stall_seconds = stall_seconds
         self.orphan_grace_seconds = orphan_grace_seconds
+        self.fan_out_threshold = fan_out_threshold
         self.max_bytes = max_bytes
         self.warning_policy = warning_policy
         self._events: list[Event] = []
@@ -464,6 +468,7 @@ class TraceIndex:
         self._recent_evictions: tuple[tuple[str, str, str], ...] = ()
         self._trace_cache: dict[str, TraceView] = {}
         self._verification_gap_cache: dict[str, tuple[Warning, ...]] = {}
+        self._coordination_warning_cache: dict[str, tuple[Warning, ...]] = {}
 
     def add(self, event: Event) -> None:
         if event.event_id in self._event_ids:
@@ -472,6 +477,7 @@ class TraceIndex:
         self._event_ids.add(event.event_id)
         self._trace_cache.pop(event.trace_id, None)
         self._verification_gap_cache.pop(event.trace_id, None)
+        self._coordination_warning_cache.pop(event.trace_id, None)
         size = self._event_size(event)
         self._sizes[event.event_id] = size
         self._retained_bytes += size
@@ -480,6 +486,7 @@ class TraceIndex:
         if self._recent_evictions:
             self._trace_cache.clear()
             self._verification_gap_cache.clear()
+            self._coordination_warning_cache.clear()
 
     @property
     def event_count(self) -> int:
@@ -621,6 +628,7 @@ class TraceIndex:
                     warnings.append(warning)
             warnings.extend(self._verification_gap_warnings(view))
             warnings.extend(self._failed_before_completion_warnings(view))
+            warnings.extend(self._coordination_warnings(view))
             for actor_id, actor in view.actors.items():
                 elapsed = (current - actor.last_activity).total_seconds()
                 if actor.open_span_ids and elapsed >= self.stall_seconds:
@@ -646,6 +654,25 @@ class TraceIndex:
                     ))
 
         return WarningAnalysis(tuple(warnings), tuple(suppressed))
+
+    def _coordination_warnings(self, view: TraceView) -> tuple[Warning, ...]:
+        if not view.events:
+            return ()
+        trace_id = view.events[0].trace_id
+        cached = self._coordination_warning_cache.get(trace_id)
+        if cached is not None:
+            return cached
+        # Coordination evidence shares the validated parent, change, context,
+        # verification, and usage contracts used by serve and export views.
+        from .serve import _coordination_warnings
+
+        warnings = tuple(_coordination_warnings(
+            view,
+            self._warning,
+            fan_out_threshold=self.fan_out_threshold,
+        ))
+        self._coordination_warning_cache[trace_id] = warnings
+        return warnings
 
     def _verification_gap_warnings(self, view: TraceView) -> tuple[Warning, ...]:
         if not view.events:

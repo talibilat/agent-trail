@@ -45,6 +45,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--metadata-only", action="store_true")
     result.add_argument("--unsafe-unredacted", action="store_true")
     result.add_argument("--loop-threshold", type=int, default=4)
+    result.add_argument("--fan-out-threshold", type=_positive_int, default=8)
     result.add_argument("--warning-policy", metavar="PATH")
     result.add_argument("--stall-seconds", type=float, default=30.0)
     result.add_argument("--max-bytes", type=_positive_int, default=16 * 1024 * 1024)
@@ -65,6 +66,7 @@ def serve_parser() -> argparse.ArgumentParser:
     result.add_argument("--metadata-only", action="store_true")
     result.add_argument("--unsafe-unredacted", action="store_true")
     result.add_argument("--loop-threshold", type=int, default=4)
+    result.add_argument("--fan-out-threshold", type=_positive_int, default=8)
     result.add_argument("--warning-policy", metavar="PATH")
     result.add_argument("--stall-seconds", type=float, default=30.0)
     result.add_argument("--max-bytes", type=_positive_int, default=16 * 1024 * 1024)
@@ -170,6 +172,7 @@ def main(argv: list[str] | None = None) -> int:
         reader_error = None
         index = TraceIndex(
             loop_threshold=arguments.loop_threshold,
+            fan_out_threshold=arguments.fan_out_threshold,
             stall_seconds=arguments.stall_seconds,
             max_bytes=arguments.max_bytes,
             warning_policy=warning_policy,
@@ -336,6 +339,7 @@ def _serve_main(argv: list[str]) -> int:
         unsafe_unredacted=arguments.unsafe_unredacted,
         remote_access=arguments.remote_access,
         loop_threshold=arguments.loop_threshold,
+        fan_out_threshold=arguments.fan_out_threshold,
         stall_seconds=arguments.stall_seconds,
         max_bytes=arguments.max_bytes,
         max_live_updates=arguments.max_live_updates,

@@ -1198,7 +1198,7 @@
         const active = ['running', 'waiting'].includes(status);
         const selected = agent.id === selectedAgentId;
         const dim = (focusSet && !focusSet.has(agent.id)) || !matchesQuery(horizonAgent, detail.run.trace_id, query);
-        const warn = findWarningForActor(detail, horizonAgent ? horizonAgent.events : [], agent.id);
+        const agentWarnings = warningsForActor(detail, agent.id);
 
         const wrap = document.createElement('button');
         wrap.type = 'button';
@@ -1237,12 +1237,13 @@
         labelWrap.innerHTML = `<div class="id">${escapeHtml(agent.id)}</div><div class="role">${escapeHtml(text(agent.role))}</div>`;
 
         wrap.append(dot, labelWrap);
-        if (warn) {
+        agentWarnings.forEach((warn, warningIndex) => {
           const badge = document.createElement('span');
           badge.className = 'node-warn';
           badge.textContent = warn.code;
+          badge.style.transform = `translateY(${warningIndex * 17}px)`;
           wrap.append(badge);
-        }
+        });
         wrap.addEventListener('click', (event) => {
           event.stopPropagation();
           selectedAgentId = agent.id;
@@ -1279,9 +1280,9 @@
       stageEl.replaceChildren(parent);
     }
 
-    function findWarningForActor(detail, actorEvents, actorId) {
-      const visibleIds = new Set(actorEvents.map((e) => e.event_id));
-      return detail.warnings.find((warning) => warning.actor_id === actorId && (!warning.event_id || visibleIds.has(warning.event_id)) && warning.active !== false);
+    function warningsForActor(detail, actorId) {
+      const visibleIds = new Set(eventsAtHorizon(detail).map((e) => e.event_id));
+      return detail.warnings.filter((warning) => warning.actor_id === actorId && (!warning.event_id || visibleIds.has(warning.event_id)) && warning.active !== false);
     }
 
     /* ---------- SWIMLANE ---------- */
@@ -1701,6 +1702,23 @@
       fieldsBlock.append(grid);
 
       wrap.append(head, fieldsBlock);
+
+      const eventWarnings = (detail.warnings || []).filter((warning) => warning.event_id === event.event_id);
+      if (eventWarnings.length) {
+        const warningBlock = document.createElement('div');
+        warningBlock.className = 'inspector-block event-warnings';
+        warningBlock.innerHTML = `<div class="warn-title">WARNINGS</div>`;
+        eventWarnings.forEach((warning) => {
+          const card = document.createElement('div');
+          card.className = 'agent-warn-card';
+          card.innerHTML = `
+            <div class="head"><span class="code">${escapeHtml(warning.code)}</span><span class="heuristic">${warning.active === false ? 'resolved' : 'active'}</span></div>
+            <div class="summary">${escapeHtml(warning.summary)}</div>
+            <div class="detail">${escapeHtml(text(warning.evidence))}</div>`;
+          warningBlock.append(card);
+        });
+        wrap.append(warningBlock);
+      }
 
       const evidenceMap = detail.evidence_map || {};
       const changeEvidence = (evidenceMap.changes || []).find((change) => change.event_id === event.event_id);

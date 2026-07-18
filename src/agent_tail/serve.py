@@ -7,6 +7,7 @@ import json
 import os
 import posixpath
 import re
+import shlex
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -32,6 +33,7 @@ class ServeConfig:
     remote_access: bool = False
     access_token: str | None = None
     loop_threshold: int = 4
+    fan_out_threshold: int = 8
     stall_seconds: float = 30.0
     max_bytes: int = 16 * 1024 * 1024
     max_live_updates: int = 10_000
@@ -46,6 +48,12 @@ class ServeConfig:
             or self.max_live_updates <= 0
         ):
             raise ValueError("max_live_updates must be a positive integer")
+        if (
+            not isinstance(self.fan_out_threshold, int)
+            or isinstance(self.fan_out_threshold, bool)
+            or self.fan_out_threshold <= 0
+        ):
+            raise ValueError("fan_out_threshold must be a positive integer")
 
 
 class RunStore:
@@ -112,6 +120,7 @@ class RunStore:
         metadata_only: bool = False,
         unsafe_unredacted: bool = False,
         loop_threshold: int = 4,
+        fan_out_threshold: int = 8,
         stall_seconds: float = 30.0,
         max_bytes: int = 16 * 1024 * 1024,
         max_live_updates: int = 10_000,
@@ -119,6 +128,7 @@ class RunStore:
     ) -> "RunStore":
         index = TraceIndex(
             loop_threshold=loop_threshold,
+            fan_out_threshold=fan_out_threshold,
             stall_seconds=stall_seconds,
             max_bytes=max_bytes,
             warning_policy=warning_policy,
@@ -540,6 +550,7 @@ def serve(
     store = RunStore(
         TraceIndex(
             loop_threshold=config.loop_threshold,
+            fan_out_threshold=config.fan_out_threshold,
             stall_seconds=config.stall_seconds,
             max_bytes=config.max_bytes,
             warning_policy=config.warning_policy,
@@ -566,6 +577,7 @@ def serve_file(
     store = RunStore(
         TraceIndex(
             loop_threshold=config.loop_threshold,
+            fan_out_threshold=config.fan_out_threshold,
             stall_seconds=config.stall_seconds,
             max_bytes=config.max_bytes,
             warning_policy=config.warning_policy,
@@ -1008,6 +1020,320 @@ def _relationships(view) -> dict[str, object]:
         "warnings": warnings,
         "unresolved_endpoints": list(unresolved.values()),
     }
+
+
+def _coordination_warnings(
+    view,
+    warning_factory: Callable[..., object],
+    *,
+    fan_out_threshold: int,
+) -> list[object]:
+    events = list(view.events)
+    events_by_id = {event.event_id: event for event in events}
+    projection = _relationships(view)
+    parents = projection["parents"]
+    actor_events: dict[str, list[Event]] = {}
+    for event in events:
+        actor_events.setdefault(str(event.actor["id"]), []).append(event)
+
+    def causal_before(before: Event, after: Event) -> bool:
+        if before.emitter_id == after.emitter_id:
+            return before.sequence < after.sequence
+        return bool(
+            view.causal_ancestors[after.event_id] & view.event_bits[before.event_id]
+        )
+
+    def lifecycle_before(before: Event, after: Event) -> bool:
+        if before.emitter_id == after.emitter_id:
+            return before.sequence < after.sequence
+        if causal_before(before, after):
+            return True
+        if causal_before(after, before):
+            return False
+        return before.timestamp < after.timestamp
+
+    def terminal_event(actor_id: str) -> Event | None:
+        activity = actor_events.get(actor_id, [])
+        return next(
+            (candidate for candidate in reversed(activity) if _terminal_operation(candidate)),
+            None,
+        )
+
+    def warning(
+        code: str,
+        event: Event,
+        summary: str,
+        cited: Iterable[Event],
+        warning_actor_id: str | None = None,
+        **evidence: object,
+    ) -> object:
+        cited_events = []
+        cited_ids = set()
+        for item in cited:
+            if item.event_id not in cited_ids:
+                cited_events.append(item)
+                cited_ids.add(item.event_id)
+        evidence["event_ids"] = [item.event_id for item in cited_events]
+        evidence["associated_usage"] = _usage_summary(cited_events)
+        return warning_factory(
+            code,
+            event.event_id,
+            event.trace_id,
+            warning_actor_id or str(event.actor["id"]),
+            summary,
+            **evidence,
+        )
+
+    warnings: list[object] = []
+
+    # Fan-out is measured at child-start boundaries. Cross-emitter timestamps can
+    # establish lifecycle interval order, but equal timestamps remain unknown.
+    children_by_parent: dict[str, list[str]] = {}
+    for child_id, parent_id in parents.items():
+        children_by_parent.setdefault(str(parent_id), []).append(str(child_id))
+    for parent_id, child_ids in children_by_parent.items():
+        intervals = []
+        for child_id in child_ids:
+            activity = actor_events.get(child_id, [])
+            if activity:
+                intervals.append((child_id, activity[0], terminal_event(child_id)))
+        best: tuple[list[tuple[str, Event, Event | None]], list[str], Event] | None = None
+        for _, boundary, _ in intervals:
+            open_intervals = []
+            unknown_ids = []
+            for interval in intervals:
+                child_id, start, end = interval
+                start_known = start.event_id == boundary.event_id or lifecycle_before(
+                    start, boundary
+                )
+                start_after = lifecycle_before(boundary, start)
+                if not start_known:
+                    if not start_after:
+                        unknown_ids.append(child_id)
+                    continue
+                if end is None or lifecycle_before(boundary, end):
+                    open_intervals.append(interval)
+                elif not lifecycle_before(end, boundary):
+                    unknown_ids.append(child_id)
+            if len(open_intervals) > fan_out_threshold and (
+                best is None or len(open_intervals) > len(best[0])
+            ):
+                best = (open_intervals, unknown_ids, boundary)
+        if best is not None:
+            open_intervals, unknown_ids, boundary = best
+            evidence_events = [start for _, start, _ in open_intervals]
+            evidence_events.extend(
+                end for _, _, end in open_intervals if end is not None
+            )
+            warnings.append(warning(
+                "HIGH_FAN_OUT",
+                boundary,
+                f"{parent_id} had {len(open_intervals)} simultaneously open direct children",
+                evidence_events,
+                warning_actor_id=parent_id,
+                parent_actor_id=parent_id,
+                threshold=fan_out_threshold,
+                concurrent_child_ids=[item[0] for item in open_intervals],
+                concurrency_unknown_child_ids=unknown_ids,
+            ))
+
+    changes: list[tuple[Event, str, str | None]] = []
+    for event in events:
+        if event.kind != "change.applied":
+            continue
+        change = _attributes(event).get("change")
+        if not isinstance(change, dict):
+            continue
+        path, reason = _normalized_repository_path(change.get("path"))
+        if path is None or reason is not None:
+            continue
+        symbol = change.get("symbol")
+        changes.append((
+            event,
+            path,
+            symbol.strip() if isinstance(symbol, str) and symbol.strip() else None,
+        ))
+    changes_by_path: dict[str, list[tuple[Event, str | None]]] = {}
+    for event, path, symbol in changes:
+        prior_changes = changes_by_path.setdefault(path, [])
+        for prior, prior_symbol in prior_changes:
+            if prior.actor["id"] == event.actor["id"]:
+                continue
+            if causal_before(prior, event) or causal_before(event, prior):
+                continue
+            matching_symbol = (
+                symbol if symbol is not None and symbol == prior_symbol else None
+            )
+            warnings.append(warning(
+                "OVERLAPPING_CHANGE",
+                event,
+                f"distinct actors changed {path} without an established causal order",
+                (prior, event),
+                path=path,
+                actor_ids=[prior.actor["id"], event.actor["id"]],
+                matching_symbol=matching_symbol,
+                causal_order="unknown",
+            ))
+            break
+        prior_changes.append((event, symbol))
+
+    operation_groups: dict[tuple[str, str, str, str], list[Event]] = {}
+    for event in events:
+        signature = _redundant_operation_signature(event, events_by_id)
+        snapshot = _validated_snapshot(event)
+        if signature is None or snapshot is None:
+            continue
+        operation_type, normalized = signature
+        key = (operation_type, normalized, snapshot[0], snapshot[1])
+        prior_events = operation_groups.setdefault(key, [])
+        prior = next(
+            (item for item in prior_events if item.actor["id"] != event.actor["id"]),
+            None,
+        )
+        if prior is not None:
+            warnings.append(warning(
+                "REDUNDANT_OPERATION",
+                event,
+                f"different actors repeated an identical {operation_type} on the same repository snapshot",
+                (prior, event),
+                operation_type=operation_type,
+                normalized_signature=normalized,
+                repository={"commit": snapshot[0], "worktree_sha256": snapshot[1]},
+                actor_ids=[prior.actor["id"], event.actor["id"]],
+            ))
+        prior_events.append(event)
+
+    for child_id, parent_id in parents.items():
+        child_end = terminal_event(str(child_id))
+        parent_end = terminal_event(str(parent_id))
+        if child_end is not None and _successful_operation(child_end) and parent_end is not None:
+            result_before_end = causal_before(child_end, parent_end)
+            if result_before_end or child_end.event_id == parent_end.event_id:
+                consumed = False
+                for source in actor_events.get(str(parent_id), []):
+                    if not any(
+                        relationship.type == "consumes"
+                        and relationship.event_id == child_end.event_id
+                        for relationship in source.relationships
+                    ):
+                        continue
+                    if source.event_id == parent_end.event_id or causal_before(source, parent_end):
+                        consumed = True
+                        break
+                if not consumed:
+                    warnings.append(warning(
+                        "UNCONSUMED_CHILD_RESULT",
+                        child_end,
+                        f"{parent_id} completed without explicitly consuming {child_id}'s result",
+                        (child_end, parent_end),
+                        parent_actor_id=parent_id,
+                        child_actor_id=child_id,
+                        result_event_id=child_end.event_id,
+                        parent_terminal_event_id=parent_end.event_id,
+                        consumes_relationship="absent",
+                    ))
+
+        if parent_end is None:
+            continue
+        for child_event in actor_events.get(str(child_id), []):
+            if causal_before(parent_end, child_event):
+                warnings.append(warning(
+                    "CHILD_AFTER_PARENT_END",
+                    child_event,
+                    f"{child_id} produced an event after {parent_id}'s terminal event",
+                    (parent_end, child_event),
+                    parent_actor_id=parent_id,
+                    child_actor_id=child_id,
+                    parent_terminal_event_id=parent_end.event_id,
+                    ordering="causal",
+                ))
+    return warnings
+
+
+def _terminal_operation(event: Event) -> bool:
+    return event.operation["status"].strip().lower() in TraceIndex._TERMINAL_STATUSES
+
+
+def _successful_operation(event: Event) -> bool:
+    return event.operation["status"].strip().lower() in {
+        "complete", "completed", "done", "succeeded", "success",
+    }
+
+
+def _validated_snapshot(event: Event) -> tuple[str, str] | None:
+    diagnostics: list[dict[str, object]] = []
+    snapshot = _repository_snapshot(event, diagnostics)
+    commit = snapshot["commit"]
+    worktree = snapshot["worktree_sha256"]
+    if (
+        diagnostics
+        or commit.get("availability") != "available"
+        or worktree.get("availability") != "available"
+    ):
+        return None
+    return str(commit["value"]), str(worktree["value"])
+
+
+def _redundant_operation_signature(
+    event: Event,
+    events_by_id: dict[str, Event],
+) -> tuple[str, str] | None:
+    if event.kind == "context.search":
+        search = _attributes(event).get("search")
+        if not isinstance(search, dict):
+            return None
+        query = search.get("query")
+        matches = search.get("matches")
+        if not isinstance(query, str) or not query.strip() or not isinstance(matches, list):
+            return None
+        normalized_matches = []
+        seen_matches = set()
+        for match in matches:
+            path, reason = _normalized_repository_path(match)
+            if path is None or reason is not None or path in seen_matches:
+                return None
+            normalized_matches.append(path)
+            seen_matches.add(path)
+        signature = json.dumps(
+            {"query": query.strip(), "matches": sorted(set(normalized_matches))},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return "search", signature
+    if event.kind != "verification.finished":
+        return None
+    raw_verification = _attributes(event).get("verification")
+    if not isinstance(raw_verification, dict):
+        return None
+    supplied_command = raw_verification.get("command")
+    if "command" in raw_verification and (
+        not isinstance(supplied_command, str) or not supplied_command.strip()
+    ):
+        return None
+    passed = raw_verification.get("passed")
+    exit_code = raw_verification.get("exit_code")
+    if not isinstance(passed, bool) or (
+        "exit_code" in raw_verification
+        and (
+            not isinstance(exit_code, int)
+            or isinstance(exit_code, bool)
+            or (passed and exit_code != 0)
+            or (not passed and exit_code == 0)
+        )
+    ):
+        return None
+    verification = _verification_result(event, events_by_id)
+    if not isinstance(verification, dict) or verification.get("unresolved"):
+        return None
+    command = verification.get("command")
+    if not isinstance(command, str) or not command.strip():
+        return None
+    try:
+        shlex.split(command)
+    except ValueError:
+        return None
+    return "verification", command.strip()
 
 
 def _event_follows(candidate: Event, reference: Event) -> bool:
