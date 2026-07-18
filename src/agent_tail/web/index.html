@@ -372,6 +372,11 @@
     .usage-inline-row { display: flex; gap: 16px; }
     .usage-inline-row .k { font: 400 9px "IBM Plex Mono", monospace; color: var(--dim); }
     .usage-inline-row .v { font: 600 15px "IBM Plex Mono", monospace; }
+    .outcome-cost { margin-top: 10px; overflow-x: auto; }
+    .outcome-cost table { width: 100%; border-collapse: collapse; font: 400 10px "IBM Plex Mono", monospace; }
+    .outcome-cost th, .outcome-cost td { padding: 6px 7px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+    .outcome-cost th:first-child, .outcome-cost td:first-child { text-align: left; }
+    .outcome-cost .notice { color: var(--dim); font: 400 10px "IBM Plex Mono", monospace; margin: 7px 0; }
     .io-title { font: 600 9.5px "IBM Plex Mono", monospace; letter-spacing: 1px; margin-bottom: 8px; }
     .io-title.in { color: var(--run); }
     .io-title.out { color: var(--ok); }
@@ -1068,6 +1073,25 @@
 
     function usageValue(field) {
       return field && field.available ? compactNumber(field.value || 0) : 'n/a';
+    }
+
+    function renderUsageTable(container, rows, key, label) {
+      const table = document.createElement('table');
+      const heading = document.createElement('thead');
+      heading.innerHTML = `<tr><th>${escapeHtml(label)}</th><th>input</th><th>output</th><th>total</th><th>cost</th></tr>`;
+      const body = document.createElement('tbody');
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        const usage = row.usage || {};
+        [row[key], usageValue(usage.input_tokens), usageValue(usage.output_tokens), usageValue(usage.total_tokens), costValue(usage.cost_usd, 4)].forEach((value) => {
+          const td = document.createElement('td');
+          td.textContent = value;
+          tr.append(td);
+        });
+        body.append(tr);
+      });
+      table.append(heading, body);
+      container.append(table);
     }
 
     function costValue(field, precision) {
@@ -1889,6 +1913,20 @@
         eventId.className = 'actor';
         eventId.textContent = `event ${changeEvidence.event_id}`;
         block.append(actor, eventId);
+        const hunkAttribution = (detail.outcome_cost?.by_hunk || []).find(
+          (row) => row.change_event_id === changeEvidence.event_id
+        );
+        const outcomeCost = document.createElement('div');
+        outcomeCost.className = 'outcome-cost';
+        const outcome = document.createElement('div');
+        outcome.className = 'notice';
+        outcome.textContent = `observed outcome ${hunkAttribution?.observed_outcome || 'undetermined'}`;
+        outcomeCost.append(outcome);
+        renderUsageTable(outcomeCost, [{
+          target: changeEvidence.event_id,
+          usage: hunkAttribution?.usage || {},
+        }], 'target', 'attributed hunk');
+        block.append(outcomeCost);
 
         const hunkWarningCodes = new Set(['UNCOVERED_CHANGE', 'STALE_CONTEXT', 'SELF_CONFIRMING_TEST']);
         (detail.warnings || []).filter(
@@ -2576,6 +2614,8 @@
         <div class="overview-rows"></div>
         <div class="section-label" style="margin:20px 0 10px">HOW REQUESTS WERE MADE</div>
         <div class="req-breakdowns"></div>
+        <div class="section-label" style="margin:18px 0 10px">OUTCOME COST ATTRIBUTION</div>
+        <div class="outcome-cost"></div>
         <div class="section-label" style="margin:18px 0 10px">TOP TOOLS &amp; MODELS</div>
         <div class="top-tools"></div>`;
 
@@ -2595,6 +2635,27 @@
         row.innerHTML = `<span class="k">${k}</span><span class="v" style="color:${cssVar(color)}">${escapeHtml(v)}</span>`;
         rows.append(row);
       });
+
+      const outcomeCost = wrap.querySelector('.outcome-cost');
+      const attribution = detail.outcome_cost;
+      if (attribution) {
+        const notice = document.createElement('div');
+        notice.className = 'notice';
+        notice.textContent = 'Warning associations are non-exclusive and must not be summed.';
+        outcomeCost.append(notice);
+        renderUsageTable(outcomeCost, [
+          { bucket: 'attributed', usage: attribution.allocation.attributed },
+          { bucket: 'pending', usage: attribution.allocation.pending },
+          { bucket: 'unattributed', usage: attribution.allocation.unattributed },
+        ], 'bucket', 'allocation');
+        renderUsageTable(outcomeCost, attribution.by_hunk.map((row) => ({
+          hunk: `${row.change_event_id} · ${row.observed_outcome}`,
+          usage: row.usage,
+        })), 'hunk', 'valid hunk');
+        renderUsageTable(outcomeCost, attribution.by_actor, 'actor_id', 'actor');
+        renderUsageTable(outcomeCost, attribution.by_operation, 'operation', 'operation');
+        renderUsageTable(outcomeCost, attribution.by_warning_code, 'warning_code', 'warning code (non-exclusive)');
+      }
 
       const breakdowns = wrap.querySelector('.req-breakdowns');
       [

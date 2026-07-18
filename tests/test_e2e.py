@@ -37,6 +37,84 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
+    def test_live_outcome_cost_resolves_forward_hunk_and_correction(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "outcome-cost.jsonl")
+            source.write_text(json.dumps(event_data(
+                event_id="usage-1",
+                usage={"input_tokens": 10, "output_tokens": 2, "total_tokens": 12, "cost_usd": 0.5},
+                relationships=[{"type": "contributes_to", "event_id": "change-1"}],
+            )) + "\n", encoding="utf-8")
+            port = _free_port()
+            process = subprocess.Popen(
+                [
+                    sys.executable, "-m", "agent_tail", "serve", str(source),
+                    "--port", str(port),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page(viewport={"width": 1440, "height": 900})
+                page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
+                page.wait_for_function(
+                    "currentDetail.outcome_cost.allocation.pending.cost_usd.value === 0.5"
+                )
+                initial_total = page.evaluate("currentDetail.outcome_cost.totals.cost_usd.value")
+                expect(page.locator(".outcome-cost").first).to_contain_text("pending")
+
+                with source.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(event_data(
+                        event_id="change-1",
+                        span_id="change-1",
+                        sequence=2,
+                        kind="change.applied",
+                        attributes={"change": {
+                            "path": "src/live.py",
+                            "old_start": 3,
+                            "old_count": 1,
+                            "new_start": 3,
+                            "new_count": 2,
+                        }},
+                    )) + "\n")
+
+                page.wait_for_function(
+                    "currentDetail.outcome_cost.allocation.attributed.cost_usd.value === 0.5"
+                )
+                page.locator(".node-wrap").filter(has_text="reviewer-1").click()
+                page.locator(".event-row").filter(has_text="change.applied").click()
+                inspector = page.locator("#inspector")
+                expect(inspector).to_contain_text("observed outcome no_correction_observed")
+                expect(inspector).to_contain_text("src/live.py:3-4")
+                expect(inspector).to_contain_text("0.5000")
+
+                with source.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(event_data(
+                        event_id="correction-1",
+                        span_id="correction-1",
+                        sequence=3,
+                        kind="human.corrected",
+                        actor={"id": "human"},
+                        attributes={"correction": {"action": "modified"}},
+                        relationships=[{"type": "corrects", "event_id": "change-1"}],
+                    )) + "\n")
+
+                page.wait_for_function(
+                    "currentDetail.outcome_cost.by_hunk[0].observed_outcome === 'modified'"
+                )
+                expect(inspector).to_contain_text("observed outcome modified")
+                self.assertEqual(
+                    page.evaluate("currentDetail.outcome_cost.totals.cost_usd.value"),
+                    initial_total,
+                )
+                browser.close()
+
     def test_growing_file_resolves_forward_security_influence_in_inspector(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "security.jsonl")

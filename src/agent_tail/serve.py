@@ -4,6 +4,7 @@ from collections import deque
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import json
+import math
 import os
 import posixpath
 import re
@@ -15,7 +16,7 @@ import secrets
 import sys
 import threading
 import time
-from typing import Callable, Iterable, TextIO
+from typing import Callable, Iterable, Mapping, TextIO
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .core import Event, IngestionError, JSONLReader, TraceIndex, sanitize_event
@@ -79,6 +80,9 @@ class RunStore:
         self._index = index
         if self._index is None:
             self._index = TraceIndex(warning_policy=warning_policy)
+        self._trace_by_event_id = {
+            event.event_id: event.trace_id for event in self._index.events
+        }
         self._errors = tuple(errors)
         self._findings: list[dict[str, object]] = []
         for error in self._errors:
@@ -187,6 +191,7 @@ class RunStore:
                 self._payload_details[(safe.trace_id, safe.event_id)] = _payload_preview(retained)
             prior_terminal_state = self._terminal_traces.get(safe.trace_id)
             self._index.add(safe)
+            self._trace_by_event_id[safe.event_id] = safe.trace_id
             eviction_count = self._index.eviction_count
             if eviction_count != self._last_eviction_count:
                 self._sync_payload_details(self._index.recent_evictions)
@@ -344,6 +349,13 @@ class RunStore:
             runtime_warnings = self._warnings_for_trace(
                 trace_id, now, security["findings"]
             )
+            outcome_cost = _outcome_cost(
+                view,
+                evidence_map,
+                runtime_warnings + projection["warnings"],
+                evicted_event_ids=self._index.metadata_evictions(trace_id),
+                retained_event_traces=self._trace_by_event_id,
+            )
             started_at = min((event.timestamp for event in view.events), default=None)
             return {
                 "api_version": "v1",
@@ -354,6 +366,7 @@ class RunStore:
                 **({"payload_mode": "metadata-only"} if self._metadata_only else {}),
                 "duration_seconds": _duration_seconds(view.events),
                 "usage": _usage_summary(view.events),
+                "outcome_cost": outcome_cost,
                 "events": [
                     self._event_message(
                         event,
@@ -453,8 +466,10 @@ class RunStore:
         self,
         evictions: Iterable[tuple[str, str, str]],
     ) -> None:
-        for trace_id, event_id, _ in evictions:
+        for trace_id, event_id, evicted in evictions:
             self._payload_details.pop((trace_id, event_id), None)
+            if evicted == "metadata":
+                self._trace_by_event_id.pop(event_id, None)
 
     def _warning_now(self, events: Iterable[Event]) -> datetime:
         event_list = list(events)
@@ -3245,6 +3260,254 @@ def _human_correction(event: Event) -> dict[str, object] | None:
     return {"action": action}
 
 
+_USAGE_FIELDS = ("input_tokens", "output_tokens", "total_tokens", "cost_usd")
+
+
+def _outcome_cost(
+    view,
+    evidence_map: dict[str, object],
+    warnings: Iterable[dict[str, object]],
+    *,
+    evicted_event_ids: Iterable[str] = (),
+    retained_event_traces: Mapping[str, str] | None = None,
+) -> dict[str, object]:
+    events = list(view.events)
+    events_by_id = {event.event_id: event for event in events}
+    usage_by_id = {
+        event.event_id: _usage_summary((event,)) for event in events
+    }
+    valid_changes = {
+        str(change["event_id"]): change for change in evidence_map["changes"]
+    }
+    evicted_ids = set(evicted_event_ids)
+    retained_traces = retained_event_traces or {
+        event.event_id: event.trace_id for event in events
+    }
+    trace_id = events[0].trace_id if events else ""
+    hunk_values = {event_id: _empty_usage_values() for event_id in valid_changes}
+    hunk_event_ids = {event_id: [] for event_id in valid_changes}
+    attributed_events = []
+    pending_events = []
+    unattributed_events: dict[str, list[Event]] = {}
+
+    for event in events:
+        event_usage = usage_by_id[event.event_id]
+        if not any(metric["available"] for metric in event_usage.values()):
+            continue
+        target_ids = list(dict.fromkeys(
+            relationship.event_id
+            for relationship in event.relationships
+            if relationship.type == "contributes_to"
+        ))
+        valid_target_ids = [target for target in target_ids if target in valid_changes]
+        if valid_target_ids:
+            divisor = len(valid_target_ids)
+            for target in valid_target_ids:
+                _add_usage(hunk_values[target], event_usage, divisor=divisor)
+                hunk_event_ids[target].append(event.event_id)
+            attributed_events.append(event)
+            continue
+
+        missing_ids = [target for target in target_ids if target not in retained_traces]
+        pending_ids = [target for target in missing_ids if target not in evicted_ids]
+        if pending_ids:
+            pending_events.append({
+                "event_id": event.event_id,
+                "target_event_ids": pending_ids,
+                "usage": event_usage,
+            })
+            continue
+
+        if not target_ids:
+            reason = "no_contributes_to"
+        elif missing_ids:
+            reason = "target_evicted"
+        elif any(retained_traces.get(target) != trace_id for target in target_ids):
+            reason = "cross_trace_target"
+        else:
+            reason = "invalid_target"
+        unattributed_events.setdefault(reason, []).append(event)
+
+    by_hunk = []
+    for event_id, change in valid_changes.items():
+        outcome = _observed_hunk_outcome(view, change, events_by_id)
+        usage = _usage_projection(hunk_values[event_id])
+        by_hunk.append({
+            "change_event_id": event_id,
+            "actor_id": change["actor_id"],
+            "hunk": change["hunk"],
+            "observed_outcome": outcome,
+            "contributing_event_ids": hunk_event_ids[event_id],
+            "usage": usage,
+        })
+
+    actor_events: dict[str, list[Event]] = {}
+    for event in events:
+        actor_events.setdefault(str(event.actor["id"]), []).append(event)
+    by_actor = [
+        {
+            "actor_id": actor_id,
+            "usage": _sum_projected_usage(
+                usage_by_id[event.event_id] for event in activity
+            ),
+        }
+        for actor_id, activity in actor_events.items()
+    ]
+
+    operations: dict[str, list[Event]] = {}
+    for event in events:
+        name = event.operation.get("name")
+        operation = name.strip() if isinstance(name, str) and name.strip() else event.kind
+        operations.setdefault(operation, []).append(event)
+    by_operation = [
+        {
+            "operation": operation,
+            "usage": _sum_projected_usage(
+                usage_by_id[event.event_id] for event in operation_events
+            ),
+        }
+        for operation, operation_events in operations.items()
+    ]
+
+    warning_event_ids: dict[str, list[str]] = {}
+    for warning in warnings:
+        code = warning.get("code")
+        if not isinstance(code, str):
+            continue
+        cited = _warning_event_ids(warning.get("evidence"))
+        known = warning_event_ids.setdefault(code, [])
+        known.extend(event_id for event_id in cited if event_id not in known)
+    by_warning_code = []
+    for code, event_ids in warning_event_ids.items():
+        by_warning_code.append({
+            "warning_code": code,
+            "event_ids": event_ids,
+            "usage": _sum_projected_usage(
+                usage_by_id[event_id]
+                for event_id in event_ids
+                if event_id in usage_by_id
+            ),
+        })
+
+    pending_usage = _sum_projected_usage(item["usage"] for item in pending_events)
+    unattributed_rows = [
+        {
+            "reason": reason,
+            "event_count": len(reason_events),
+            "usage": _sum_projected_usage(
+                usage_by_id[event.event_id] for event in reason_events
+            ),
+        }
+        for reason, reason_events in unattributed_events.items()
+    ]
+    unattributed_usage = _sum_projected_usage(
+        item["usage"] for item in unattributed_rows
+    )
+    return {
+        "allocation_rule": "full_to_one_or_equal_split_across_distinct_valid_hunks",
+        "warning_association": "non_exclusive_do_not_sum",
+        "totals": _sum_projected_usage(usage_by_id.values()),
+        "allocation": {
+            "attributed": _sum_projected_usage(
+                usage_by_id[event.event_id] for event in attributed_events
+            ),
+            "pending": pending_usage,
+            "unattributed": unattributed_usage,
+        },
+        "by_actor": by_actor,
+        "by_operation": by_operation,
+        "by_warning_code": by_warning_code,
+        "by_hunk": by_hunk,
+        "pending": pending_events,
+        "unattributed": unattributed_rows,
+    }
+
+
+def _observed_hunk_outcome(
+    view,
+    change: dict[str, object],
+    events_by_id: dict[str, Event],
+) -> str:
+    corrections = change.get("corrections", [])
+    if not corrections:
+        return "no_correction_observed"
+    change_event = events_by_id[str(change["event_id"])]
+    valid = []
+    for link in corrections:
+        correction_event = events_by_id.get(str(link.get("source_event_id")))
+        correction = link.get("correction")
+        if (
+            correction_event is None
+            or not isinstance(correction, dict)
+            or correction.get("action") not in {"modified", "reverted"}
+            or not _causally_before(view, change_event, correction_event)
+        ):
+            return "undetermined"
+        valid.append((correction_event, str(correction["action"])))
+    latest = [
+        item for item in valid
+        if not any(
+            item[0].event_id != other[0].event_id
+            and _causally_before(view, item[0], other[0])
+            for other in valid
+        )
+    ]
+    return latest[0][1] if len(latest) == 1 else "undetermined"
+
+
+def _causally_before(view, before: Event, after: Event) -> bool:
+    if before.emitter_id == after.emitter_id:
+        return before.sequence < after.sequence
+    return bool(
+        view.causal_ancestors[after.event_id] & view.event_bits[before.event_id]
+    )
+
+
+def _warning_event_ids(evidence: object) -> list[str]:
+    if isinstance(evidence, str):
+        try:
+            evidence = json.loads(evidence)
+        except (TypeError, ValueError):
+            return []
+    if not isinstance(evidence, dict) or not isinstance(evidence.get("event_ids"), list):
+        return []
+    return list(dict.fromkeys(
+        event_id for event_id in evidence["event_ids"] if isinstance(event_id, str)
+    ))
+
+
+def _empty_usage_values() -> dict[str, object]:
+    return {field: None for field in _USAGE_FIELDS}
+
+
+def _add_usage(
+    totals: dict[str, object],
+    usage: dict[str, object],
+    *,
+    divisor: int = 1,
+) -> None:
+    for field in _USAGE_FIELDS:
+        metric = usage[field]
+        if not metric["available"]:
+            continue
+        value = metric["value"] / divisor if divisor > 1 else metric["value"]
+        totals[field] = value if totals[field] is None else totals[field] + value
+
+
+def _usage_projection(values: dict[str, object]) -> dict[str, object]:
+    return {
+        field: {"available": values[field] is not None, "value": values[field]}
+        for field in _USAGE_FIELDS
+    }
+
+
+def _sum_projected_usage(usages: Iterable[dict[str, object]]) -> dict[str, object]:
+    totals = _empty_usage_values()
+    for usage in usages:
+        _add_usage(totals, usage)
+    return _usage_projection(totals)
+
+
 def _actor_role(events: Iterable[Event], actor_id: str) -> object:
     for event in events:
         if event.actor["id"] == actor_id and "role" in event.actor:
@@ -3287,13 +3550,14 @@ def _usage_summary(events: Iterable[Event]) -> dict[str, object]:
 
 
 def _usage(event: Event) -> dict[str, object]:
-    raw = event.raw
+    raw = event._raw
     usage = raw.get("usage")
     if isinstance(usage, dict):
         result = dict(usage)
     else:
         result = {}
-    attributes = _attributes(event)
+    raw_attributes = raw.get("attributes")
+    attributes = dict(raw_attributes) if isinstance(raw_attributes, dict) else {}
     attribute_usage = attributes.get("usage")
     if isinstance(attribute_usage, dict):
         result.update(attribute_usage)
@@ -3311,7 +3575,11 @@ def _attributes(event: Event) -> dict[str, object]:
 
 
 def _number(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
 
 
 def _terminal_state(event: Event) -> str | None:

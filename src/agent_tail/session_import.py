@@ -221,7 +221,10 @@ def hunk(value: object) -> dict[str, object] | None:
 def relationship_list(value: object) -> list[dict[str, str]]:
     if not isinstance(value, list):
         return []
-    allowed = {"motivated_by", "informed_by", "preceded_by", "applies", "verified_by", "corrects"}
+    allowed = {
+        "motivated_by", "informed_by", "preceded_by", "applies",
+        "verified_by", "corrects", "contributes_to",
+    }
     return [
         {"type": item["type"], "source_key": item["event_id"]}
         for item in value

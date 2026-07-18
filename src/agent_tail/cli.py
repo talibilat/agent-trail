@@ -21,7 +21,7 @@ from .session_import import (
     canonical_jsonl as session_jsonl,
     import_session,
 )
-from .serve import ServeConfig, serve, serve_file
+from .serve import RunStore, ServeConfig, serve, serve_file
 from .ui import render_snapshot, run
 from .warning_policy import WarningPolicyError, load_warning_policy
 
@@ -388,11 +388,19 @@ def _markdown(
     metadata_only: bool = False,
 ) -> str:
     events = index.events
+    error_list = list(errors)
     now = max(
         (event.timestamp for event in events),
         default=datetime.fromtimestamp(0, timezone.utc),
     )
     warnings = index.warnings(now=now)
+    detail_store = RunStore(
+        index,
+        error_list,
+        source_kind="export",
+        metadata_only=metadata_only,
+    )
+    detail_store.set_source_status(connected=False, state="frozen")
     lines = [
         "# Agent Tail Trace Report",
         "",
@@ -445,6 +453,10 @@ def _markdown(
                 f"{_markdown_text(', '.join(actor.open_span_ids) or 'none')} | "
                 f"{'uncertain' if actor.uncertain else 'causal'} |"
             )
+
+        detail = detail_store.run_detail(trace_id)
+        if detail is not None:
+            lines.extend(_markdown_outcome_cost(detail["outcome_cost"]))
 
         lines.extend((
             "",
@@ -536,7 +548,6 @@ def _markdown(
             lines.append("")
 
     lines.extend(("## Ingestion errors", ""))
-    error_list = list(errors)
     if error_list:
         lines.extend(
             (f"- Line {error.line}: " if error.line is not None else "- ")
@@ -547,6 +558,59 @@ def _markdown(
         lines.append("None.")
     lines.append("")
     return "\n".join(lines)
+
+
+def _markdown_outcome_cost(attribution: dict[str, object]) -> list[str]:
+    lines = [
+        "",
+        "### Outcome cost attribution",
+        "",
+        "Usage is allocated in full to one valid hunk or equally across distinct valid hunks.",
+        "Warning associations are non-exclusive and must not be summed.",
+        "",
+    ]
+
+    def table(title: str, key: str, rows: Iterable[dict[str, object]]) -> None:
+        lines.extend((
+            f"#### {title}",
+            "",
+            f"| {key} | Input tokens | Output tokens | Total tokens | Cost USD |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ))
+        for row in rows:
+            usage = row["usage"]
+            values = [
+                _markdown_usage_value(usage[field])
+                for field in ("input_tokens", "output_tokens", "total_tokens", "cost_usd")
+            ]
+            lines.append(
+                f"| {_markdown_text(str(row[key]))} | " + " | ".join(values) + " |"
+            )
+        lines.append("")
+
+    allocation = attribution["allocation"]
+    table("Allocation", "bucket", [
+        {"bucket": bucket, "usage": allocation[bucket]}
+        for bucket in ("attributed", "pending", "unattributed")
+    ])
+    table("By actor", "actor_id", attribution["by_actor"])
+    table("By operation", "operation", attribution["by_operation"])
+    table("By warning code (non-exclusive)", "warning_code", attribution["by_warning_code"])
+    table("By valid hunk", "hunk", [
+        {
+            "hunk": f"{row['change_event_id']} {row['hunk']['path']} "
+            f"{row['observed_outcome']}",
+            "usage": row["usage"],
+        }
+        for row in attribution["by_hunk"]
+    ])
+    return lines
+
+
+def _markdown_usage_value(metric: dict[str, object]) -> str:
+    if not metric["available"]:
+        return "unavailable"
+    return _markdown_text(str(metric["value"]))
 
 
 def _payload_retention(payload: object) -> str:

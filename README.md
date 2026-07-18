@@ -99,6 +99,7 @@ See [Deterministic verification gaps](docs/verification-gaps.md) for the four fa
 See [Audit-only taint security](docs/taint-security.md) for trust labels, sensitive capabilities, explicit influence propagation, deterministic paths, and incomplete coverage.
 
 See [Parallel coordination findings](docs/parallel-coordination.md) for fan-out, same-path change, redundant operation, explicit result consumption, lifecycle ordering, usage attribution, and producer guidance.
+See [Outcome cost attribution](docs/outcome-cost.md) for explicit usage-to-hunk relationships, conservation rules, pending targets, correction outcomes, and non-exclusive warning associations.
 Identical relationships from the same source event are projected once in first-declaration order, while the raw event retains every producer-supplied relationship.
 Resolved links include source and target kinds and actors so clients can present the smallest relevant evidence chain without joining the event list themselves.
 For repository changes, emit a `change.applied` event with a Git hunk locator under `attributes.change`:
