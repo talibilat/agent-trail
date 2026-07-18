@@ -1,0 +1,8 @@
+{"type":"system","subtype":"init","session_format_version":"1","claudeCodeVersion":"1.0.58","sessionId":"claude-multi"}
+{"type":"agent_start","uuid":"cc-agent","sessionId":"claude-multi","timestamp":"2026-07-18T10:01:00Z","agentId":"worker-1"}
+{"type":"context_read","uuid":"cc-read","parentUuid":"cc-agent","sessionId":"claude-multi","timestamp":"2026-07-18T10:01:01Z","agentId":"worker-1","path":"src/parser.py","line_start":4,"line_end":12,"symbol":"parse"}
+{"type":"tool_use","uuid":"cc-tool","parentUuid":"cc-agent","sessionId":"claude-multi","timestamp":"2026-07-18T10:01:02Z","agentId":"worker-1","name":"shell","command":"pytest tests/test_parser.py","input":{"command":"pytest tests/test_parser.py"}}
+{"type":"change","uuid":"cc-change","parentUuid":"cc-agent","sessionId":"claude-multi","timestamp":"2026-07-18T10:01:03Z","agentId":"worker-1","hunk":{"path":"src/parser.py","old_start":4,"old_count":2,"new_start":4,"new_count":3,"symbol":"parse"},"relationships":[{"type":"informed_by","event_id":"cc-read"},{"type":"preceded_by","event_id":"cc-tool"},{"type":"verified_by","event_id":"cc-vf"}]}
+{"type":"verification_started","uuid":"cc-vs","parentUuid":"cc-agent","sessionId":"claude-multi","timestamp":"2026-07-18T10:01:04Z","agentId":"tester","command":"pytest tests/test_parser.py"}
+{"type":"verification_finished","uuid":"cc-vf","parentUuid":"cc-agent","sessionId":"claude-multi","timestamp":"2026-07-18T10:01:05Z","agentId":"tester","command":"pytest tests/test_parser.py","passed":true,"exit_code":0,"startUuid":"cc-vs"}
+{"type":"agent_stop","uuid":"cc-agent-stop","parentUuid":"cc-agent","sessionId":"claude-multi","timestamp":"2026-07-18T10:01:06Z","agentId":"worker-1"}

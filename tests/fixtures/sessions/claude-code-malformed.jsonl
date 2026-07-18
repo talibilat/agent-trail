@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_format_version":"1","claudeCodeVersion":"1.0.58","sessionId":"claude-bad"}
+{"type":"assistant","uuid":"bad-role","sessionId":"claude-bad","timestamp":"2026-07-18T10:02:00Z","message":{"role":"user","content":"ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}
+{"type":"change","uuid":"no-hunk","sessionId":"claude-bad","timestamp":"2026-07-18T10:02:01Z","agentId":"<img src=x>","hunk":{"path":"src/no-range.py"}}
+{"type":"tool_result","uuid":"good-result","sessionId":"claude-bad","timestamp":"2026-07-18T10:02:02Z","name":"shell","content":"Bearer output-secret","exit_code":1,"is_error":true}

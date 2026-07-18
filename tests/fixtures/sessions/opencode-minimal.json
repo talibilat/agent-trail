@@ -1,0 +1,1 @@
+{"schema_version":"1","info":{"id":"oc-min","providerID":"opencode","version":"1.0.153"},"messages":[{"info":{"id":"oc-m1","role":"user","time":"2026-07-18T12:00:00Z"},"parts":[{"id":"oc-p1","type":"text","text":"Fix the parser."}]}]}

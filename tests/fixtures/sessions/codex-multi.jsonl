@@ -1,0 +1,7 @@
+{"timestamp":"2026-07-18T11:01:00Z","type":"session_meta","payload":{"id":"codex-multi","format_version":"1","cli_version":"0.98.0"}}
+{"timestamp":"2026-07-18T11:01:01Z","type":"event_msg","payload":{"type":"agent_start","id":"cx-agent","agent_id":"worker-2"}}
+{"timestamp":"2026-07-18T11:01:02Z","type":"event_msg","payload":{"type":"context_read","id":"cx-read","parent_id":"cx-agent","agent_id":"worker-2","path":"src/codex.py"}}
+{"timestamp":"2026-07-18T11:01:03Z","type":"response_item","payload":{"type":"function_call","id":"cx-call","parent_id":"cx-agent","agent_id":"worker-2","name":"shell","command":"pytest tests/test_codex.py","arguments":"{\"command\":\"pytest tests/test_codex.py\"}"}}
+{"timestamp":"2026-07-18T11:01:04Z","type":"event_msg","payload":{"type":"change","id":"cx-change","parent_id":"cx-agent","agent_id":"worker-2","hunk":{"path":"src/codex.py","old_start":8,"old_count":1,"new_start":8,"new_count":2},"relationships":[{"type":"informed_by","event_id":"cx-read"},{"type":"preceded_by","event_id":"cx-call"},{"type":"verified_by","event_id":"cx-vf"}]}}
+{"timestamp":"2026-07-18T11:01:05Z","type":"event_msg","payload":{"type":"verification_started","id":"cx-vs","parent_id":"cx-agent","agent_id":"tester","command":"pytest tests/test_codex.py"}}
+{"timestamp":"2026-07-18T11:01:06Z","type":"event_msg","payload":{"type":"verification_finished","id":"cx-vf","parent_id":"cx-agent","agent_id":"tester","command":"pytest tests/test_codex.py","passed":true,"exit_code":0,"start_id":"cx-vs"}}

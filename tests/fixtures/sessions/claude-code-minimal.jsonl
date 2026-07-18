@@ -1,0 +1,3 @@
+{"type":"system","subtype":"init","session_format_version":"1","claudeCodeVersion":"1.0.58","sessionId":"claude-min"}
+{"type":"user","uuid":"cc-u1","parentUuid":null,"sessionId":"claude-min","timestamp":"2026-07-18T10:00:00Z","message":{"role":"user","content":"Fix the parser."}}
+{"type":"assistant","uuid":"cc-a1","parentUuid":"cc-u1","sessionId":"claude-min","timestamp":"2026-07-18T10:00:01Z","message":{"role":"assistant","content":"I will inspect it.","usage":{"input_tokens":12,"output_tokens":5}}}

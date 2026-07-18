@@ -1,0 +1,3 @@
+{"timestamp":"2026-07-18T11:00:00Z","type":"session_meta","payload":{"id":"codex-min","format_version":"1","cli_version":"0.98.0"}}
+{"timestamp":"2026-07-18T11:00:01Z","type":"response_item","payload":{"type":"message","id":"cx-u1","role":"user","content":[{"type":"input_text","text":"Fix the parser."}]}}
+{"timestamp":"2026-07-18T11:00:02Z","type":"event_msg","payload":{"type":"token_count","id":"cx-tokens","usage":{"input_tokens":10,"output_tokens":4,"total_tokens":14}}}

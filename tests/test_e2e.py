@@ -29,6 +29,111 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
+    def test_coding_agent_hostile_fixture_is_sanitized_at_browser_boundary(self):
+        fixture = Path(__file__).parent / "fixtures" / "sessions" / "claude-code-hostile.jsonl"
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory, "hostile.jsonl")
+            imported = subprocess.run(
+                [
+                    sys.executable, "-m", "agent_tail", "import", "session",
+                    str(fixture), "--output", str(output),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(imported.returncode, 0, imported.stderr)
+            self.assertIn("ghp_", output.read_text(encoding="utf-8"))
+
+            port = _free_port()
+            process = subprocess.Popen(
+                [sys.executable, "-m", "agent_tail", "serve", str(output), "--port", str(port)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+            base_url = f"http://127.0.0.1:{port}"
+            runs = json.loads(urlopen(base_url + "/api/v1/runs", timeout=3).read())
+            detail_text = urlopen(
+                base_url + f"/api/v1/runs/{runs['runs'][0]['trace_id']}", timeout=3
+            ).read().decode()
+            self.assertNotIn("ghp_", detail_text)
+            self.assertIn("[REDACTED", detail_text)
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.goto(base_url, wait_until="domcontentloaded")
+                self.assertNotIn("ghp_", page.content())
+                expect(page.locator("#message-injected")).to_have_count(0)
+                expect(page.locator("#command-injected")).to_have_count(0)
+                expect(page.locator("#path-injected")).to_have_count(0)
+                expect(page.locator("#error-injected")).to_have_count(0)
+                expect(page.locator("#unknown-key-injected")).to_have_count(0)
+                browser.close()
+
+    def test_coding_agent_import_process_to_generic_browser_inspectors(self):
+        fixture = Path(__file__).parent / "fixtures" / "sessions" / "claude-code-multi.jsonl"
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory, "imported.jsonl")
+            imported = subprocess.run(
+                [
+                    sys.executable, "-m", "agent_tail", "import", "session",
+                    str(fixture), "--source", "auto", "--output", str(output),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(imported.returncode, 0, imported.stderr)
+
+            port = _free_port()
+            process = subprocess.Popen(
+                [sys.executable, "-m", "agent_tail", "serve", str(output), "--port", str(port)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+            base_url = f"http://127.0.0.1:{port}"
+            runs = json.loads(urlopen(base_url + "/api/v1/runs", timeout=3).read())
+            detail = json.loads(urlopen(
+                base_url + f"/api/v1/runs/{runs['runs'][0]['trace_id']}", timeout=3
+            ).read())
+            self.assertEqual(len(detail["evidence_map"]["changes"]), 1)
+            self.assertEqual(
+                {event["kind"] for event in detail["events"]},
+                {
+                    "agent.started", "agent.finished", "context.read",
+                    "tool.call.started", "change.applied",
+                    "verification.started", "verification.finished",
+                },
+            )
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.goto(base_url, wait_until="domcontentloaded")
+                expect(page.locator(".node-wrap").filter(has_text="claude-code:worker-1")).to_be_visible()
+                expect(page.locator(".node-wrap").filter(has_text="claude-code:tester")).to_be_visible()
+                page.locator(".node-wrap").filter(has_text="claude-code:worker-1").click()
+                expect(page.locator("#inspector")).to_contain_text("context.read")
+                expect(page.locator("#inspector")).to_contain_text("tool.call")
+                page.evaluate("""() => {
+                  [...document.querySelectorAll('.event-row')]
+                    .find((row) => row.textContent.includes('change.applied')).click();
+                }""")
+                evidence = page.locator(".change-evidence")
+                expect(evidence).to_contain_text("src/parser.py:4-6")
+                expect(evidence).to_contain_text("pytest tests/test_parser.py")
+                expect(evidence).to_contain_text("PASS")
+                browser.close()
+
     def test_langgraph_adapter_process_to_browser_change_and_failure_journey(self):
         if importlib.util.find_spec("langgraph") is None:
             self.skipTest("LangGraph extra is not installed")

@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-18T11:02:00Z","type":"session_meta","payload":{"id":"codex-bad","format_version":"1","cli_version":"0.98.0"}}
+{"timestamp":"Bearer timestamp-secret","type":"response_item","payload":{"type":"message","id":"bad-time","role":"assistant","content":"<script>bad</script>"}}
+{"timestamp":"2026-07-18T11:02:01Z","type":"event_msg","payload":{"type":"change","id":"cx-no-hunk","agent_id":"<img src=x>","hunk":{"path":"src/no-range.py","old_start":1}}}
+{"timestamp":"2026-07-18T11:02:02Z","type":"response_item","payload":{"type":"function_call_output","id":"cx-output","name":"shell","success":false,"output":"ghp_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","exit_code":2}}
