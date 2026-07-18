@@ -37,6 +37,92 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
+    def test_growing_file_updates_context_provenance_from_unknown_to_stale(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "context-provenance.jsonl")
+            source.write_text("".join((
+                json.dumps(event_data(
+                    event_id="read-1",
+                    kind="context.read",
+                    attributes={"context": {
+                        "path": "src/session.py",
+                        "line_start": 8,
+                        "content_sha256": "1" * 64,
+                    }, "repository": {"commit": "abc123"}},
+                )) + "\n",
+                json.dumps(event_data(
+                    event_id="change-unknown",
+                    span_id="change-unknown",
+                    sequence=2,
+                    kind="change.applied",
+                    attributes={"change": {
+                        "path": "src/session.py",
+                        "old_start": 8,
+                        "old_count": 1,
+                        "new_start": 8,
+                        "new_count": 1,
+                    }, "repository": {"commit": "abc123"}},
+                    relationships=[{"type": "informed_by", "event_id": "read-1"}],
+                )) + "\n",
+            )), encoding="utf-8")
+            port = _free_port()
+            process = subprocess.Popen(
+                [
+                    sys.executable, "-m", "agent_tail", "serve", str(source),
+                    "--port", str(port),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+            base_url = f"http://127.0.0.1:{port}"
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.goto(base_url, wait_until="domcontentloaded")
+                page.locator(".node-wrap").filter(has_text="reviewer-1").click()
+                page.locator(".event-row").filter(has_text="change.applied").click()
+                provenance = page.locator(".context-provenance")
+                expect(provenance).to_contain_text("preimage sha256 absent · freshness unknown")
+                expect(provenance).to_contain_text("snapshot commit abc123")
+
+                with source.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(event_data(
+                        event_id="change-stale",
+                        span_id="change-stale",
+                        sequence=3,
+                        timestamp="2026-07-13T11:03:44.912Z",
+                        kind="change.applied",
+                        attributes={"change": {
+                            "path": "src/session.py",
+                            "old_start": 8,
+                            "old_count": 1,
+                            "new_start": 8,
+                            "new_count": 2,
+                            "preimage_sha256": "2" * 64,
+                        }, "repository": {
+                            "commit": "abc123", "worktree_sha256": "3" * 64,
+                        }},
+                        relationships=[{"type": "informed_by", "event_id": "read-1"}],
+                    )) + "\n")
+
+                page.locator(".back-btn").click()
+                expect(page.locator(".event-row").filter(has_text="change.applied")).to_have_count(2)
+                page.locator(".event-row").filter(has_text="change.applied").first.click()
+                expect(page.locator(".change-evidence")).to_contain_text("src/session.py:8-9")
+                expect(page.locator(".context-provenance")).to_contain_text(
+                    "preimage sha256 " + "2" * 64 + " · freshness stale"
+                )
+                expect(page.locator(".context-provenance")).to_contain_text(
+                    "stale read for change change-stale"
+                )
+                self.assertNotIn("why", page.locator(".context-provenance").inner_text().lower())
+                browser.close()
+
     def test_metadata_only_serve_omits_payload_from_api_sse_lazy_and_browser(self):
         initial_sentinel = "payload-only-browser-sentinel"
         live_sentinel = "payload-only-sse-sentinel"

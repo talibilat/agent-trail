@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import re
 import threading
 from typing import Any, Callable, Mapping, TextIO
 
@@ -427,6 +428,9 @@ class AgentTailCallbackHandler(_CallbackBase):
         line_start: int | None = None,
         line_end: int | None = None,
         symbol: str | None = None,
+        content_sha256: str | None = None,
+        repository_commit: str | None = None,
+        repository_worktree_sha256: str | None = None,
         actor_id: str | None = None,
     ) -> str:
         context: dict[str, object] = {"path": _non_blank("path", path)}
@@ -438,9 +442,45 @@ class AgentTailCallbackHandler(_CallbackBase):
             raise ValueError("line_end must not precede line_start")
         if symbol is not None:
             context["symbol"] = _non_blank("symbol", symbol)
+        if content_sha256 is not None:
+            context["content_sha256"] = _sha256("content_sha256", content_sha256)
+        attributes: dict[str, object] = {"context": context}
+        repository = _repository(repository_commit, repository_worktree_sha256)
+        if repository:
+            attributes["repository"] = repository
         return self._emit_evidence(
             run_id, evidence_id, "context.read", "success", actor_id,
-            {"context": context}, [],
+            attributes, [],
+        )
+
+    def emit_context_search(
+        self,
+        *,
+        run_id: object,
+        evidence_id: str,
+        query: str,
+        matches: list[str],
+        repository_commit: str | None = None,
+        repository_worktree_sha256: str | None = None,
+        actor_id: str | None = None,
+    ) -> str:
+        if not isinstance(matches, list):
+            raise TypeError("matches must be an array")
+        canonical_matches = [_non_blank("match", match) for match in matches]
+        if len(set(canonical_matches)) != len(canonical_matches):
+            raise ValueError("matches must be distinct")
+        attributes: dict[str, object] = {
+            "search": {
+                "query": _non_blank("query", query),
+                "matches": canonical_matches,
+            }
+        }
+        repository = _repository(repository_commit, repository_worktree_sha256)
+        if repository:
+            attributes["repository"] = repository
+        return self._emit_evidence(
+            run_id, evidence_id, "context.search", "success", actor_id,
+            attributes, [],
         )
 
     def emit_change_applied(
@@ -454,6 +494,9 @@ class AgentTailCallbackHandler(_CallbackBase):
         new_start: int,
         new_count: int,
         symbol: str | None = None,
+        preimage_sha256: str | None = None,
+        repository_commit: str | None = None,
+        repository_worktree_sha256: str | None = None,
         relationships: list[Mapping[str, str]] | None = None,
         actor_id: str | None = None,
     ) -> str:
@@ -466,10 +509,16 @@ class AgentTailCallbackHandler(_CallbackBase):
         }
         if symbol is not None:
             change["symbol"] = _non_blank("symbol", symbol)
+        if preimage_sha256 is not None:
+            change["preimage_sha256"] = _sha256("preimage_sha256", preimage_sha256)
+        attributes: dict[str, object] = {"change": change}
+        repository = _repository(repository_commit, repository_worktree_sha256)
+        if repository:
+            attributes["repository"] = repository
         links = _relationships(relationships, allowed=_CHANGE_RELATIONSHIPS)
         return self._emit_evidence(
             run_id, evidence_id, "change.applied", "success", actor_id,
-            {"change": change}, links,
+            attributes, links,
         )
 
     def emit_verification_started(
@@ -834,6 +883,27 @@ def _non_blank(field: str, value: object) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} must be a non-blank string")
     return value
+
+
+def _sha256(field: str, value: object) -> str:
+    digest = _non_blank(field, value)
+    if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise ValueError(f"{field} must be a lowercase SHA-256 string")
+    return digest
+
+
+def _repository(
+    commit: str | None,
+    worktree_sha256: str | None,
+) -> dict[str, str]:
+    repository = {}
+    if commit is not None:
+        repository["commit"] = _non_blank("repository_commit", commit)
+    if worktree_sha256 is not None:
+        repository["worktree_sha256"] = _sha256(
+            "repository_worktree_sha256", worktree_sha256
+        )
+    return repository
 
 
 def _positive_int(field: str, value: object) -> int:

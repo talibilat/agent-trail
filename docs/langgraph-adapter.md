@@ -136,6 +136,11 @@ callback.emit_verification_finished(
 ```
 
 Context helpers require a non-blank path and validate optional positive line bounds and symbols.
+`emit_context_read` also accepts an explicit complete-file `content_sha256`, repository commit, and worktree digest.
+`emit_context_search` accepts an explicit non-blank query, a distinct ordered path list including an empty list, and the same optional repository snapshot fields.
+`emit_change_applied` accepts an explicit complete-file `preimage_sha256` and the same optional repository snapshot fields.
+These helpers validate caller-supplied values but never inspect a repository, read a file, perform a search, or calculate a digest.
+See [Context provenance](context-provenance.md) for the exact byte and dirty-worktree manifest algorithms.
 Change helpers require a valid Git hunk range and accept only the canonical `motivated_by`, `informed_by`, `preceded_by`, `verified_by`, and `applies` relationship types.
 The caller must supply every relationship type and canonical target event ID explicitly.
 Verification helpers require a command on the start or finished event, validate lifecycle linkage, validate boolean outcomes and exit-code agreement, and accept only `pre_existing` or `same_agent` test origins.

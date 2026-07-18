@@ -339,6 +339,13 @@
     .compaction-card .source { margin-top: 5px; font: 500 10.5px "IBM Plex Mono", monospace; color: var(--text); word-break: break-word; }
     .compaction-card .meta { margin-top: 3px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); }
     .compaction-card .incomplete { margin-top: 5px; font: 500 9.5px "IBM Plex Mono", monospace; color: var(--warn); }
+    .provenance-timeline { display: grid; gap: 7px; margin-top: 9px; }
+    .provenance-entry { padding: 8px 9px; border-left: 2px solid var(--faint); background: rgba(255,255,255,.025); }
+    .provenance-entry.selected { border-left-color: var(--accent); background: rgba(255,184,77,.06); }
+    .provenance-entry .title { font: 600 10px "IBM Plex Mono", monospace; color: var(--text); }
+    .provenance-entry .detail { margin-top: 3px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); word-break: break-word; }
+    .provenance-entry .diagnostic { margin-top: 4px; font: 500 9.5px "IBM Plex Mono", monospace; color: var(--warn); }
+    .provenance-entry.stale .title { color: var(--err); }
     .unresolved-evidence { margin-top: 8px; padding: 8px 10px; border-left: 2px solid var(--warn); background: rgba(255,190,92,.06); }
     .unresolved-evidence .type { font: 600 10px "IBM Plex Mono", monospace; color: var(--warn); word-break: break-word; }
     .unresolved-evidence .event-id { margin-top: 4px; font: 400 9.5px "IBM Plex Mono", monospace; color: var(--dim); word-break: break-all; }
@@ -2285,6 +2292,97 @@
           ? `Evidence incomplete · ${missing.length} missing categor${missing.length === 1 ? 'y' : 'ies'} · ${unresolvedCount} unresolved reference${unresolvedCount === 1 ? '' : 's'} · ${integrityIssueCount} change integrity issue${integrityIssueCount === 1 ? '' : 's'} · ${unknownTestOriginCount} test${unknownTestOriginCount === 1 ? '' : 's'} with unknown provenance · ${sameAgentTestCount} same-agent test${sameAgentTestCount === 1 ? '' : 's'} · ${failedVerificationCount} failed verification${failedVerificationCount === 1 ? '' : 's'}`
           : 'Core evidence complete';
         block.append(completeness);
+        wrap.append(block);
+      }
+
+      const provenance = detail.context_provenance || {};
+      const actorTimeline = (provenance.actors || []).find(
+        (timeline) => timeline.actor_id === event.actor.id
+      );
+      if (actorTimeline && actorTimeline.entries.length) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block context-provenance';
+        const label = document.createElement('div');
+        label.className = 'inspector-label';
+        label.textContent = 'CONTEXT PROVENANCE';
+        const timeline = document.createElement('div');
+        timeline.className = 'provenance-timeline';
+        const availability = (field) => field && field.availability === 'available'
+          ? field.value
+          : field && field.availability || 'absent';
+        actorTimeline.entries.forEach((entry) => {
+          const card = document.createElement('div');
+          card.className = `provenance-entry${entry.event_id === event.event_id ? ' selected' : ''}${entry.freshness === 'stale' ? ' stale' : ''}`;
+          const title = document.createElement('div');
+          title.className = 'title';
+          title.textContent = `${entry.kind} · ${entry.event_id}`;
+          card.append(title);
+          const snapshot = document.createElement('div');
+          snapshot.className = 'detail';
+          snapshot.textContent = `snapshot commit ${availability(entry.repository?.commit)} · worktree sha256 ${availability(entry.repository?.worktree_sha256)}`;
+          card.append(snapshot);
+          if (entry.locator) {
+            const locator = document.createElement('div');
+            locator.className = 'detail';
+            const path = entry.locator.normalized_path || entry.locator.raw_path || 'path unavailable';
+            const range = entry.locator.line_start === undefined
+              ? ''
+              : `:${entry.locator.line_start}${entry.locator.line_end === undefined ? '' : `-${entry.locator.line_end}`}`;
+            locator.textContent = `locator ${path}${range}${entry.locator.symbol ? ` · ${entry.locator.symbol}` : ''}`;
+            card.append(locator);
+          }
+          if (entry.content_sha256 || entry.preimage_sha256) {
+            const hash = document.createElement('div');
+            hash.className = 'detail';
+            const hashField = entry.content_sha256 || entry.preimage_sha256;
+            const hashName = entry.content_sha256 ? 'content sha256' : 'preimage sha256';
+            hash.textContent = `${hashName} ${availability(hashField)} · freshness ${entry.freshness || 'unknown'}`;
+            card.append(hash);
+          }
+          if (entry.kind === 'context.search') {
+            const query = document.createElement('div');
+            query.className = 'detail';
+            query.textContent = `query ${entry.query === undefined ? 'unavailable' : entry.query}`;
+            const matches = document.createElement('div');
+            matches.className = 'detail';
+            matches.textContent = entry.canonical_matches.length
+              ? `matches ${entry.canonical_matches.join(', ')}`
+              : 'matches empty';
+            card.append(query, matches);
+          }
+          if (entry.kind === 'context.compacted') {
+            const boundary = document.createElement('div');
+            boundary.className = 'detail';
+            const sources = (entry.summarizes || []).map(
+              (source) => `${source.event_id}${source.chronology ? ` ${source.chronology}` : ` ${source.status || source.kind || 'unknown'}`}`
+            );
+            boundary.textContent = sources.length
+              ? `compaction boundary summarizes ${sources.join(', ')}`
+              : 'compaction boundary has no explicit sources';
+            card.append(boundary);
+          }
+          (entry.diagnostics || []).forEach((diagnostic) => {
+            const warning = document.createElement('div');
+            warning.className = 'diagnostic';
+            warning.textContent = diagnostic.code === 'stale_context_read'
+              ? `stale read for change ${diagnostic.change_event_id}`
+              : diagnostic.code === 'divergent_repository_snapshot'
+                ? `divergent repository snapshot · ${diagnostic.fields.join(', ')}`
+                : diagnostic.code.replaceAll('_', ' ');
+            card.append(warning);
+          });
+          (entry.comparisons || entry.reads || []).forEach((comparison) => {
+            const status = document.createElement('div');
+            status.className = comparison.freshness === 'stale' ? 'diagnostic' : 'detail';
+            const counterpart = entry.kind === 'context.read'
+              ? comparison.change_event_id
+              : comparison.read_event_id;
+            status.textContent = `${comparison.freshness} vs ${counterpart} · ${comparison.chronology}`;
+            card.append(status);
+          });
+          timeline.append(card);
+        });
+        block.append(label, timeline);
         wrap.append(block);
       }
 

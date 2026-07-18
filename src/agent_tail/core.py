@@ -299,6 +299,24 @@ def sanitize_event(
     original_payload = original_raw.pop("payload", None) if has_omitted_payload else None
     raw = redact(original_raw)
 
+    attributes = raw.get("attributes")
+    if isinstance(attributes, dict):
+        if event.kind == "context.read":
+            context = attributes.get("context")
+            if isinstance(context, dict):
+                for key in ("content", "contents", "text"):
+                    context.pop(key, None)
+        elif event.kind == "context.search":
+            search = attributes.get("search")
+            if isinstance(search, dict):
+                for key in ("content", "contents", "result", "results", "summary"):
+                    search.pop(key, None)
+            for key in ("content", "contents", "results", "summary"):
+                attributes.pop(key, None)
+        elif event.kind == "context.compacted":
+            for key in ("content", "contents", "summary", "summaries", "text"):
+                attributes.pop(key, None)
+
     if has_omitted_payload:
         original = json.dumps(
             original_payload, ensure_ascii=False, separators=(",", ":")
@@ -384,6 +402,8 @@ class TraceView:
     uncertain_event_ids: frozenset[str]
     actors: Mapping[str, ActorState]
     spans: Mapping[str, SpanState]
+    causal_ancestors: Mapping[str, int]
+    event_bits: Mapping[str, int]
 
     @property
     def event_ids(self) -> tuple[str, ...]:
@@ -482,7 +502,7 @@ class TraceIndex:
         if cached is not None:
             return cached
         events = [event for event in self._events if event.trace_id == trace_id]
-        ordered, uncertain, (_, descendants) = self._order(events)
+        ordered, uncertain, (ancestors, descendants) = self._order(events)
         spans: dict[str, SpanState] = {}
         actor_events: dict[str, list[Event]] = {}
 
@@ -560,7 +580,17 @@ class TraceIndex:
                 len(maxima) != 1,
             )
 
-        view = TraceView(tuple(ordered), frozenset(uncertain), actors, spans)
+        view = TraceView(
+            tuple(ordered),
+            frozenset(uncertain),
+            actors,
+            spans,
+            ancestors,
+            {
+                event.event_id: 1 << position
+                for position, event in enumerate(ordered)
+            },
+        )
         self._trace_cache[trace_id] = view
         return view
 

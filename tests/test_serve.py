@@ -5867,6 +5867,245 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertIn("AGENT LANES", stdout.getvalue())
 
+class ContextProvenanceTests(unittest.TestCase):
+    def test_forward_and_late_reads_keep_freshness_separate_from_chronology(self):
+        digest = "4" * 64
+        events = [
+            event_data(
+                event_id="change-forward", span_id="change", sequence=2,
+                timestamp="2026-07-18T12:00:00Z", kind="change.applied",
+                attributes={"change": {
+                    "path": "src/forward.py", "old_start": 1, "old_count": 1,
+                    "new_start": 1, "new_count": 1, "preimage_sha256": digest,
+                }},
+                relationships=[{"type": "informed_by", "event_id": "read-forward"}],
+            ),
+            event_data(
+                event_id="read-forward", span_id="read", sequence=1,
+                timestamp="2026-07-18T12:00:00Z", kind="context.read",
+                attributes={"context": {
+                    "path": "src/forward.py", "content_sha256": digest,
+                }},
+            ),
+            event_data(
+                event_id="read-late", span_id="late", sequence=3,
+                timestamp="2026-07-18T11:59:00Z", kind="context.read",
+                attributes={"context": {
+                    "path": "src/forward.py", "content_sha256": "5" * 64,
+                }},
+            ),
+        ]
+        projection = RunStore.from_lines(
+            json.dumps(item) + "\n" for item in events
+        ).run_detail("trace-1")["context_provenance"]
+
+        self.assertEqual(
+            projection["by_event_id"]["read-forward"]["comparisons"],
+            [{
+                "read_event_id": "read-forward",
+                "change_event_id": "change-forward",
+                "chronology": "before_change",
+                "freshness": "fresh",
+            }],
+        )
+        self.assertEqual(
+            projection["by_event_id"]["read-late"]["comparisons"][0],
+            {
+                "read_event_id": "read-late",
+                "change_event_id": "change-forward",
+                "chronology": "after_change",
+                "freshness": "stale",
+            },
+        )
+
+    def test_projects_stale_search_compaction_and_clock_skew_without_text(self):
+        old_hash = "1" * 64
+        current_hash = "2" * 64
+        worktree = "3" * 64
+        events = [
+            event_data(
+                event_id="read-1", sequence=1,
+                timestamp="2026-07-18T12:04:00Z", kind="context.read",
+                attributes={
+                    "context": {
+                        "path": "src/./main.py", "line_start": 4,
+                        "content_sha256": old_hash, "contents": "must not project",
+                    },
+                    "repository": {"commit": "abc123", "worktree_sha256": worktree},
+                },
+            ),
+            event_data(
+                event_id="search-1", span_id="search", sequence=2,
+                timestamp="2026-07-18T12:03:00Z", kind="context.search",
+                attributes={"search": {
+                    "query": "ContextProvenance", "matches": [
+                        "src/main.py", "src/main.py", "../secret", "/etc/passwd",
+                    ],
+                    "summary": "must not project",
+                }},
+            ),
+            event_data(
+                event_id="compact-1", span_id="compact", sequence=3,
+                timestamp="2026-07-18T12:02:00Z", kind="context.compacted",
+                attributes={"summary": "must not project"},
+                relationships=[{"type": "summarizes", "event_id": "read-1"}],
+            ),
+            event_data(
+                event_id="change-1", span_id="change", sequence=4,
+                timestamp="2026-07-18T12:01:00Z", kind="change.applied",
+                attributes={
+                    "change": {
+                        "path": "src/main.py", "old_start": 1, "old_count": 1,
+                        "new_start": 1, "new_count": 1,
+                        "preimage_sha256": current_hash,
+                    },
+                    "repository": {"commit": "abc123", "worktree_sha256": worktree},
+                },
+                relationships=[{"type": "informed_by", "event_id": "compact-1"}],
+            ),
+        ]
+        detail = RunStore.from_lines(json.dumps(item) + "\n" for item in events).run_detail(
+            "trace-1"
+        )
+        projection = detail["context_provenance"]
+        read = projection["by_event_id"]["read-1"]
+        search = projection["by_event_id"]["search-1"]
+        change = projection["by_event_id"]["change-1"]
+
+        self.assertEqual(read["locator"]["normalized_path"], "src/main.py")
+        self.assertEqual(read["freshness"], "stale")
+        self.assertEqual(read["comparisons"][0]["chronology"], "before_change")
+        self.assertEqual(change["freshness"], "stale")
+        self.assertEqual(search["query"], "ContextProvenance")
+        self.assertEqual(search["canonical_matches"], ["src/main.py"])
+        self.assertEqual(
+            [item["code"] for item in search["diagnostics"]],
+            [
+                "duplicate_search_match", "parent_traversal_repository_path",
+                "absolute_repository_path",
+            ],
+        )
+        self.assertNotIn("contents", json.dumps(projection))
+        self.assertNotIn("must not project", json.dumps(projection))
+        self.assertNotIn("must not project", json.dumps(detail))
+        self.assertEqual(detail["evidence_map"]["changes"][0]["event_id"], "change-1")
+
+    def test_missing_malformed_hashes_and_unsafe_paths_remain_unknown(self):
+        events = [
+            event_data(
+                event_id="read-unsafe", kind="context.read",
+                attributes={"context": {
+                    "path": "../../src/main.py", "content_sha256": "A" * 64,
+                }},
+            ),
+            event_data(
+                event_id="change-unsafe", span_id="change", sequence=2,
+                kind="change.applied", attributes={"change": {
+                    "path": "../../src/main.py", "old_start": 1, "old_count": 1,
+                    "new_start": 1, "new_count": 1,
+                }},
+            ),
+            event_data(
+                event_id="empty-search", span_id="search", sequence=3,
+                kind="context.search",
+                attributes={"search": {"query": "nothing", "matches": []}},
+            ),
+        ]
+        projection = RunStore.from_lines(
+            json.dumps(item) + "\n" for item in events
+        ).run_detail("trace-1")["context_provenance"]
+        read = projection["by_event_id"]["read-unsafe"]
+        change = projection["by_event_id"]["change-unsafe"]
+
+        self.assertEqual(read["locator"]["raw_path"], "../../src/main.py")
+        self.assertNotIn("normalized_path", read["locator"])
+        self.assertEqual(read["content_sha256"]["availability"], "malformed")
+        self.assertEqual(read["freshness"], "unknown")
+        self.assertEqual(change["freshness"], "unknown")
+        self.assertEqual(projection["by_event_id"]["empty-search"]["canonical_matches"], [])
+        self.assertFalse(any(item["code"] == "stale_context_read" for item in projection["diagnostics"]))
+
+    def test_equal_time_cross_actor_snapshots_diverge_but_ordered_events_do_not(self):
+        events = [
+            event_data(
+                event_id="actor-a", emitter_id="a", actor={"id": "a"},
+                timestamp="2026-07-18T12:00:00Z", kind="context.read",
+                attributes={
+                    "context": {"path": "a.py"},
+                    "repository": {"commit": "commit-a", "worktree_sha256": "a" * 64},
+                },
+            ),
+            event_data(
+                event_id="actor-b", emitter_id="b", actor={"id": "b"},
+                timestamp="2026-07-18T12:00:00Z", kind="context.search",
+                attributes={
+                    "search": {"query": "x", "matches": []},
+                    "repository": {"commit": "commit-b", "worktree_sha256": "b" * 64},
+                },
+            ),
+            event_data(
+                event_id="actor-c", emitter_id="a", sequence=2, actor={"id": "c"},
+                timestamp="2026-07-18T12:01:00Z", kind="context.read",
+                attributes={
+                    "context": {"path": "c.py"},
+                    "repository": {"commit": "commit-c"},
+                },
+            ),
+        ]
+        projection = RunStore.from_lines(
+            json.dumps(item) + "\n" for item in events
+        ).run_detail("trace-1")["context_provenance"]
+        divergent = [
+            item for item in projection["diagnostics"]
+            if item["code"] == "divergent_repository_snapshot"
+        ]
+
+        equal_time = next(
+            item for item in divergent
+            if item["event_ids"] == ["actor-a", "actor-b"]
+        )
+        self.assertEqual(equal_time["fields"], ["commit", "worktree_sha256"])
+        self.assertFalse(any(
+            item["event_ids"] == ["actor-a", "actor-c"] for item in divergent
+        ))
+        self.assertFalse(any(
+            item["event_ids"] == ["actor-b", "actor-c"] for item in divergent
+        ))
+
+    def test_explicit_causal_snapshot_order_suppresses_divergence(self):
+        events = [
+            event_data(
+                event_id="context-source", emitter_id="source", sequence=1,
+                actor={"id": "source"}, timestamp="2026-07-18T12:00:00Z",
+                kind="context.read", attributes={
+                    "context": {"path": "source.py"},
+                    "repository": {"commit": "commit-source"},
+                },
+            ),
+            event_data(
+                event_id="causal-bridge", emitter_id="source", sequence=2,
+                span_id="bridge-span", actor={"id": "bridge"},
+                timestamp="2026-07-18T12:00:00Z", kind="agent.started",
+            ),
+            event_data(
+                event_id="context-child", emitter_id="child", sequence=1,
+                span_id="child-span", parent_span_id="bridge-span",
+                actor={"id": "child"}, timestamp="2026-07-18T12:00:00Z",
+                kind="context.search", attributes={
+                    "search": {"query": "child", "matches": []},
+                    "repository": {"commit": "commit-child"},
+                },
+            ),
+        ]
+        projection = RunStore.from_lines(
+            json.dumps(item) + "\n" for item in events
+        ).run_detail("trace-1")["context_provenance"]
+
+        self.assertFalse(any(
+            item["code"] == "divergent_repository_snapshot"
+            for item in projection["diagnostics"]
+        ))
+
 
 def _wait_until(callback, *, timeout: float = 2.0) -> bool:
     deadline = time.time() + timeout

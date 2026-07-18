@@ -5,6 +5,8 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import json
 import os
+import posixpath
+import re
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -322,6 +324,7 @@ class RunStore:
             now = self._warning_now(view.events)
             policy = self._index.warning_policy_projection(now=now, trace_id=trace_id)
             projection = _relationships(view)
+            context_provenance = _context_provenance(view)
             evidence_map = _event_evidence(view.events)
             started_at = min((event.timestamp for event in view.events), default=None)
             return {
@@ -363,6 +366,7 @@ class RunStore:
                 "links": projection["links"],
                 "unresolved_endpoints": projection["unresolved_endpoints"],
                 "evidence_map": evidence_map,
+                "context_provenance": context_provenance,
                 "source": dict(self._source_status),
                 "findings": [
                     finding for finding in self._findings
@@ -1023,6 +1027,367 @@ def _evidence_chronology(
     if _event_follows(boundary, evidence):
         return f"before_{boundary_name}"
     return "undetermined"
+
+
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+_WINDOWS_ABSOLUTE_PATH = re.compile(r"^[A-Za-z]:[\\/]")
+_CONTEXT_PROVENANCE_KINDS = {
+    "context.read",
+    "context.search",
+    "context.compacted",
+    "change.applied",
+}
+
+
+def _normalized_repository_path(value: object) -> tuple[str | None, str | None]:
+    if not isinstance(value, str) or not value.strip():
+        return None, "invalid_repository_path"
+    path = value.replace("\\", "/")
+    if path.startswith("/") or _WINDOWS_ABSOLUTE_PATH.match(path):
+        return None, "absolute_repository_path"
+    if ".." in path.split("/"):
+        return None, "parent_traversal_repository_path"
+    normalized = posixpath.normpath(path)
+    if normalized in {"", "."}:
+        return None, "invalid_repository_path"
+    return normalized, None
+
+
+def _hash_field(
+    container: object,
+    field: str,
+    diagnostic_prefix: str,
+    diagnostics: list[dict[str, object]],
+) -> dict[str, object]:
+    if not isinstance(container, dict) or field not in container:
+        return {"availability": "absent"}
+    value = container[field]
+    if isinstance(value, str) and _SHA256.fullmatch(value):
+        return {"availability": "available", "value": value}
+    diagnostics.append({
+        "code": f"malformed_{diagnostic_prefix}",
+        "field": field,
+    })
+    return {"availability": "malformed"}
+
+
+def _repository_snapshot(
+    event: Event,
+    diagnostics: list[dict[str, object]],
+) -> dict[str, object]:
+    attributes = _attributes(event)
+    repository = attributes.get("repository")
+    if repository is not None and not isinstance(repository, dict):
+        diagnostics.append({
+            "code": "malformed_repository_snapshot",
+            "field": "repository",
+        })
+    commit: dict[str, object] = {"availability": "absent"}
+    if isinstance(repository, dict) and "commit" in repository:
+        value = repository["commit"]
+        if isinstance(value, str) and value.strip():
+            commit = {"availability": "available", "value": value}
+        else:
+            commit = {"availability": "malformed"}
+            diagnostics.append({
+                "code": "malformed_repository_commit",
+                "field": "repository.commit",
+            })
+    worktree = _hash_field(
+        repository,
+        "worktree_sha256",
+        "repository_worktree_sha256",
+        diagnostics,
+    )
+    return {"commit": commit, "worktree_sha256": worktree}
+
+
+def _path_detail(
+    value: object,
+    diagnostics: list[dict[str, object]],
+    *,
+    field: str,
+) -> dict[str, object]:
+    detail: dict[str, object] = {}
+    if isinstance(value, str):
+        detail["raw_path"] = value
+    normalized, reason = _normalized_repository_path(value)
+    if normalized is not None:
+        detail["normalized_path"] = normalized
+    else:
+        diagnostics.append({"code": reason, "field": field})
+    return detail
+
+
+def _context_provenance(view) -> dict[str, object]:
+    event_list = list(view.events)
+    entries: list[dict[str, object]] = []
+    by_event_id: dict[str, dict[str, object]] = {}
+    diagnostics: list[dict[str, object]] = []
+    events_by_id = {event.event_id: event for event in event_list}
+
+    for event in event_list:
+        if event.kind not in _CONTEXT_PROVENANCE_KINDS:
+            continue
+        entry_diagnostics: list[dict[str, object]] = []
+        entry: dict[str, object] = {
+            "event_id": event.event_id,
+            "kind": event.kind,
+            "actor_id": event.actor["id"],
+            "emitter_id": event.emitter_id,
+            "sequence": event.sequence,
+            "timestamp": event.timestamp.isoformat(),
+            "repository": _repository_snapshot(event, entry_diagnostics),
+        }
+        attributes = _attributes(event)
+        if event.kind == "context.read":
+            context = attributes.get("context")
+            if not isinstance(context, dict):
+                entry_diagnostics.append({
+                    "code": "malformed_context_read",
+                    "field": "context",
+                })
+                context = {}
+            locator = _path_detail(
+                context.get("path"), entry_diagnostics, field="context.path"
+            )
+            for key in ("line_start", "line_end"):
+                value = context.get(key)
+                if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                    locator[key] = value
+            symbol = context.get("symbol")
+            if isinstance(symbol, str) and symbol.strip():
+                locator["symbol"] = symbol
+            entry["locator"] = locator
+            entry["content_sha256"] = _hash_field(
+                context,
+                "content_sha256",
+                "context_content_sha256",
+                entry_diagnostics,
+            )
+            entry["freshness"] = "unknown"
+            entry["comparisons"] = []
+        elif event.kind == "context.search":
+            search = attributes.get("search")
+            if not isinstance(search, dict):
+                entry_diagnostics.append({
+                    "code": "malformed_context_search",
+                    "field": "search",
+                })
+                search = {}
+            query = search.get("query")
+            if isinstance(query, str) and query.strip():
+                entry["query"] = query
+            else:
+                entry_diagnostics.append({
+                    "code": "malformed_search_query",
+                    "field": "search.query",
+                })
+            raw_matches = search.get("matches")
+            projected_matches: list[dict[str, object]] = []
+            canonical_matches: list[str] = []
+            seen_raw: set[str] = set()
+            if not isinstance(raw_matches, list):
+                entry_diagnostics.append({
+                    "code": "malformed_search_matches",
+                    "field": "search.matches",
+                })
+                raw_matches = []
+            for position, raw_path in enumerate(raw_matches):
+                match_diagnostics: list[dict[str, object]] = []
+                match = _path_detail(
+                    raw_path,
+                    match_diagnostics,
+                    field=f"search.matches[{position}]",
+                )
+                if isinstance(raw_path, str) and raw_path in seen_raw:
+                    match_diagnostics.append({
+                        "code": "duplicate_search_match",
+                        "field": f"search.matches[{position}]",
+                    })
+                elif isinstance(raw_path, str):
+                    seen_raw.add(raw_path)
+                    normalized = match.get("normalized_path")
+                    if isinstance(normalized, str) and normalized not in canonical_matches:
+                        canonical_matches.append(normalized)
+                if match_diagnostics:
+                    match["diagnostics"] = match_diagnostics
+                    entry_diagnostics.extend(match_diagnostics)
+                projected_matches.append(match)
+            entry["matches"] = projected_matches
+            entry["canonical_matches"] = canonical_matches
+        elif event.kind == "context.compacted":
+            sources = []
+            seen_sources = set()
+            for relationship in event.relationships:
+                if relationship.type != "summarizes" or relationship.event_id in seen_sources:
+                    continue
+                seen_sources.add(relationship.event_id)
+                source = events_by_id.get(relationship.event_id)
+                source_detail: dict[str, object] = {"event_id": relationship.event_id}
+                if source is None:
+                    source_detail["status"] = "missing"
+                else:
+                    source_detail["kind"] = source.kind
+                    source_detail["actor_id"] = source.actor["id"]
+                    source_detail["chronology"] = _evidence_chronology(
+                        source, event, "compaction"
+                    )
+                sources.append(source_detail)
+            entry["summarizes"] = sources
+        else:
+            change = attributes.get("change")
+            if not isinstance(change, dict):
+                change = {}
+            entry["locator"] = _path_detail(
+                change.get("path"), entry_diagnostics, field="change.path"
+            )
+            entry["preimage_sha256"] = _hash_field(
+                change,
+                "preimage_sha256",
+                "change_preimage_sha256",
+                entry_diagnostics,
+            )
+            entry["freshness"] = "unknown"
+            entry["reads"] = []
+        if entry_diagnostics:
+            entry["diagnostics"] = entry_diagnostics
+            diagnostics.extend({"event_id": event.event_id, **item} for item in entry_diagnostics)
+        entries.append(entry)
+        by_event_id[event.event_id] = entry
+
+    reads = [entry for entry in entries if entry["kind"] == "context.read"]
+    changes = [entry for entry in entries if entry["kind"] == "change.applied"]
+    for change_entry in changes:
+        change_event = events_by_id[str(change_entry["event_id"])]
+        linked_reads = {
+            relationship.event_id
+            for relationship in change_event.relationships
+            if relationship.type == "informed_by"
+        }
+        linked_compactions = [
+            events_by_id.get(relationship.event_id)
+            for relationship in change_event.relationships
+            if relationship.type == "informed_by"
+        ]
+        linked_reads.update(
+            relationship.event_id
+            for compaction in linked_compactions
+            if compaction is not None and compaction.kind == "context.compacted"
+            for relationship in compaction.relationships
+            if relationship.type == "summarizes"
+        )
+        change_path = change_entry.get("locator", {}).get("normalized_path")
+        preimage = change_entry["preimage_sha256"]
+        statuses = []
+        for read_entry in reads:
+            if not isinstance(change_path, str):
+                continue
+            if read_entry.get("locator", {}).get("normalized_path") != change_path:
+                continue
+            if (
+                read_entry["actor_id"] != change_entry["actor_id"]
+                and read_entry["event_id"] not in linked_reads
+            ):
+                continue
+            read_event = events_by_id[str(read_entry["event_id"])]
+            chronology = _evidence_chronology(read_event, change_event, "change")
+            observed = read_entry["content_sha256"]
+            freshness = "unknown"
+            if (
+                observed.get("availability") == "available"
+                and preimage.get("availability") == "available"
+            ):
+                freshness = (
+                    "fresh" if observed["value"] == preimage["value"] else "stale"
+                )
+            comparison = {
+                "read_event_id": read_entry["event_id"],
+                "change_event_id": change_entry["event_id"],
+                "chronology": chronology,
+                "freshness": freshness,
+            }
+            read_entry["comparisons"].append(comparison)
+            change_entry["reads"].append(comparison)
+            statuses.append(freshness)
+            if freshness == "stale":
+                diagnostic = {
+                    "code": "stale_context_read",
+                    "event_id": read_entry["event_id"],
+                    "change_event_id": change_entry["event_id"],
+                    "path": change_path,
+                }
+                diagnostics.append(diagnostic)
+                read_entry.setdefault("diagnostics", []).append(diagnostic)
+                change_entry.setdefault("diagnostics", []).append(diagnostic)
+        if "stale" in statuses:
+            change_entry["freshness"] = "stale"
+        elif "fresh" in statuses:
+            change_entry["freshness"] = "fresh"
+        for read_entry in reads:
+            read_statuses = [item["freshness"] for item in read_entry["comparisons"]]
+            if "stale" in read_statuses:
+                read_entry["freshness"] = "stale"
+            elif "fresh" in read_statuses:
+                read_entry["freshness"] = "fresh"
+
+    snapshot_entries = [
+        entry for entry in entries
+        if any(
+            value.get("availability") == "available"
+            for value in entry["repository"].values()
+        )
+    ]
+    def causally_ordered(left_event: Event, right_event: Event) -> bool:
+        return bool(
+            view.causal_ancestors[right_event.event_id]
+            & view.event_bits[left_event.event_id]
+            or view.causal_ancestors[left_event.event_id]
+            & view.event_bits[right_event.event_id]
+        )
+
+    for position, left in enumerate(snapshot_entries):
+        for right in snapshot_entries[position + 1:]:
+            if left["actor_id"] == right["actor_id"]:
+                continue
+            left_event = events_by_id[str(left["event_id"])]
+            right_event = events_by_id[str(right["event_id"])]
+            if (
+                causally_ordered(left_event, right_event)
+                or _evidence_chronology(left_event, right_event, "event")
+                != "undetermined"
+            ):
+                continue
+            differing = [
+                field for field in ("commit", "worktree_sha256")
+                if left["repository"][field].get("availability") == "available"
+                and right["repository"][field].get("availability") == "available"
+                and left["repository"][field]["value"] != right["repository"][field]["value"]
+            ]
+            if not differing:
+                continue
+            diagnostic = {
+                "code": "divergent_repository_snapshot",
+                "event_ids": [left["event_id"], right["event_id"]],
+                "actor_ids": [left["actor_id"], right["actor_id"]],
+                "fields": differing,
+            }
+            diagnostics.append(diagnostic)
+            left.setdefault("diagnostics", []).append(diagnostic)
+            right.setdefault("diagnostics", []).append(diagnostic)
+
+    actor_entries: dict[str, list[dict[str, object]]] = {}
+    for entry in entries:
+        actor_entries.setdefault(str(entry["actor_id"]), []).append(entry)
+    actors = [
+        {"actor_id": actor_id, "entries": timeline}
+        for actor_id, timeline in actor_entries.items()
+    ]
+    return {
+        "actors": actors,
+        "diagnostics": diagnostics,
+        "by_event_id": by_event_id,
+    }
 
 
 def _event_evidence(events: Iterable[Event]) -> dict[str, object]:

@@ -146,6 +146,16 @@ class LangGraphAdapterTests(unittest.TestCase):
             line_start=10,
             line_end=20,
             symbol="authenticate",
+            content_sha256="1" * 64,
+            repository_commit="abc123",
+            repository_worktree_sha256="2" * 64,
+        )
+        search_id = handler.emit_context_search(
+            run_id=run_id,
+            evidence_id="auth-search",
+            query="authenticate",
+            matches=[],
+            repository_commit="abc123",
         )
         verification_id = handler.event_id(
             run_id, "verification.finished", "auth-tests-finished"
@@ -158,6 +168,9 @@ class LangGraphAdapterTests(unittest.TestCase):
             old_count=2,
             new_start=10,
             new_count=3,
+            preimage_sha256="1" * 64,
+            repository_commit="abc123",
+            repository_worktree_sha256="2" * 64,
             relationships=[
                 {"type": "informed_by", "event_id": context_id},
                 {"type": "verified_by", "event_id": verification_id},
@@ -188,6 +201,14 @@ class LangGraphAdapterTests(unittest.TestCase):
         self.assertEqual(change["event_id"], change_id)
         self.assertEqual(change["hunk"]["path"], "src/auth.py")
         self.assertEqual(
+            detail["context_provenance"]["by_event_id"][change_id]["freshness"],
+            "fresh",
+        )
+        self.assertEqual(
+            detail["context_provenance"]["by_event_id"][search_id]["canonical_matches"],
+            [],
+        )
+        self.assertEqual(
             {link["target_event_id"] for link in change["links"]},
             {context_id, verification_id},
         )
@@ -202,6 +223,20 @@ class LangGraphAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "path must be"):
             handler.emit_context_read(
                 run_id=run_id, evidence_id="bad", path=" "
+            )
+        with self.assertRaisesRegex(ValueError, "lowercase SHA-256"):
+            handler.emit_context_read(
+                run_id=run_id,
+                evidence_id="bad-hash",
+                path="x.py",
+                content_sha256="A" * 64,
+            )
+        with self.assertRaisesRegex(ValueError, "distinct"):
+            handler.emit_context_search(
+                run_id=run_id,
+                evidence_id="duplicate-search",
+                query="x",
+                matches=["x.py", "x.py"],
             )
         with self.assertRaisesRegex(ValueError, "not valid"):
             handler.emit_change_applied(

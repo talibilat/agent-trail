@@ -89,6 +89,8 @@ Every event must be a JSON object containing these fields:
 `relationships` is an optional array of event references with string `type` and `event_id` fields.
 Relationship types are extensible, and referenced events may arrive later in a stream.
 Run-detail responses project these references into an `evidence_map` with resolved event links and unresolved references.
+Run-detail responses also project actor-specific repository context timelines under `context_provenance` for validated reads, searches, compactions, and changes.
+See [Context provenance](docs/context-provenance.md) for the exact hash bytes, safe path rules, deterministic dirty-worktree manifest, freshness and snapshot diagnostics, and producer guidance.
 Identical relationships from the same source event are projected once in first-declaration order, while the raw event retains every producer-supplied relationship.
 Resolved links include source and target kinds and actors so clients can present the smallest relevant evidence chain without joining the event list themselves.
 For repository changes, emit a `change.applied` event with a Git hunk locator under `attributes.change`:
