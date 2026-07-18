@@ -62,6 +62,11 @@ def render_html(
         ),
         "payload_retention": _payload_retention(index),
         "generated_at": generated_at,
+        **(
+            {"warning_policy": index.warning_policy_projection()}
+            if index.warning_policy is not None
+            else {}
+        ),
     }
     snapshot = {
         "metadata": metadata,

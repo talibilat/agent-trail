@@ -7,6 +7,8 @@ import json
 import re
 from typing import Iterable, Mapping
 
+from .warning_policy import ToolWarningRule, WarningPolicy
+
 
 _SENSITIVE_KEY = re.compile(
     r"^(?:auth|authorization|cookie|setcookie)"
@@ -352,6 +354,12 @@ class Warning:
 
 
 @dataclass(frozen=True)
+class WarningAnalysis:
+    warnings: tuple[Warning, ...]
+    suppressed: tuple[Warning, ...]
+
+
+@dataclass(frozen=True)
 class SpanState:
     parent_span_id: str | None
     actor_id: str
@@ -396,12 +404,15 @@ class TraceIndex:
         self,
         *,
         loop_threshold: int = 4,
+        retry_threshold: int = 3,
         stall_seconds: float = 30.0,
         orphan_grace_seconds: float = 5.0,
         max_bytes: int = 16 * 1024 * 1024,
+        warning_policy: WarningPolicy | None = None,
     ) -> None:
         for field_name, value, expected_type in (
             ("loop_threshold", loop_threshold, int),
+            ("retry_threshold", retry_threshold, int),
             ("stall_seconds", stall_seconds, (int, float)),
             ("orphan_grace_seconds", orphan_grace_seconds, (int, float)),
             ("max_bytes", max_bytes, int),
@@ -410,6 +421,7 @@ class TraceIndex:
                 raise TypeError(f"{field_name} has an incorrect type")
         for field_name, valid in (
             ("loop_threshold", loop_threshold >= 2),
+            ("retry_threshold", retry_threshold >= 3),
             ("stall_seconds", stall_seconds >= 0),
             ("orphan_grace_seconds", orphan_grace_seconds >= 0),
             ("max_bytes", max_bytes > 0),
@@ -417,9 +429,11 @@ class TraceIndex:
             if not valid:
                 raise ValueError(f"{field_name} is outside its valid range")
         self.loop_threshold = loop_threshold
+        self.retry_threshold = retry_threshold
         self.stall_seconds = stall_seconds
         self.orphan_grace_seconds = orphan_grace_seconds
         self.max_bytes = max_bytes
+        self.warning_policy = warning_policy
         self._events: list[Event] = []
         self._event_ids: set[str] = set()
         self._sizes: dict[str, int] = {}
@@ -532,13 +546,27 @@ class TraceIndex:
         return TraceView(tuple(ordered), frozenset(uncertain), actors, spans)
 
     def warnings(self, *, now: str | datetime | None = None) -> tuple[Warning, ...]:
+        return self.warning_analysis(now=now).warnings
+
+    def warning_analysis(
+        self,
+        *,
+        now: str | datetime | None = None,
+    ) -> WarningAnalysis:
         current = self._parse_now(now)
         warnings = [self._eviction_warning] if self._eviction_warning else []
+        suppressed = []
 
         for trace_id in dict.fromkeys(event.trace_id for event in self._events):
             view = self.trace(trace_id)
-            warnings.extend(self._loop_warnings(view.events))
-            warnings.extend(self._retry_warnings(view.events))
+            for warning, rule in (
+                *self._loop_warnings(view.events),
+                *self._retry_warnings(view.events),
+            ):
+                if rule is not None and warning.code in rule.suppress:
+                    suppressed.append(warning)
+                else:
+                    warnings.append(warning)
             for actor_id, actor in view.actors.items():
                 elapsed = (current - actor.last_activity).total_seconds()
                 if actor.open_span_ids and elapsed >= self.stall_seconds:
@@ -563,7 +591,26 @@ class TraceIndex:
                         event_ids=[event.event_id], parent_span_id=event.parent_span_id,
                     ))
 
-        return tuple(warnings)
+        return WarningAnalysis(tuple(warnings), tuple(suppressed))
+
+    def warning_policy_projection(
+        self,
+        *,
+        now: str | datetime | None = None,
+        trace_id: str | None = None,
+    ) -> dict[str, object] | None:
+        if self.warning_policy is None:
+            return None
+        suppressed = self.warning_analysis(now=now).suppressed
+        if trace_id is not None:
+            suppressed = tuple(
+                warning for warning in suppressed if warning.trace_id == trace_id
+            )
+        return self.warning_policy.projection(
+            default_loop_threshold=self.loop_threshold,
+            default_retry_threshold=self.retry_threshold,
+            suppressed=suppressed,
+        )
 
     def _order(
         self, events: list[Event]
@@ -676,28 +723,38 @@ class TraceIndex:
         uncertain.update(event.event_id for event in remainder)
         return ordered, uncertain, (ancestors, descendants)
 
-    def _loop_warnings(self, events: tuple[Event, ...]) -> list[Warning]:
+    def _loop_warnings(
+        self, events: tuple[Event, ...]
+    ) -> list[tuple[Warning, ToolWarningRule | None]]:
         warnings = []
         for (_, signature), histories in self._histories(events).items():
             for repeated in histories:
-                for start in range(len(repeated) - self.loop_threshold + 1):
-                    window = repeated[start:start + self.loop_threshold]
+                rule = self._rule(repeated[0]) if repeated else None
+                threshold = (
+                    rule.loop_threshold
+                    if rule is not None and rule.loop_threshold is not None
+                    else self.loop_threshold
+                )
+                for start in range(len(repeated) - threshold + 1):
+                    window = repeated[start:start + threshold]
                     states = {self._state(event) for event in window}
                     if len(states) == 1:
                         last = window[-1]
-                        warnings.append(self._warning(
+                        warnings.append((self._warning(
                             "LOOP", last.event_id, last.trace_id, last.actor["id"],
                             f"repeated equivalent operation {len(window)} times without state change",
                             event_ids=[event.event_id for event in window],
                             signature=signature, state=next(iter(states)),
-                        ))
+                        ), rule))
                         break
                 else:
                     continue
                 break
         return warnings
 
-    def _retry_warnings(self, events: tuple[Event, ...]) -> list[Warning]:
+    def _retry_warnings(
+        self, events: tuple[Event, ...]
+    ) -> list[tuple[Warning, ToolWarningRule | None]]:
         warnings = []
         streaks: dict[tuple[str, str, str], tuple[str, str, list[Event], bool]] = {}
         for event in events:
@@ -716,6 +773,12 @@ class TraceIndex:
 
             signature = self._signature(event, include_kind=False)
             state = self._state(event)
+            rule = self._rule(event)
+            threshold = (
+                rule.retry_threshold
+                if rule is not None and rule.retry_threshold is not None
+                else self.retry_threshold
+            )
             prior = streaks.get(scope)
             if (
                 prior is None
@@ -726,25 +789,30 @@ class TraceIndex:
                 repeated = [event]
                 warned = False
             else:
-                repeated = [*prior[2][-2:], event]
+                repeated = [*prior[2][-(threshold - 1):], event]
                 warned = prior[3]
 
-            if len(repeated) >= 3 and not warned:
-                window = repeated[-3:]
+            if len(repeated) >= threshold and not warned:
+                window = repeated[-threshold:]
                 delays = [
                     (after.timestamp - before.timestamp).total_seconds()
                     for before, after in zip(window, window[1:])
                 ]
-                if delays[1] <= delays[0]:
-                    warnings.append(self._warning(
+                if any(after <= before for before, after in zip(delays, delays[1:])):
+                    warnings.append((self._warning(
                         "RETRY", event.event_id, event.trace_id, event.actor["id"],
-                        "repeated an unchanged failing call 3 times without increasing delay",
+                        f"repeated an unchanged failing call {threshold} times without increasing delay",
                         event_ids=[item.event_id for item in window],
                         delays=delays, signature=signature, state=state,
-                    ))
+                    ), rule))
                     warned = True
             streaks[scope] = (signature, state, repeated, warned)
         return warnings
+
+    def _rule(self, event: Event) -> ToolWarningRule | None:
+        if self.warning_policy is None:
+            return None
+        return self.warning_policy.rule_for(event.operation.get("name"))
 
     def _histories(
         self, events: tuple[Event, ...]

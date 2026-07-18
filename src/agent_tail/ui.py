@@ -171,6 +171,20 @@ def render_snapshot(
             f"warnings={'on' if state.warnings_only else 'off'}",
         ))
     lines = [" ".join(filters)]
+    policy = index.warning_policy_projection(now=current)
+    if policy is not None:
+        lines.extend((
+            f"WARNING POLICY: {policy['path']} version {policy['version']}",
+            "WARNING POLICY CHANGES: restart required",
+            f"SUPPRESSED FINDINGS: {policy['suppressed_counts']['total']} "
+            f"(LOOP {policy['suppressed_counts']['by_code']['LOOP']}, "
+            f"RETRY {policy['suppressed_counts']['by_code']['RETRY']})",
+        ))
+        lines.extend(
+            "EFFECTIVE WARNING RULE: "
+            + json.dumps(rule, sort_keys=True, separators=(",", ":"))
+            for rule in policy["rules"]
+        )
     if metadata_only:
         lines.append("PAYLOAD MODE: metadata-only (payload bodies omitted)")
     lines.append("AGENT LANES")

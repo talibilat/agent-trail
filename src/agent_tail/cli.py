@@ -21,6 +21,7 @@ from .session_import import (
 )
 from .serve import ServeConfig, serve, serve_file
 from .ui import render_snapshot, run
+from .warning_policy import WarningPolicyError, load_warning_policy
 
 
 def _positive_int(value: str) -> int:
@@ -44,6 +45,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--metadata-only", action="store_true")
     result.add_argument("--unsafe-unredacted", action="store_true")
     result.add_argument("--loop-threshold", type=int, default=4)
+    result.add_argument("--warning-policy", metavar="PATH")
     result.add_argument("--stall-seconds", type=float, default=30.0)
     result.add_argument("--max-bytes", type=_positive_int, default=16 * 1024 * 1024)
     result.add_argument(
@@ -63,6 +65,7 @@ def serve_parser() -> argparse.ArgumentParser:
     result.add_argument("--metadata-only", action="store_true")
     result.add_argument("--unsafe-unredacted", action="store_true")
     result.add_argument("--loop-threshold", type=int, default=4)
+    result.add_argument("--warning-policy", metavar="PATH")
     result.add_argument("--stall-seconds", type=float, default=30.0)
     result.add_argument("--max-bytes", type=_positive_int, default=16 * 1024 * 1024)
     result.add_argument("--max-live-updates", type=_positive_int, default=10_000)
@@ -124,6 +127,20 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as error:
         argument_parser.error(str(error))
 
+    try:
+        warning_policy = (
+            load_warning_policy(arguments.warning_policy)
+            if arguments.warning_policy
+            else None
+        )
+    except WarningPolicyError as error:
+        print(
+            f"agent-tail: warning policy {redact_text(arguments.warning_policy)}: "
+            f"{redact_text(str(error))}",
+            file=sys.stderr,
+        )
+        return 2
+
     source: TextIO
     close_source = False
     if arguments.input == "-":
@@ -155,6 +172,7 @@ def main(argv: list[str] | None = None) -> int:
             loop_threshold=arguments.loop_threshold,
             stall_seconds=arguments.stall_seconds,
             max_bytes=arguments.max_bytes,
+            warning_policy=warning_policy,
         )
         if arguments.snapshot_stream:
             for event in events():
@@ -295,6 +313,20 @@ def _serve_main(argv: list[str]) -> int:
     if arguments.metadata_only and arguments.full_payloads:
         argument_parser.error("--metadata-only cannot be combined with --full-payloads")
 
+    try:
+        warning_policy = (
+            load_warning_policy(arguments.warning_policy)
+            if arguments.warning_policy
+            else None
+        )
+    except WarningPolicyError as error:
+        print(
+            f"agent-tail: warning policy {redact_text(arguments.warning_policy)}: "
+            f"{redact_text(str(error))}",
+            file=sys.stderr,
+        )
+        return 2
+
     config = ServeConfig(
         host=arguments.host,
         port=arguments.port,
@@ -307,6 +339,7 @@ def _serve_main(argv: list[str]) -> int:
         stall_seconds=arguments.stall_seconds,
         max_bytes=arguments.max_bytes,
         max_live_updates=arguments.max_live_updates,
+        warning_policy=warning_policy,
     )
     try:
         if arguments.input == "-":
@@ -342,6 +375,19 @@ def _markdown(
     ]
     if metadata_only:
         lines.append("Payload mode: `metadata-only` (payload bodies omitted)")
+    policy = index.warning_policy_projection(now=now)
+    if policy is not None:
+        lines.extend((
+            f"Warning policy: `{_markdown_text(policy['path'])}` (version {policy['version']})",
+            "Warning policy changes require a restart.",
+            "Suppressed findings: "
+            f"{policy['suppressed_counts']['total']} "
+            f"(LOOP {policy['suppressed_counts']['by_code']['LOOP']}, "
+            f"RETRY {policy['suppressed_counts']['by_code']['RETRY']})",
+            "Effective warning rules: `"
+            + _markdown_text(json.dumps(policy["rules"], sort_keys=True, separators=(",", ":")))
+            + "`",
+        ))
     lines.append("")
 
     for trace_id in dict.fromkeys(event.trace_id for event in events):

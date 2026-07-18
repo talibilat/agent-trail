@@ -1,0 +1,13 @@
+version = 1
+
+[[tools]]
+name = "poll_status"
+loop_threshold = 6
+
+[[tools]]
+name = "read_expected"
+retry_threshold = 5
+
+[[tools]]
+name = "flaky_api"
+suppress = ["RETRY"]

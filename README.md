@@ -229,6 +229,8 @@ Clock skew and late arrivals therefore remain visible without overriding an emit
 
 `LOOP`, `RETRY`, `STALL`, and `ORPHAN` findings are heuristics, not diagnoses.
 Loop and retry detection compares canonical operation arguments and selected material-state attributes.
+Use an explicit `--warning-policy PATH` to tune or suppress `LOOP` and `RETRY` findings for exact canonical operation names.
+See [Warning policies](docs/warning-policies.md) for the complete versioned schema, examples, validation behavior, and projection metadata.
 Stall detection checks open spans against `--stall-seconds`, which defaults to 30 seconds.
 Orphan detection allows a short parent-arrival grace period.
 
@@ -295,7 +297,7 @@ The interactive terminal UI provides these controls:
 
 ## Deferred Scope
 
-Version 1 defers sockets, public harness adapters, Mermaid exports, persistence, replay, hosting, fan-out warnings, per-tool policies, and custom keybindings.
+Version 1 defers sockets, public harness adapters, Mermaid exports, persistence, replay, hosting, fan-out warnings, and custom keybindings.
 
 Serve mode remains process-local and does not persist run history across restarts.
 One actor ID represents one logical agent invocation, and primary parentage uses the first causal cross-actor relationship that introduces the actor.

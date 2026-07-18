@@ -131,6 +131,11 @@ def inventory(
         "original_payload_bytes": original_payload_bytes,
         "redaction_ruleset": "1",
         "metadata_only": metadata_only,
+        **(
+            {"warning_policy": index.warning_policy_projection()}
+            if index.warning_policy is not None
+            else {}
+        ),
     }
 
 

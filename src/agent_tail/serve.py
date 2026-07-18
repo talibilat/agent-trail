@@ -15,6 +15,7 @@ from typing import Callable, Iterable, TextIO
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .core import Event, IngestionError, JSONLReader, TraceIndex, sanitize_event
+from .warning_policy import WarningPolicy
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class ServeConfig:
     stall_seconds: float = 30.0
     max_bytes: int = 16 * 1024 * 1024
     max_live_updates: int = 10_000
+    warning_policy: WarningPolicy | None = None
 
     def __post_init__(self) -> None:
         if self.full_payloads and self.metadata_only:
@@ -52,6 +54,7 @@ class RunStore:
         source_kind: str = "snapshot",
         metadata_only: bool = False,
         max_live_updates: int = 10_000,
+        warning_policy: WarningPolicy | None = None,
     ) -> None:
         if (
             not isinstance(max_live_updates, int)
@@ -63,7 +66,7 @@ class RunStore:
         self._metadata_only = metadata_only
         self._index = index
         if self._index is None:
-            self._index = TraceIndex()
+            self._index = TraceIndex(warning_policy=warning_policy)
         self._errors = tuple(errors)
         self._findings: list[dict[str, object]] = []
         for error in self._errors:
@@ -109,11 +112,13 @@ class RunStore:
         stall_seconds: float = 30.0,
         max_bytes: int = 16 * 1024 * 1024,
         max_live_updates: int = 10_000,
+        warning_policy: WarningPolicy | None = None,
     ) -> "RunStore":
         index = TraceIndex(
             loop_threshold=loop_threshold,
             stall_seconds=stall_seconds,
             max_bytes=max_bytes,
+            warning_policy=warning_policy,
         )
         store = cls(
             index,
@@ -290,6 +295,7 @@ class RunStore:
                 return None
             view = self._index.trace(trace_id)
             now = self._warning_now(view.events)
+            policy = self._index.warning_policy_projection(now=now, trace_id=trace_id)
             projection = _relationships(view)
             evidence_map = _event_evidence(view.events)
             started_at = min((event.timestamp for event in view.events), default=None)
@@ -337,6 +343,7 @@ class RunStore:
                     finding for finding in self._findings
                     if finding.get("trace_id") in {None, trace_id}
                 ],
+                **({"warning_policy": policy} if policy is not None else {}),
             }
 
     def _summary(
@@ -509,6 +516,7 @@ def serve(
             loop_threshold=config.loop_threshold,
             stall_seconds=config.stall_seconds,
             max_bytes=config.max_bytes,
+            warning_policy=config.warning_policy,
         ),
         source_kind="stdin",
         metadata_only=config.metadata_only,
@@ -535,6 +543,7 @@ def serve_file(
             loop_threshold=config.loop_threshold,
             stall_seconds=config.stall_seconds,
             max_bytes=config.max_bytes,
+            warning_policy=config.warning_policy,
         ),
         source_kind="file",
         metadata_only=config.metadata_only,

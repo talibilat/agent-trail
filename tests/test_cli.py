@@ -1,4 +1,5 @@
 import hashlib
+import base64
 import io
 import json
 from pathlib import Path
@@ -39,6 +40,101 @@ def run_cli(*arguments, input=None):
 
 
 class CliTests(unittest.TestCase):
+    def test_invalid_policy_fails_before_stdin_or_export_destination_is_consumed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            policy = Path(directory, "policy.toml")
+            destination = Path(directory, "report.md")
+            for content in (
+                "version = 99\n",
+                "version = 1\n[[tools]\nname = 'Bearer hidden-policy-value'\n",
+            ):
+                with self.subTest(content=content):
+                    policy.write_text(content, encoding="utf-8")
+                    destination.write_text("existing", encoding="utf-8")
+                    result = run_cli(
+                        "-", "--warning-policy", policy, "--export", destination,
+                        input=json.dumps(event_data()) + "\n",
+                    )
+
+                    self.assertEqual(result.returncode, 2)
+                    self.assertEqual(destination.read_text(encoding="utf-8"), "existing")
+                    self.assertNotIn("hidden-policy-value", result.stderr)
+
+            policy.write_text("version = 1\n[[tools]\n", encoding="utf-8")
+            process = subprocess.Popen(
+                [
+                    sys.executable, "-m", "agent_tail", "-", "--warning-policy",
+                    str(policy), "--export", str(destination),
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertEqual(process.wait(timeout=2), 2)
+            process.communicate()
+            self.assertEqual(destination.read_text(encoding="utf-8"), "existing")
+
+        class ExplodingInput(io.StringIO):
+            def __iter__(self):
+                raise AssertionError("stdin was consumed")
+
+        stderr = io.StringIO()
+        with (
+            mock.patch.object(cli.sys, "stdin", ExplodingInput("unused")),
+            mock.patch.object(cli.sys, "stderr", stderr),
+        ):
+            self.assertEqual(cli.main(["-", "--warning-policy", "missing.toml"]), 2)
+
+    def test_policy_results_match_file_stdin_terminal_markdown_and_html(self):
+        lines = []
+        for sequence in range(1, 4):
+            lines.append(json.dumps(event_data(
+                event_id=f"evt-{sequence}",
+                span_id=f"span-{sequence}",
+                sequence=sequence,
+                timestamp=f"2026-07-13T11:02:{sequence:02d}Z",
+                kind="tool.call.failed",
+                operation={"status": "failed", "name": "flaky_api"},
+                attributes={"arguments": {"path": "same"}},
+            )))
+        text = "\n".join(lines) + "\n"
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "run.jsonl")
+            source.write_text(text, encoding="utf-8")
+            policy = Path(directory, "policy.toml")
+            policy.write_text(
+                "version = 1\n[[tools]]\nname = 'flaky_api'\nsuppress = ['RETRY']\n",
+                encoding="utf-8",
+            )
+            markdown_path = Path(directory, "report.md")
+            html_path = Path(directory, "report.html")
+
+            file_terminal = run_cli(source, "--warning-policy", policy)
+            stdin_terminal = run_cli("-", "--warning-policy", policy, input=text)
+            markdown_result = run_cli(
+                source, "--warning-policy", policy, "--export", markdown_path
+            )
+            html_result = run_cli(
+                source, "--warning-policy", policy, "--export-html", html_path
+            )
+            markdown = markdown_path.read_text(encoding="utf-8")
+            html = html_path.read_text(encoding="utf-8")
+            encoded = html.split(
+                'id="agent-tail-export-data" hidden>', 1
+            )[1].split("</div>", 1)[0]
+            html_policy = json.loads(base64.b64decode(encoded))["metadata"]["warning_policy"]
+
+        self.assertEqual(file_terminal.returncode, 0)
+        self.assertEqual(stdin_terminal.returncode, 0)
+        self.assertEqual(markdown_result.returncode, 0)
+        self.assertEqual(html_result.returncode, 0)
+        self.assertEqual(file_terminal.stdout, stdin_terminal.stdout)
+        self.assertIn("SUPPRESSED FINDINGS: 1 (LOOP 0, RETRY 1)", file_terminal.stdout)
+        self.assertIn("Suppressed findings: 1 (LOOP 0, RETRY 1)", markdown)
+        self.assertEqual(html_policy["suppressed_counts"]["total"], 1)
+        self.assertEqual(html_policy["rules"][0]["retry_threshold"], 3)
+
     def test_markdown_text_neutralizes_hostile_markup_and_controls(self):
         hostile = (
             "<img src=x> ![alt](javascript:boom) [link](https://evil) "

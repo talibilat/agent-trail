@@ -2199,6 +2199,72 @@ with AgentTailCallbackHandler(output) as callback:
                 expect(page.locator("#run-picker-btn")).to_contain_text("trace-2")
                 browser.close()
 
+    def test_warning_policy_is_visible_and_preserves_unrelated_warning_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "policy-run.jsonl")
+            policy = Path(directory, "policy.toml")
+            policy.write_text(
+                "version = 1\n[[tools]]\nname = 'flaky_api'\nsuppress = ['RETRY']\n",
+                encoding="utf-8",
+            )
+            events = []
+            for sequence in range(1, 4):
+                for name in ("flaky_api", "unrelated_api"):
+                    events.append(event_data(
+                        event_id=f"{name}-{sequence}",
+                        span_id=f"{name}-{sequence}",
+                        emitter_id=f"emitter-{name}",
+                        sequence=sequence,
+                        timestamp=f"2026-07-13T11:02:{sequence:02d}Z",
+                        kind="tool.call.failed",
+                        actor={"id": f"actor-{name}"},
+                        operation={"status": "failed", "name": name},
+                        attributes={"arguments": {"url": "same"}},
+                    ))
+            source.write_text(
+                "".join(json.dumps(event) + "\n" for event in events),
+                encoding="utf-8",
+            )
+            port = _free_port()
+            process = subprocess.Popen(
+                [
+                    sys.executable, "-m", "agent_tail", "serve", str(source),
+                    "--port", str(port), "--warning-policy", str(policy),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+            base_url = f"http://127.0.0.1:{port}"
+            detail = json.loads(
+                urlopen(base_url + "/api/v1/runs/trace-1", timeout=3).read()
+            )
+
+            self.assertEqual(detail["warning_policy"]["path"], str(policy))
+            self.assertEqual(detail["warning_policy"]["version"], 1)
+            self.assertEqual(detail["warning_policy"]["suppressed_counts"]["total"], 1)
+            retry = next(warning for warning in detail["warnings"] if warning["code"] == "RETRY")
+            self.assertEqual(
+                json.loads(retry["evidence"])["event_ids"],
+                ["unrelated_api-1", "unrelated_api-2", "unrelated_api-3"],
+            )
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.goto(base_url, wait_until="domcontentloaded")
+                page.get_by_role("button", name="Warnings", exact=True).click()
+                drawer = page.locator("#warnings-drawer")
+                expect(drawer).to_contain_text(str(policy))
+                expect(drawer).to_contain_text("version 1")
+                expect(drawer).to_contain_text("Suppressed 1")
+                expect(drawer).to_contain_text("RETRY")
+                expect(drawer).to_contain_text("actor-unrelated_api")
+                browser.close()
+
     def test_primary_journey_in_chrome_firefox_and_webkit(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "cross-browser.jsonl")
