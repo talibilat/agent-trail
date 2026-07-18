@@ -326,6 +326,7 @@ class RunStore:
             projection = _relationships(view)
             context_provenance = _context_provenance(view)
             evidence_map = _event_evidence(view.events)
+            runtime_warnings = self._warnings_for_trace(trace_id, now)
             started_at = min((event.timestamp for event in view.events), default=None)
             return {
                 "api_version": "v1",
@@ -362,7 +363,7 @@ class RunStore:
                     }
                     for actor_id, actor in view.actors.items()
                 ],
-                "warnings": self._warnings_for_trace(trace_id, now) + projection["warnings"],
+                "warnings": runtime_warnings + projection["warnings"],
                 "links": projection["links"],
                 "unresolved_endpoints": projection["unresolved_endpoints"],
                 "evidence_map": evidence_map,
@@ -460,7 +461,7 @@ class RunStore:
                 record["active"] = False
                 record["resolved_at"] = now.isoformat()
         return [
-            record for record in self._warning_history.values()
+            dict(record) for record in self._warning_history.values()
             if record.get("trace_id") == trace_id
         ]
 
@@ -2193,6 +2194,137 @@ def _event_evidence(events: Iterable[Event]) -> dict[str, object]:
         "links": links,
         "unresolved": unresolved,
     }
+
+
+def _change_verification_warnings(view, warning_factory) -> list[object]:
+    evidence_map = _event_evidence(view.events)
+    provenance = _context_provenance(view)
+    events_by_id = {event.event_id: event for event in view.events}
+    warnings = []
+    for change in evidence_map["changes"]:
+        change_event_id = str(change["event_id"])
+        actor_id = str(change["actor_id"])
+        trace_id = events_by_id[change_event_id].trace_id
+        verification_links = [
+            link for link in change["links"]
+            if link.get("type") == "verified_by"
+            and isinstance(link.get("verification"), dict)
+        ]
+        covered = any("command" in link["verification"] for link in verification_links)
+        if not covered:
+            warnings.append(warning_factory(
+                "UNCOVERED_CHANGE",
+                change_event_id,
+                trace_id,
+                actor_id,
+                f"change {change_event_id} has no valid linked verification command",
+                change_event_id=change_event_id,
+                event_ids=[change_event_id],
+                hunk=change["hunk"],
+                verification_command_count=0,
+            ))
+
+        invalid_verification_ids = {
+            item.get("target_event_id")
+            for item in change["unresolved"]
+            if item.get("type") == "verified_by"
+            and item.get("reason") in {
+                "invalid_verification_result",
+                "invalid_verification_exit_code",
+                "conflicting_verification_outcome",
+                "invalid_verification_test_origin",
+            }
+        }
+        passing = [
+            link for link in verification_links
+            if link["verification"].get("passed") is True
+            and link.get("target_event_id") not in invalid_verification_ids
+        ]
+        if passing and all(
+            link["verification"].get("test_origin") == "same_agent"
+            for link in passing
+        ):
+            verification_ids = [str(link["target_event_id"]) for link in passing]
+            warnings.append(warning_factory(
+                "SELF_CONFIRMING_TEST",
+                change_event_id,
+                trace_id,
+                actor_id,
+                f"every passing verification linked to change {change_event_id} has same-agent provenance",
+                change_event_id=change_event_id,
+                event_ids=[change_event_id, *verification_ids],
+                hunk=change["hunk"],
+                passing_verification_event_ids=verification_ids,
+                test_origin="same_agent",
+            ))
+
+        change_entry = provenance["by_event_id"].get(change_event_id, {})
+        linked_read_ids = _informing_read_ids(events_by_id[change_event_id], events_by_id)
+        stale_reads = []
+        stale_read_ids = set()
+        for comparison in change_entry.get("reads", []):
+            read_event_id = comparison.get("read_event_id")
+            if (
+                comparison.get("freshness") != "stale"
+                or read_event_id not in linked_read_ids
+                or read_event_id in stale_read_ids
+            ):
+                continue
+            read_entry = provenance["by_event_id"].get(read_event_id, {})
+            observed = read_entry.get("content_sha256", {})
+            preimage = change_entry.get("preimage_sha256", {})
+            if (
+                observed.get("availability") != "available"
+                or preimage.get("availability") != "available"
+            ):
+                continue
+            stale_read_ids.add(read_event_id)
+            stale_reads.append({
+                "event_id": str(read_event_id),
+                "content_sha256": observed["value"],
+            })
+        if stale_reads:
+            path = change_entry.get("locator", {}).get("normalized_path")
+            read_event_ids = [read["event_id"] for read in stale_reads]
+            warnings.append(warning_factory(
+                "STALE_CONTEXT",
+                change_event_id,
+                trace_id,
+                actor_id,
+                f"{len(stale_reads)} informing context read{'s' if len(stale_reads) != 1 else ''} have validated hashes that differ from the pre-edit hash for {path}",
+                change_event_id=change_event_id,
+                event_ids=[change_event_id, *read_event_ids],
+                path=path,
+                preimage_sha256=preimage["value"],
+                stale_read_event_ids=read_event_ids,
+                stale_reads=stale_reads,
+                hunk=change["hunk"],
+            ))
+    return warnings
+
+
+def _informing_read_ids(
+    change: Event,
+    events_by_id: dict[str, Event],
+) -> set[str]:
+    read_ids = set()
+    for relationship in change.relationships:
+        if relationship.type != "informed_by":
+            continue
+        target = events_by_id.get(relationship.event_id)
+        if target is None:
+            continue
+        if target.kind == "context.read":
+            read_ids.add(target.event_id)
+        elif target.kind == "context.compacted":
+            read_ids.update(
+                source.event_id
+                for link in target.relationships
+                if link.type == "summarizes"
+                and (source := events_by_id.get(link.event_id)) is not None
+                and source.kind == "context.read"
+            )
+    return read_ids
 
 
 def _evidence_coverage(

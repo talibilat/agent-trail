@@ -1825,6 +1825,21 @@
         eventId.textContent = `event ${changeEvidence.event_id}`;
         block.append(actor, eventId);
 
+        const hunkWarningCodes = new Set(['UNCOVERED_CHANGE', 'STALE_CONTEXT', 'SELF_CONFIRMING_TEST']);
+        (detail.warnings || []).filter(
+          (warning) => warning.event_id === changeEvidence.event_id
+            && hunkWarningCodes.has(warning.code)
+        ).forEach((warning) => {
+          const card = document.createElement('div');
+          card.className = `agent-warn-card${warning.active === false ? ' resolved' : ''}`;
+          const evidence = warning.evidence || '{}';
+          card.innerHTML = `
+            <div class="head"><span class="code">${escapeHtml(warning.code)}</span><span class="heuristic">${warning.active === false ? 'resolved' : 'deterministic'}</span></div>
+            <div class="summary">${escapeHtml(warning.summary)}</div>
+            <div class="actor">evidence ${escapeHtml(evidence)}</div>`;
+          block.append(card);
+        });
+
         (changeEvidence.links || []).filter(
           (link) => link.type === 'applies'
             && link.target_kind === 'change.proposed'
@@ -2556,7 +2571,7 @@
       warningsBackdropEl.hidden = !warningsOpen;
       if (!warningsOpen) return;
       const items = [
-        ...warnings.map((w) => ({ code: w.code, actor: w.actor_id, summary: w.summary, time: eventTime(detail, w.event_id), actorId: w.actor_id, eventId: w.event_id, detectedAt: w.detected_at, resolvedAt: w.resolved_at })),
+        ...warnings.map((w) => ({ code: w.code, actor: w.actor_id, summary: w.summary, evidence: w.evidence, active: w.active, time: eventTime(detail, w.event_id), actorId: w.actor_id, eventId: w.event_id, detectedAt: w.detected_at, resolvedAt: w.resolved_at })),
         ...findings.map((f) => ({ code: f.code, actor: f.kind, summary: f.message, time: eventTime(detail, f.event_id), actorId: null, eventId: f.event_id, detectedAt: f.detected_at, resolvedAt: null })),
       ];
       const head = document.createElement('div');
@@ -2602,7 +2617,9 @@
             <span class="spacer"></span>
             <span class="time">${item.time !== null ? clock(item.time) : '—'}</span>
           </div>
-          <div class="summary">${escapeHtml(item.summary)}</div>`;
+          <div class="summary">${escapeHtml(item.summary)}</div>
+          ${item.active === false ? '<div class="actor">resolved</div>' : ''}
+          ${item.evidence ? `<div class="actor">evidence ${escapeHtml(item.evidence)}</div>` : ''}`;
         card.addEventListener('click', () => {
           warningsOpen = false;
           selectedEventId = item.eventId || null;

@@ -187,6 +187,19 @@ def render_snapshot(
         )
     if metadata_only:
         lines.append("PAYLOAD MODE: metadata-only (payload bodies omitted)")
+    presented_warnings = [
+        warning for warning in warnings
+        if not state
+        or (not state.trace_filter or warning.trace_id == state.trace_filter)
+        and (not state.agent_filter or warning.actor_id == state.agent_filter)
+    ]
+    if presented_warnings:
+        lines.append("WARNING FINDINGS")
+        lines.extend(
+            f"WARNING {warning.code} event {warning.event_id} actor "
+            f"{warning.actor_id}: {warning.summary} evidence {warning.evidence}"
+            for warning in presented_warnings
+        )
     lines.append("AGENT LANES")
     latest_by_actor = {
         (event.trace_id, event.actor["id"]): event for event in events

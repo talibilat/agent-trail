@@ -37,6 +37,73 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
+    def test_growing_file_warning_resolves_and_navigates_to_change_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "verification-gaps.jsonl")
+            source.write_text(json.dumps(event_data(
+                event_id="change-1",
+                kind="change.applied",
+                attributes={"change": {
+                    "path": "src/session.py",
+                    "old_start": 8,
+                    "old_count": 1,
+                    "new_start": 8,
+                    "new_count": 2,
+                }},
+                relationships=[{
+                    "type": "verified_by",
+                    "event_id": "verification-1",
+                }],
+            )) + "\n", encoding="utf-8")
+            port = _free_port()
+            process = subprocess.Popen(
+                [
+                    sys.executable, "-m", "agent_tail", "serve", str(source),
+                    "--port", str(port),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+            base_url = f"http://127.0.0.1:{port}"
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.goto(base_url, wait_until="domcontentloaded")
+                page.get_by_role("button", name="Warnings", exact=True).click()
+                drawer = page.locator("#warnings-drawer")
+                expect(drawer).to_contain_text("UNCOVERED_CHANGE")
+                expect(drawer).to_contain_text('"change_event_id":"change-1"')
+                drawer.locator(".warn-card").filter(has_text="UNCOVERED_CHANGE").click()
+                expect(page.locator(".change-evidence")).to_contain_text("src/session.py:8-9")
+                expect(page.locator(".change-evidence")).to_contain_text("deterministic")
+
+                with source.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(event_data(
+                        event_id="verification-1",
+                        span_id="verification-span",
+                        sequence=2,
+                        kind="verification.finished",
+                        operation={"status": "completed", "name": "pytest"},
+                        attributes={"verification": {
+                            "command": "pytest tests/test_session.py",
+                            "passed": True,
+                            "exit_code": 0,
+                            "test_origin": "pre_existing",
+                        }},
+                    )) + "\n")
+
+                page.wait_for_function("currentDetail.warnings.some((warning) => warning.code === 'UNCOVERED_CHANGE' && warning.active === false)")
+                page.get_by_role("button", name="Warnings", exact=True).click()
+                expect(drawer).to_contain_text("resolved")
+                drawer.locator(".warn-card").filter(has_text="UNCOVERED_CHANGE").click()
+                expect(page.locator(".change-evidence")).to_contain_text("resolved")
+                browser.close()
+
     def test_growing_file_updates_context_provenance_from_unknown_to_stale(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "context-provenance.jsonl")

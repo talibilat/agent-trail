@@ -463,6 +463,7 @@ class TraceIndex:
         self._eviction_count = 0
         self._recent_evictions: tuple[tuple[str, str, str], ...] = ()
         self._trace_cache: dict[str, TraceView] = {}
+        self._verification_gap_cache: dict[str, tuple[Warning, ...]] = {}
 
     def add(self, event: Event) -> None:
         if event.event_id in self._event_ids:
@@ -470,6 +471,7 @@ class TraceIndex:
         self._events.append(event)
         self._event_ids.add(event.event_id)
         self._trace_cache.pop(event.trace_id, None)
+        self._verification_gap_cache.pop(event.trace_id, None)
         size = self._event_size(event)
         self._sizes[event.event_id] = size
         self._retained_bytes += size
@@ -477,6 +479,7 @@ class TraceIndex:
         self._evict()
         if self._recent_evictions:
             self._trace_cache.clear()
+            self._verification_gap_cache.clear()
 
     @property
     def event_count(self) -> int:
@@ -616,6 +619,8 @@ class TraceIndex:
                     suppressed.append(warning)
                 else:
                     warnings.append(warning)
+            warnings.extend(self._verification_gap_warnings(view))
+            warnings.extend(self._failed_before_completion_warnings(view))
             for actor_id, actor in view.actors.items():
                 elapsed = (current - actor.last_activity).total_seconds()
                 if actor.open_span_ids and elapsed >= self.stall_seconds:
@@ -641,6 +646,103 @@ class TraceIndex:
                     ))
 
         return WarningAnalysis(tuple(warnings), tuple(suppressed))
+
+    def _verification_gap_warnings(self, view: TraceView) -> tuple[Warning, ...]:
+        if not view.events:
+            return ()
+        trace_id = view.events[0].trace_id
+        cached = self._verification_gap_cache.get(trace_id)
+        if cached is not None:
+            return cached
+        # The evidence projection owns canonical evidence validation, so warning
+        # detection deliberately consumes it instead of duplicating its contract.
+        from .serve import _change_verification_warnings
+
+        warnings = tuple(_change_verification_warnings(view, self._warning))
+        self._verification_gap_cache[trace_id] = warnings
+        return warnings
+
+    def _failed_before_completion_warnings(self, view: TraceView) -> list[Warning]:
+        completions = [event for event in view.events if event.kind == "trace.completed"]
+        successes: dict[tuple[str, str], list[Event]] = {}
+        failures: list[tuple[Event, str, str]] = []
+        for event in view.events:
+            outcome = self._operation_outcome(event)
+            if outcome is None:
+                continue
+            signature = self._signature(event, include_kind=False)
+            state = self._state(event)
+            if outcome == "success":
+                successes.setdefault((signature, state), []).append(event)
+            else:
+                failures.append((event, signature, state))
+
+        warnings = []
+        for failure, signature, state in failures:
+            completion = next((
+                event for event in completions
+                if self._causally_precedes(view, failure, event)
+            ), None)
+            if completion is None:
+                continue
+            recovered = any(
+                self._causally_precedes(view, failure, event)
+                and self._causally_precedes(view, event, completion)
+                for event in successes.get((signature, state), ())
+            )
+            if recovered:
+                continue
+            warnings.append(self._warning(
+                "FAILED_BEFORE_COMPLETION",
+                failure.event_id,
+                failure.trace_id,
+                failure.actor["id"],
+                f"failed operation {failure.event_id} preceded trace completion without equivalent recovery",
+                event_ids=[failure.event_id, completion.event_id],
+                failure_event_id=failure.event_id,
+                completion_event_id=completion.event_id,
+                signature=signature,
+                state=state,
+            ))
+        return warnings
+
+    @staticmethod
+    def _causally_precedes(view: TraceView, before: Event, after: Event) -> bool:
+        return bool(
+            view.causal_ancestors[after.event_id] & view.event_bits[before.event_id]
+        )
+
+    def _operation_outcome(self, event: Event) -> str | None:
+        if event.kind == "verification.finished":
+            attributes = event.raw.get("attributes")
+            verification = (
+                attributes.get("verification")
+                if isinstance(attributes, Mapping)
+                else None
+            )
+            if not isinstance(verification, Mapping) or not isinstance(
+                verification.get("passed"), bool
+            ):
+                return None
+            exit_code = verification.get("exit_code")
+            if "exit_code" in verification and (
+                not isinstance(exit_code, int)
+                or isinstance(exit_code, bool)
+                or (verification["passed"] and exit_code != 0)
+                or (not verification["passed"] and exit_code == 0)
+            ):
+                return None
+            return "success" if verification["passed"] else "failure"
+        if not event.kind.startswith("tool.call."):
+            return None
+        status = event.operation["status"].strip().lower()
+        if event.kind.endswith(".failed") or status in {"error", "errored", "failed"}:
+            return "failure"
+        if event.kind.endswith(".completed") or status in {
+            "complete", "completed", "done", "succeeded", "success",
+        }:
+            return "success"
+        return None
 
     def warning_policy_projection(
         self,
