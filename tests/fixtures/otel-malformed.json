@@ -1,0 +1,43 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {"attributes": []},
+      "scopeSpans": [
+        {
+          "scope": {"name": "fixture.scope"},
+          "spans": [
+            {
+              "traceId": "33333333333333333333333333333333",
+              "spanId": "eeeeeeeeeeeeeeee",
+              "name": "valid sibling",
+              "endTimeUnixNano": "1783940564000000000",
+              "attributes": []
+            },
+            {
+              "traceId": "Bearer diagnostic-secret",
+              "spanId": "ffffffffffffffff",
+              "name": "invalid sibling",
+              "endTimeUnixNano": "1783940564000000000",
+              "attributes": []
+            },
+            {
+              "traceId": "44444444444444444444444444444444",
+              "spanId": "abababababababab",
+              "name": "valid span with one invalid event",
+              "endTimeUnixNano": "1783940564000000000",
+              "attributes": [],
+              "events": [
+                {"name": "bad event Bearer event-secret"},
+                {
+                  "name": "good event",
+                  "timeUnixNano": "1783940563000000000",
+                  "attributes": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

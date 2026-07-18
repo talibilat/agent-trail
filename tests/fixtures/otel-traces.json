@@ -1,0 +1,106 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {"key": "service.name", "value": {"stringValue": "planner-service"}},
+          {"key": "service.instance.id", "value": {"stringValue": "planner-instance-7"}}
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {"name": "agent.runtime", "version": "2.1.0"},
+          "schemaUrl": "https://opentelemetry.io/schemas/1.30.0",
+          "spans": [
+            {
+              "traceId": "11111111111111111111111111111111",
+              "spanId": "aaaaaaaaaaaaaaaa",
+              "name": "invoke planner",
+              "startTimeUnixNano": "1783940560000000000",
+              "endTimeUnixNano": "1783940564000000000",
+              "status": {"code": "STATUS_CODE_OK"},
+              "attributes": [
+                {"key": "gen_ai.operation.name", "value": {"stringValue": "invoke_agent"}},
+                {"key": "gen_ai.agent.id", "value": {"stringValue": "planner-7"}}
+              ],
+              "events": [
+                {
+                  "timeUnixNano": "1783940561000000000",
+                  "name": "planning checkpoint",
+                  "attributes": [
+                    {"key": "step", "value": {"intValue": "1"}}
+                  ]
+                }
+              ]
+            },
+            {
+              "traceId": "11111111111111111111111111111111",
+              "spanId": "bbbbbbbbbbbbbbbb",
+              "parentSpanId": "aaaaaaaaaaaaaaaa",
+              "name": "chat gpt-4.1",
+              "startTimeUnixNano": "1783940561000000000",
+              "endTimeUnixNano": "1783940562000000000",
+              "status": {"code": "STATUS_CODE_UNSET"},
+              "attributes": [
+                {"key": "gen_ai.operation.name", "value": {"stringValue": "chat"}},
+                {"key": "gen_ai.request.model", "value": {"stringValue": "gpt-4.1"}},
+                {"key": "gen_ai.usage.input_tokens", "value": {"intValue": "12"}}
+              ],
+              "links": [
+                {
+                  "traceId": "22222222222222222222222222222222",
+                  "spanId": "dddddddddddddddd",
+                  "attributes": [
+                    {"key": "link.reason", "value": {"stringValue": "handoff"}}
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "scope": {"name": "tool.runtime"},
+          "spans": [
+            {
+              "traceId": "11111111111111111111111111111111",
+              "spanId": "cccccccccccccccc",
+              "parentSpanId": "aaaaaaaaaaaaaaaa",
+              "name": "execute search",
+              "endTimeUnixNano": "1783940563000000000",
+              "status": {"code": "STATUS_CODE_ERROR", "message": "tool exited 1"},
+              "attributes": [
+                {"key": "gen_ai.operation.name", "value": {"stringValue": "execute_tool"}},
+                {"key": "gen_ai.tool.name", "value": {"stringValue": "search"}}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {"key": "service.name", "value": {"stringValue": "worker-service"}}
+        ]
+      },
+      "schemaUrl": "https://opentelemetry.io/schemas/1.29.0",
+      "scopeSpans": [
+        {
+          "scope": {"name": "worker.library", "version": "1.0"},
+          "spans": [
+            {
+              "traceId": "22222222222222222222222222222222",
+              "spanId": "dddddddddddddddd",
+              "name": "database lookup",
+              "kind": "SPAN_KIND_CLIENT",
+              "endTimeUnixNano": "1783940564000000000",
+              "attributes": [
+                {"key": "db.system", "value": {"stringValue": "sqlite"}}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

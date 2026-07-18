@@ -3,6 +3,9 @@
 Agent Tail is a local CLI and terminal UI for inspecting canonical multi-agent runtime events without a backend.
 Version 1 directly supports the canonical JSONL emitted by this runtime from a file or standard input.
 
+Import standard OpenTelemetry OTLP JSON with `agent-tail import otel traces.json --output run.jsonl`.
+See [OpenTelemetry OTLP JSON import](docs/opentelemetry-import.md) for mapping, stream, diagnostics, and artifact-safety details.
+
 ## Install
 
 Agent Tail requires Python 3.11 or newer.

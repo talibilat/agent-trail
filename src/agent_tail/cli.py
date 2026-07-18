@@ -10,6 +10,7 @@ import unicodedata
 import webbrowser
 
 from .core import IngestionError, JSONLReader, TraceIndex, redact_text, sanitize_event
+from .otel import OTLPDocumentError, canonical_jsonl, parse_otlp_json
 from .serve import ServeConfig, serve, serve_file
 from .ui import render_snapshot, run
 
@@ -52,10 +53,21 @@ def serve_parser() -> argparse.ArgumentParser:
     return result
 
 
+def otel_import_parser() -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(prog="agent-tail import otel")
+    result.add_argument("input", metavar="INPUT", help="OTLP JSON file or - for standard input")
+    result.add_argument(
+        "--output", required=True, metavar="OUTPUT", help="canonical JSONL file or - for standard output"
+    )
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["serve"]:
         return _serve_main(argv[1:])
+    if argv[:2] == ["import", "otel"]:
+        return _otel_import_main(argv[2:])
 
     argument_parser = parser()
     arguments = argument_parser.parse_args(argv)
@@ -130,6 +142,31 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     _print_errors(reader.all_errors)
     return 0 if reader.accepted_count else 1
+
+
+def _otel_import_main(argv: list[str]) -> int:
+    argument_parser = otel_import_parser()
+    arguments = argument_parser.parse_args(argv)
+    if arguments.input == "-" and arguments.output == "-":
+        argument_parser.error("INPUT and OUTPUT cannot both be standard streams")
+
+    try:
+        if arguments.input == "-":
+            source = sys.stdin.read()
+        else:
+            source = Path(arguments.input).read_text(encoding="utf-8")
+        imported = parse_otlp_json(source)
+        output = canonical_jsonl(imported)
+        if arguments.output == "-":
+            sys.stdout.write(output)
+        else:
+            Path(arguments.output).write_text(output, encoding="utf-8")
+    except (OSError, UnicodeError, OTLPDocumentError) as error:
+        print(f"agent-tail: {redact_text(str(error))}", file=sys.stderr)
+        return 2
+
+    _print_errors(imported.errors)
+    return 0 if imported.events else 1
 
 
 def _serve_main(argv: list[str]) -> int:

@@ -2108,6 +2108,73 @@ class ServeEndToEndTests(unittest.TestCase):
 
         self.assertLess(first_useful_paint, 10.0)
 
+    def test_otlp_import_opens_with_parentage_and_source_attributes(self):
+        fixture = Path(__file__).parent / "fixtures" / "otel-traces.json"
+        with tempfile.TemporaryDirectory() as directory:
+            imported = Path(directory, "imported.jsonl")
+            import_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "agent_tail",
+                    "import",
+                    "otel",
+                    str(fixture),
+                    "--output",
+                    str(imported),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(import_result.returncode, 0, import_result.stderr)
+            port = _free_port()
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "agent_tail",
+                    "serve",
+                    str(imported),
+                    "--port",
+                    str(port),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(channel="chrome", headless=True)
+                page = browser.new_page()
+                page.goto(
+                    f"http://127.0.0.1:{port}", wait_until="domcontentloaded"
+                )
+                expect(
+                    page.locator(".node-wrap").filter(has_text="planner-7")
+                ).to_be_visible()
+                expect(
+                    page.locator(".node-wrap").filter(has_text="planner-service")
+                ).to_be_visible()
+                page.evaluate("""() => {
+                  [...document.querySelectorAll('.node-wrap')]
+                    .find((node) => node.textContent.includes('planner-service')).click();
+                  [...document.querySelectorAll('.event-row')]
+                    .find((row) => row.textContent.includes('bbbbbbbbbbbbbbbb')).click();
+                }""")
+
+                inspector = page.locator("#inspector")
+                expect(inspector).to_contain_text("model.request.finished")
+                expect(inspector).to_contain_text("parent_span")
+                expect(inspector).to_contain_text("aaaaaaaaaaaaaaaa")
+                expect(inspector).to_contain_text("gen_ai.request.model")
+                expect(inspector).to_contain_text("gpt-4.1")
+                expect(inspector).to_contain_text("dddddddddddddddd")
+                browser.close()
+
 
 def _free_port() -> int:
     with socket.socket() as sock:
