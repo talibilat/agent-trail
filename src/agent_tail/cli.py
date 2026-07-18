@@ -10,6 +10,7 @@ import unicodedata
 import webbrowser
 
 from .core import IngestionError, JSONLReader, TraceIndex, redact_text, sanitize_event
+from .compare import compare_paths
 from .html_export import normalize_generation_time, render_html, write_html_atomic
 from .otel import OTLPDocumentError, canonical_jsonl as otel_jsonl, parse_otlp_json
 from .review import ExportCandidate, review_export, write_bytes_atomic
@@ -97,10 +98,19 @@ def session_import_parser() -> argparse.ArgumentParser:
     return result
 
 
+def compare_parser() -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(prog="agent-tail compare")
+    result.add_argument("run_a", metavar="RUN_A.jsonl")
+    result.add_argument("run_b", metavar="RUN_B.jsonl")
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["serve"]:
         return _serve_main(argv[1:])
+    if argv[:1] == ["compare"]:
+        return _compare_main(argv[1:])
     if argv[:2] == ["import", "otel"]:
         return _otel_import_main(argv[2:])
     if argv[:2] == ["import", "session"]:
@@ -280,6 +290,16 @@ def _otel_import_main(argv: list[str]) -> int:
 
     _print_errors(imported.errors)
     return 0 if imported.events else 1
+
+
+def _compare_main(argv: list[str]) -> int:
+    arguments = compare_parser().parse_args(argv)
+    try:
+        sys.stdout.write(compare_paths(Path(arguments.run_a), Path(arguments.run_b)))
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"agent-tail compare: {redact_text(str(error))}", file=sys.stderr)
+        return 2
+    return 0
 
 
 def _session_import_main(argv: list[str]) -> int:

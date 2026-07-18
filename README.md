@@ -53,6 +53,10 @@ The automated release matrix drives installed stable Chrome plus Playwright Fire
 Stable Safari must allow JavaScript from Apple Events or SafariDriver automation before its full installed-browser journey can be automated; without that local setting, release verification is limited to loading the dashboard in installed Safari and the passing WebKit journey.
 See [10,000-event performance envelope](docs/performance-envelope.md) for release thresholds, fixture semantics, and exact reproduction commands.
 
+Compare two local single-trace runs with `agent-tail compare RUN_A.jsonl RUN_B.jsonl`.
+See [Local run comparison](docs/run-comparison.md) for semantic fields, integrity handling, causal divergence, and deterministic output.
+Run comparison is not exact replay or a quality judgment.
+
 ## Read Events
 
 Read a JSONL file:
