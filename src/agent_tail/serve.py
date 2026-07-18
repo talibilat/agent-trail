@@ -19,6 +19,7 @@ from typing import Callable, Iterable, TextIO
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .core import Event, IngestionError, JSONLReader, TraceIndex, sanitize_event
+from .security import security_projection
 from .warning_policy import WarningPolicy
 
 
@@ -336,12 +337,20 @@ class RunStore:
             projection = _relationships(view)
             context_provenance = _context_provenance(view)
             evidence_map = _event_evidence(view.events)
-            runtime_warnings = self._warnings_for_trace(trace_id, now)
+            security = security_projection(
+                view,
+                evicted_event_ids=self._index.metadata_evictions(trace_id),
+            )
+            runtime_warnings = self._warnings_for_trace(
+                trace_id, now, security["findings"]
+            )
             started_at = min((event.timestamp for event in view.events), default=None)
             return {
                 "api_version": "v1",
                 "cursor": self._cursor,
-                "run": self._summary(trace_id, projection=projection),
+                "run": self._summary(
+                    trace_id, projection=projection, security=security
+                ),
                 **({"payload_mode": "metadata-only"} if self._metadata_only else {}),
                 "duration_seconds": _duration_seconds(view.events),
                 "usage": _usage_summary(view.events),
@@ -378,6 +387,7 @@ class RunStore:
                 "unresolved_endpoints": projection["unresolved_endpoints"],
                 "evidence_map": evidence_map,
                 "context_provenance": context_provenance,
+                "security": security,
                 "source": dict(self._source_status),
                 "findings": [
                     finding for finding in self._findings
@@ -391,11 +401,17 @@ class RunStore:
         trace_id: str,
         *,
         projection: dict[str, object] | None = None,
+        security: dict[str, object] | None = None,
     ) -> dict[str, object]:
         view = self._index.trace(trace_id)
         timestamps = [event.timestamp for event in view.events]
         if projection is None:
             projection = _relationships(view)
+        if security is None:
+            security = security_projection(
+                view,
+                evicted_event_ids=self._index.metadata_evictions(trace_id),
+            )
         runtime_warning_count = sum(
             1 for warning in self._index.warnings(now=max(timestamps, default=_epoch()))
             if warning.trace_id == trace_id
@@ -409,7 +425,11 @@ class RunStore:
             "duration_seconds": _duration_seconds(view.events),
             "usage": _usage_summary(view.events),
             "uncertain_event_count": len(view.uncertain_event_ids),
-            "warning_count": runtime_warning_count + len(projection["warnings"]),
+            "warning_count": (
+                runtime_warning_count
+                + len(projection["warnings"])
+                + len(security["findings"])
+            ),
             "state": self._lifecycle_state(trace_id),
             **({"payload_mode": "metadata-only"} if self._metadata_only else {}),
         }
@@ -446,6 +466,7 @@ class RunStore:
         self,
         trace_id: str,
         now: datetime,
+        security_findings: Iterable[dict[str, object]] = (),
     ) -> list[dict[str, object]]:
         current_keys = set()
         for warning in self._index.warnings(now=now):
@@ -462,6 +483,24 @@ class RunStore:
                 "actor_id": warning.actor_id,
                 "summary": warning.summary,
                 "evidence": warning.evidence,
+                "active": True,
+                "detected_at": prior.get("detected_at", now.isoformat()),
+                "resolved_at": None,
+            }
+        for finding in security_findings:
+            event_id = str(finding["operation_event_id"])
+            actor_id = str(finding["operation_actor_id"])
+            key = (str(finding["code"]), event_id, actor_id)
+            current_keys.add(key)
+            prior = self._warning_history.get(key, {})
+            self._warning_history[key] = {
+                "category": "security",
+                "code": finding["code"],
+                "event_id": event_id,
+                "trace_id": trace_id,
+                "actor_id": actor_id,
+                "summary": finding["summary"],
+                "evidence": json.dumps(finding, sort_keys=True, separators=(",", ":")),
                 "active": True,
                 "detected_at": prior.get("detected_at", now.isoformat()),
                 "resolved_at": None,

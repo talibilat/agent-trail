@@ -211,7 +211,7 @@ class CliTests(unittest.TestCase):
         self.assertNotIn(secret, report)
         self.assertEqual(
             hashlib.sha256(report.encode()).hexdigest(),
-            "e88cfab80643e2a678337b9088d02a8c2daabc9651404c69a80f3f1c60ffa5b2",
+            "6cdffe76c7d55e0676e2c816f8027925e0b54ab1d7bab7bd2c54ec227dd4f8ae",
         )
 
     def test_help_names_file_and_stdin_inputs_without_internal_options(self):
@@ -523,6 +523,38 @@ class CliTests(unittest.TestCase):
             with self.subTest(evidence=evidence):
                 self.assertIn(evidence, report)
         self.assertNotIn("hidden-value", report)
+
+    def test_markdown_security_section_is_deterministic_and_audit_only(self):
+        lines = [
+            json.dumps(event_data(
+                event_id="web-input",
+                kind="message.received",
+                attributes={"security": {"trust_origin": "web"}},
+            )),
+            json.dumps(event_data(
+                event_id="send",
+                span_id="send",
+                sequence=2,
+                operation={"status": "running", "name": "http_post"},
+                attributes={"security": {"capabilities": ["network_egress"]}},
+                relationships=[{"type": "influenced_by", "event_id": "web-input"}],
+            )),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory, "first.md")
+            second = Path(directory, "second.md")
+            first_result = run_cli("-", "--export", first, input="\n".join(lines) + "\n")
+            second_result = run_cli("-", "--export", second, input="\n".join(lines) + "\n")
+            report = first.read_text(encoding="utf-8")
+
+            self.assertEqual(first_result.returncode, 0)
+            self.assertEqual(second_result.returncode, 0)
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            self.assertIn("## Security audit", report)
+            self.assertIn("UNTRUSTED_TO_SENSITIVE", report)
+            self.assertIn("web-input -> send", report)
+            self.assertIn("network&#95;egress", report)
+            self.assertIn("Coverage reasons: none", report)
 
 
 if __name__ == "__main__":

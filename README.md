@@ -96,6 +96,7 @@ Run-detail responses project these references into an `evidence_map` with resolv
 Run-detail responses also project actor-specific repository context timelines under `context_provenance` for validated reads, searches, compactions, and changes.
 See [Context provenance](docs/context-provenance.md) for the exact hash bytes, safe path rules, deterministic dirty-worktree manifest, freshness and snapshot diagnostics, and producer guidance.
 See [Deterministic verification gaps](docs/verification-gaps.md) for the four factual warning rules, exact evidence, causal ordering, late resolution, and producer guidance.
+See [Audit-only taint security](docs/taint-security.md) for trust labels, sensitive capabilities, explicit influence propagation, deterministic paths, and incomplete coverage.
 
 See [Parallel coordination findings](docs/parallel-coordination.md) for fan-out, same-path change, redundant operation, explicit result consumption, lifecycle ordering, usage attribution, and producer guidance.
 Identical relationships from the same source event are projected once in first-declaration order, while the raw event retains every producer-supplied relationship.

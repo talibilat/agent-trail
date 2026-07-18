@@ -37,6 +37,61 @@ def event_data(**changes):
 
 
 class ServeEndToEndTests(unittest.TestCase):
+    def test_growing_file_resolves_forward_security_influence_in_inspector(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "security.jsonl")
+            source.write_text(json.dumps(event_data(
+                event_id="sensitive-operation",
+                sequence=2,
+                kind="tool.call.started",
+                operation={"status": "running", "name": "http_post"},
+                attributes={"security": {"capabilities": ["network_egress"]}},
+                relationships=[{"type": "influenced_by", "event_id": "web-input"}],
+            )) + "\n", encoding="utf-8")
+            port = _free_port()
+            process = subprocess.Popen(
+                [
+                    sys.executable, "-m", "agent_tail", "serve", str(source),
+                    "--port", str(port),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            self.addCleanup(_stop_process, process)
+            _wait_for_server_line(process)
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.goto(f"http://127.0.0.1:{port}", wait_until="domcontentloaded")
+                page.locator(".node-wrap").filter(has_text="reviewer-1").click()
+                page.locator(".event-row").filter(has_text="http_post").click()
+                audit = page.locator(".security-audit")
+                expect(audit).to_contain_text("UNRESOLVED_INFLUENCE_TARGET")
+                expect(audit).not_to_contain_text("UNTRUSTED_TO_SENSITIVE")
+
+                with source.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(event_data(
+                        event_id="web-input",
+                        span_id="web-input",
+                        emitter_id="web-source",
+                        sequence=1,
+                        timestamp="2026-07-13T11:02:43.912Z",
+                        kind="message.received",
+                        actor={"id": "web-source"},
+                        operation={"status": "completed", "name": "receive"},
+                        attributes={"security": {"trust_origin": "web"}},
+                    )) + "\n")
+
+                page.wait_for_function("currentDetail.security.findings.length === 1")
+                expect(audit).to_contain_text("UNTRUSTED_TO_SENSITIVE")
+                expect(audit).to_contain_text("network_egress")
+                expect(audit).to_contain_text("web-input=web (untrusted)")
+                expect(audit).to_contain_text("web-input [web] → sensitive-operation [unlabeled]")
+                browser.close()
+
     def test_parallel_coordination_fixture_surfaces_shared_warnings_everywhere(self):
         fixture = Path(__file__).parent / "fixtures" / "parallel-coordination.jsonl"
         port = _free_port()

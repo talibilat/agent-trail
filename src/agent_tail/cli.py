@@ -14,6 +14,7 @@ from .compare import compare_paths
 from .html_export import normalize_generation_time, render_html, write_html_atomic
 from .otel import OTLPDocumentError, canonical_jsonl as otel_jsonl, parse_otlp_json
 from .review import ExportCandidate, review_export, write_bytes_atomic
+from .security import security_projection
 from .session_import import (
     SOURCES,
     SessionDocumentError,
@@ -475,6 +476,64 @@ def _markdown(
             ))
     else:
         lines.extend(("None.", ""))
+
+    lines.extend(("## Security audit", ""))
+    for trace_id in dict.fromkeys(event.trace_id for event in events):
+        security = security_projection(
+            index.trace(trace_id),
+            evicted_event_ids=index.metadata_evictions(trace_id),
+        )
+        coverage = security["coverage"]
+        lines.extend((
+            f"### Trace `{_markdown_text(trace_id)}`",
+            "",
+            f"- Coverage: `{coverage['status']}`",
+            f"- Result: `{coverage['result']}`",
+            f"- Sensitive operations: {coverage['sensitive_operation_count']}",
+            f"- Integrity issues: {coverage['integrity_issue_count']}",
+            f"- Unresolved influence edges: {coverage['unresolved_edge_count']}",
+            "- Coverage reasons: " + (
+                ", ".join(
+                    f"`{_markdown_text(reason)}`"
+                    for reason in coverage["reasons"]
+                )
+                or "none"
+            ),
+            "",
+        ))
+        for finding in security["findings"]:
+            path = next(
+                item for item in security["paths"]
+                if item["id"] == finding["path_id"]
+            )
+            event_path = " -> ".join(
+                _markdown_text(item["event_id"]) for item in path["events"]
+            )
+            trust = ", ".join(
+                f"{_markdown_text(item['event_id'])}="
+                f"{_markdown_text(item['trust_origin'])} ({_markdown_text(item['risk'])})"
+                for item in path["trust_origins"]
+            ) or "none"
+            lines.extend((
+                f"#### {finding['code']}: {_markdown_text(finding['summary'])}",
+                "",
+                f"- Operation: `{_markdown_text(finding['operation_event_id'])}`",
+                "- Capabilities: " + ", ".join(
+                    f"`{_markdown_text(item)}`" for item in finding["capabilities"]
+                ),
+                f"- Influence path: `{event_path}`",
+                f"- Trust evidence: {trust}",
+                "",
+            ))
+        if security["integrity"]:
+            lines.append("Integrity diagnostics:")
+            lines.extend(
+                "- `" + _markdown_text(json.dumps(
+                    item, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                )) + "`"
+                for item in security["integrity"]
+            )
+            lines.append("")
 
     lines.extend(("## Ingestion errors", ""))
     error_list = list(errors)

@@ -1703,6 +1703,53 @@
 
       wrap.append(head, fieldsBlock);
 
+      const security = detail.security || {};
+      const securityFinding = (security.findings || []).find(
+        (finding) => finding.operation_event_id === event.event_id
+      );
+      const securityPath = securityFinding
+        ? (security.paths || []).find((path) => path.id === securityFinding.path_id)
+        : null;
+      const securityDiagnostics = (security.integrity || []).filter(
+        (item) => item.event_id === event.event_id
+          || item.source_event_id === event.event_id
+          || item.operation_event_id === event.event_id
+      );
+      if (securityFinding || securityDiagnostics.length) {
+        const block = document.createElement('div');
+        block.className = 'inspector-block security-audit';
+        block.innerHTML = `<div class="inspector-label">SECURITY AUDIT · AUDIT ONLY</div>`;
+        if (securityFinding) {
+          const title = document.createElement('div');
+          title.className = 'warn-title';
+          title.textContent = securityFinding.code;
+          const capabilities = document.createElement('div');
+          capabilities.className = 'detail';
+          capabilities.textContent = `capabilities ${(securityFinding.capabilities || []).join(', ')}`;
+          block.append(title, capabilities);
+        }
+        if (securityPath) {
+          const trust = document.createElement('div');
+          trust.className = 'detail';
+          trust.textContent = `trust evidence ${(securityPath.trust_origins || []).map(
+            (item) => `${item.event_id}=${item.trust_origin} (${item.risk})`
+          ).join(', ') || 'none'}`;
+          const path = document.createElement('div');
+          path.className = 'detail security-path';
+          path.textContent = `influence path ${(securityPath.events || []).map(
+            (item) => `${item.event_id} [${(item.trust_origins || []).join(', ') || 'unlabeled'}]`
+          ).join(' → ')}`;
+          block.append(trust, path);
+        }
+        securityDiagnostics.forEach((diagnostic) => {
+          const item = document.createElement('div');
+          item.className = 'diagnostic';
+          item.textContent = `${diagnostic.code} · ${diagnostic.target_event_id || diagnostic.event_id || 'unknown event'}`;
+          block.append(item);
+        });
+        wrap.append(block);
+      }
+
       const eventWarnings = (detail.warnings || []).filter((warning) => warning.event_id === event.event_id);
       if (eventWarnings.length) {
         const warningBlock = document.createElement('div');
@@ -2540,6 +2587,8 @@
         ['Total requests', String(modelReq + toolReq), '--run'],
         ['Tokens (in/out)', `${usageValue(usage.input_tokens)} / ${usageValue(usage.output_tokens)}`, '--ok'],
         ['Estimated cost', costValue(usage.cost_usd, 2), '--warn'],
+        ['Security audit', `${detail.security?.coverage?.result || 'no_observed_path'} · ${detail.security?.coverage?.status || 'incomplete'} coverage`, detail.security?.findings?.length ? '--err' : '--warn'],
+        ...((detail.security?.coverage?.reasons || []).length ? [['Security coverage reason', detail.security.coverage.reasons.join(', '), '--warn']] : []),
       ].forEach(([k, v, color]) => {
         const row = document.createElement('div');
         row.className = 'overview-row';

@@ -94,6 +94,18 @@ class Event:
         return deepcopy(self._raw["operation"])
 
     @property
+    def has_security(self) -> bool:
+        attributes = self._raw.get("attributes")
+        return isinstance(attributes, Mapping) and "security" in attributes
+
+    @property
+    def security(self) -> object:
+        attributes = self._raw.get("attributes")
+        if not isinstance(attributes, Mapping) or "security" not in attributes:
+            return None
+        return deepcopy(attributes["security"])
+
+    @property
     def raw(self) -> dict[str, object]:
         return deepcopy(self._raw)
 
@@ -466,6 +478,7 @@ class TraceIndex:
         self._eviction_warning: Warning | None = None
         self._eviction_count = 0
         self._recent_evictions: tuple[tuple[str, str, str], ...] = ()
+        self._metadata_evictions: dict[str, set[str]] = {}
         self._trace_cache: dict[str, TraceView] = {}
         self._verification_gap_cache: dict[str, tuple[Warning, ...]] = {}
         self._coordination_warning_cache: dict[str, tuple[Warning, ...]] = {}
@@ -499,6 +512,9 @@ class TraceIndex:
     @property
     def recent_evictions(self) -> tuple[tuple[str, str, str], ...]:
         return self._recent_evictions
+
+    def metadata_evictions(self, trace_id: str) -> frozenset[str]:
+        return frozenset(self._metadata_evictions.get(trace_id, ()))
 
     @property
     def events(self) -> tuple[Event, ...]:
@@ -1079,6 +1095,7 @@ class TraceIndex:
             size = self._sizes.pop(event.event_id)
             self._retained_bytes -= size
             self._event_ids.remove(event.event_id)
+            self._metadata_evictions.setdefault(event.trace_id, set()).add(event.event_id)
             self._record_eviction(event, "metadata", size)
             recent_evictions.append((event.trace_id, event.event_id, "metadata"))
         self._recent_evictions = tuple(recent_evictions)
