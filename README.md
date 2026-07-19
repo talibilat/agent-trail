@@ -1,295 +1,350 @@
 # Agent Tail
 
-Agent Tail is a local CLI and terminal UI for inspecting canonical multi-agent runtime events without a backend.
-Version 1 directly supports the canonical JSONL emitted by this runtime from a file or standard input.
+Agent Tail is a local CLI, terminal UI, and browser flight recorder for debugging coding-agent and multi-agent runs without a backend.
+It connects causal runtime events to repository context, changes, verification, warnings, security influence, usage, and observed outcomes.
 
-Import standard OpenTelemetry OTLP JSON with `agent-tail import otel traces.json --output run.jsonl`.
-See [OpenTelemetry OTLP JSON import](docs/opentelemetry-import.md) for mapping, stream, diagnostics, and artifact-safety details.
-Import supported Claude Code, Codex, and OpenCode local sessions with `agent-tail import session INPUT --source auto --output run.jsonl`.
-See [Coding-agent session imports](docs/coding-agent-imports.md) for pinned formats, conservative mappings, diagnostics, and local artifact safety.
-Capture LangGraph runs directly with the optional `AgentTailCallbackHandler` adapter.
-See [LangGraph callback adapter](docs/langgraph-adapter.md) for installation, callback mapping, evidence helpers, and a complete local workflow.
-
-## Install
+## Quick Start
 
 Agent Tail requires Python 3.11 or newer.
 
 ```bash
 python -m pip install .
+agent-tail serve examples/demo-run.jsonl --open --fan-out-threshold 2
+```
+
+For development without installation, replace `agent-tail` with `PYTHONPATH=src python -m agent_tail` in every command.
+The comprehensive demo opens a local UI and does not make external network requests.
+
+## Test Everything In The UI
+
+Most product features can be tested from one browser session.
+Imports and run comparison start as CLI commands, but every imported canonical JSONL file can then be opened in the same UI.
+
+```bash
+agent-tail serve examples/demo-run.jsonl --open --fan-out-threshold 2
+```
+
+Use the demo in this order:
+
+1. Switch between **Graph**, **Tree**, **Swimlane**, and **Sequence** to inspect topology, parentage, timing, and handoffs.
+2. Open **Warnings** to see loop, uncovered-change, stale-context, self-confirming-test, fan-out, overlapping-change, redundant-operation, unconsumed-result, child-after-parent, and untrusted-to-sensitive findings.
+3. Select `implementer`, then select `change.applied`, to inspect the requirement, context, tool, proposal, test, human correction, stale hash, and attributed cost for one hunk.
+4. Select `researcher` or either `searcher-*` agent to inspect repository snapshots, content hashes, queries, and matched paths in Context Provenance.
+5. Select `security-worker`, then select `http_post`, to inspect the audit-only `web -> network_egress` influence path.
+6. Select the run overview to inspect totals, actor and operation usage, hunk allocation, warning associations, and the observed `modified` outcome.
+7. Search for `demo-change`, scrub playback backward, and use **Jump to live** to test investigation controls.
+
+The demo payload contains a fake bearer value so the inspector can demonstrate redaction.
+Do not use real credentials in examples or shared reports.
+
+## Live Update Demo
+
+Use a temporary copy so the tracked example remains unchanged.
+
+```bash
+cp examples/demo-run.jsonl /tmp/agent-tail-demo.jsonl
+agent-tail serve /tmp/agent-tail-demo.jsonl --open --fan-out-threshold 2
+```
+
+Append a new event from another terminal while the browser is open.
+
+```bash
+cat examples/demo-live-event.jsonl >> /tmp/agent-tail-demo.jsonl
+```
+
+The request count, timeline, and outcome-cost totals update through SSE without refreshing the page.
+If a reconnect cursor falls outside retained live history, the browser reloads the authoritative snapshot automatically.
+
+## Demo Files
+
+The Claude Code, Codex, and OpenCode session files are synthetic, independently authored fixtures that model the pinned formats documented by their import adapters.
+They are not copied from user sessions or vendor repositories.
+
+| File | Purpose |
+| --- | --- |
+| `examples/demo-run.jsonl` | Comprehensive UI demo covering evidence, provenance, warnings, security, coordination, payloads, and cost. |
+| `examples/demo-live-event.jsonl` | One append-only event for testing live SSE updates and cost changes. |
+| `examples/warning-policy.toml` | Raises the expected `poll_status` loop threshold and suppresses `flaky_api` retries. |
+| `examples/otel-traces.json` | Minimal standard OTLP JSON trace for the OpenTelemetry importer. |
+| `examples/claude-code-session.jsonl` | Minimal pinned Claude Code session export. |
+| `examples/codex-session.jsonl` | Minimal pinned Codex CLI rollout export. |
+| `examples/opencode-session.json` | Minimal pinned OpenCode session export. |
+| `examples/langgraph-demo.py` | Small LangGraph run captured through `AgentTailCallbackHandler`. |
+| `examples/compare-run-a.jsonl` | Successful-style comparison input with repository context and integration tests. |
+| `examples/compare-run-b.jsonl` | Divergent comparison input with different context, tests, usage, and cost. |
+
+## Feature Catalog
+
+Each feature below has a two-line summary: what it does and how to run or inspect it.
+Detailed contracts and security boundaries are linked from each entry.
+
+### Browser Flight Recorder
+
+Graph, tree, swimlane, and sequence views combine topology, causal uncertainty, playback, search, warning history, and event or agent inspectors.
+Run `agent-tail serve examples/demo-run.jsonl --open --fan-out-threshold 2` and switch views from the top navigation.
+
+### Causal Ordering And Uncertainty
+
+Ordering prefers per-emitter sequence and explicit causal ancestry, then uses timestamps and ingestion order only as fallbacks while marking facts that cannot be totally ordered.
+Run the comprehensive demo and compare Graph, Swimlane, and Sequence views to see concurrent branches without fabricated certainty.
+
+### Fault-Tolerant Ingestion
+
+Each JSONL line is validated independently, so malformed records and duplicate IDs become redacted findings without discarding valid sibling events.
+Run `agent-tail INPUT.jsonl` or pipe a producer into `agent-tail -`, then inspect ingestion findings in the terminal, API, UI, or exports.
+
+### Live Tailing And Bounded History
+
+Serve mode follows growing files or standard input, streams typed SSE updates, and resets stale clients from authoritative snapshots without unbounded replay memory.
+Run the [live update demo](#live-update-demo), and read [bounded live history](docs/bounded-live-history.md) for the reset contract.
+
+### Change Evidence Map
+
+Each valid Git hunk can show its requirement, repository context, decision agent, preceding tools, verification lifecycle, test origin, and later human correction.
+Open `implementer -> change.applied` in the demo, and read the [event envelope](#canonical-event-envelope) for producer relationships.
+
+### Verification Gap Detector
+
+Deterministic warnings identify uncovered changes, failures before completion, stale context, and tests whose only passing evidence was produced by the same agent.
+Open **Warnings** and the demo hunk, then read [verification gaps](docs/verification-gaps.md) for exact rules.
+
+### Context Provenance
+
+Actor timelines expose file hashes, repository commits, dirty-worktree fingerprints, searches, compaction boundaries, stale reads, and divergent snapshots without storing file contents.
+Select `researcher` in the demo, then read [context provenance](docs/context-provenance.md) for path and hashing algorithms.
+
+### Parallel-Agent Coordination
+
+Findings cover excessive fan-out, same-path changes without causal order, exact redundant work, unconsumed child results, and child activity after parent completion.
+Run the UI with `--fan-out-threshold 2`, open **Warnings**, and read [parallel coordination](docs/parallel-coordination.md).
+
+### Taint Security Audit
+
+Producer-declared trust labels propagate only through explicit `influenced_by` edges to sensitive capabilities, with incomplete instrumentation reported separately from no observed path.
+Select `security-worker -> http_post` in the demo, then read [taint security](docs/taint-security.md).
+
+### Outcome Cost Attribution
+
+Event-local tokens and cost are conserved across attributed, pending, and unattributed buckets and can be linked explicitly to valid hunks and observed corrections.
+Open the run overview and demo hunk, then read [outcome cost](docs/outcome-cost.md).
+
+### Runtime Warnings
+
+The warning engine detects loops, unchanged retries, stalls, missing parents, verification gaps, coordination problems, security paths, and memory eviction with factual evidence.
+Open **Warnings** in the demo or run `agent-tail examples/demo-run.jsonl --fan-out-threshold 2` for a terminal snapshot.
+
+### Per-Tool Warning Policies
+
+A versioned TOML policy can tune or explicitly suppress `LOOP` and `RETRY` for exact canonical operation names while preserving suppression counts and evidence.
+Run `agent-tail serve examples/demo-run.jsonl --open --fan-out-threshold 2 --warning-policy examples/warning-policy.toml` and read [warning policies](docs/warning-policies.md).
+
+### Redaction And Payload Retention
+
+Common secret shapes and sensitive keys are redacted before indexing, large payloads are truncated with byte counts and hashes, and the memory budget evicts payloads before metadata.
+Inspect `demo-usage`, try `--full-payloads` only with trusted input, and never treat finite redaction rules as a sharing guarantee.
+
+### Metadata-Only Mode
+
+Payload bodies are omitted before indexing while deterministic original byte count, SHA-256, and omission state remain available throughout terminal, API, browser, and exports.
+Run `agent-tail serve examples/demo-run.jsonl --open --metadata-only --fan-out-threshold 2` and read [metadata-only mode](docs/metadata-only.md).
+
+### Markdown Export
+
+The deterministic text report includes actor state, timelines, warnings, security audit, outcome-cost tables, payload state, and ingestion findings.
+Run `agent-tail examples/demo-run.jsonl --fan-out-threshold 2 --export demo-report.md` and open `demo-report.md`.
+
+### Self-Contained HTML Export
+
+One sanitized offline HTML file embeds the interactive browser UI, all run projections, and a restrictive no-network Content Security Policy.
+Run `agent-tail examples/demo-run.jsonl --fan-out-threshold 2 --export-html demo-report.html` and read [HTML export](docs/html-export.md).
+
+### Pre-Export Review
+
+A temporary loopback-only review session freezes the exact Markdown or HTML candidate, shows its disclosure inventory and digest, and writes only after one-shot approval.
+Run `agent-tail examples/demo-run.jsonl --export-html /tmp/reviewed-demo.html --review --open` and read [export review](docs/export-review.md).
+
+### OpenTelemetry Import
+
+The dependency-free importer converts standard OTLP JSON resources, scopes, spans, and span events into deterministic canonical JSONL without receiving live OTLP traffic.
+Run the command in [Import Demos](#import-demos), then read [OpenTelemetry import](docs/opentelemetry-import.md).
+
+### Coding-Agent Session Imports
+
+Isolated adapters conservatively convert fixture-pinned Claude Code, Codex, and OpenCode exports without scanning global directories or inventing missing evidence.
+Run the commands in [Import Demos](#import-demos), then read [coding-agent imports](docs/coding-agent-imports.md).
+
+### LangGraph Adapter
+
+The optional callback handler captures synchronous or asynchronous graph, node, model, tool, failure, and explicit evidence activity as flushed canonical JSONL.
+Run the command in [LangGraph Demo](#langgraph-demo), then read [LangGraph adapter](docs/langgraph-adapter.md).
+
+### Local Run Comparison
+
+Comparison reports added and removed semantic facts, usage changes, integrity differences, and the earliest supported divergence or stable concurrent frontier without exact replay claims.
+Run `agent-tail compare examples/compare-run-a.jsonl examples/compare-run-b.jsonl` and read [run comparison](docs/run-comparison.md).
+
+### 10,000-Event Performance Envelope
+
+Release gates verify retained and default-budget ingestion, projection, serialization, memory, installed-browser startup, search, view switching, playback, and progressive reveal.
+Run `PYTHONPATH=src python -m unittest tests.test_performance -v` and read [performance envelope](docs/performance-envelope.md).
+
+### Terminal UI And Snapshots
+
+TTY output provides an interactive lane view, while redirected output produces a deterministic plain snapshot suitable for scripts and CI artifacts.
+Run `agent-tail examples/demo-run.jsonl` in a terminal or redirect it with `agent-tail examples/demo-run.jsonl > snapshot.txt`.
+
+### Local API And SSE
+
+The versioned local API exposes run lists, complete run projections, lazy payload detail, and cursor-based typed SSE updates used by the packaged browser.
+Run `agent-tail serve examples/demo-run.jsonl`, then open `/api/v1/runs` or `/api/v1/events?cursor=0` on the printed loopback origin.
+
+### Offline Assets And Guarded Remote Access
+
+The browser ships without runtime CDN dependencies, binds to loopback by default, and requires an explicit tokenized mode before listening on a non-loopback host.
+Run locally with `agent-tail serve examples/demo-run.jsonl`, or read [Security And Remote Access](#security-and-remote-access) before using `--remote-access`.
+
+## Import Demos
+
+Convert OTLP JSON and open the result in the UI.
+
+```bash
+agent-tail import otel examples/otel-traces.json --output /tmp/otel-demo.jsonl
+agent-tail serve /tmp/otel-demo.jsonl --open
+```
+
+Convert each supported coding-agent session and open any result in the UI.
+
+```bash
+agent-tail import session examples/claude-code-session.jsonl --source auto --output /tmp/claude-demo.jsonl
+agent-tail import session examples/codex-session.jsonl --source auto --output /tmp/codex-demo.jsonl
+agent-tail import session examples/opencode-session.json --source auto --output /tmp/opencode-demo.jsonl
+agent-tail serve /tmp/claude-demo.jsonl --open
+```
+
+Generated import artifacts can contain source prompts, commands, and other sensitive telemetry.
+Protect imported JSONL like the original source file.
+
+## LangGraph Demo
+
+Install the optional adapter dependency, generate a trace, and open it in the UI.
+
+```bash
+python -m pip install '.[langgraph]'
+python examples/langgraph-demo.py /tmp/langgraph-demo.jsonl
+agent-tail serve /tmp/langgraph-demo.jsonl --open
+```
+
+The adapter never infers repository reads, changes, or verification from model text.
+Use its explicit evidence helpers when the application can supply those facts.
+
+## Export And Review Demos
+
+Create deterministic Markdown and self-contained HTML reports.
+
+```bash
+agent-tail examples/demo-run.jsonl --fan-out-threshold 2 --export /tmp/agent-tail-demo.md
+agent-tail examples/demo-run.jsonl --fan-out-threshold 2 --export-html /tmp/agent-tail-demo.html
+```
+
+Review the exact frozen HTML bytes before they replace the destination.
+
+```bash
+agent-tail examples/demo-run.jsonl --fan-out-threshold 2 --export-html /tmp/agent-tail-reviewed.html --review --open
+```
+
+The review command waits until **Approve export**, **Cancel**, timeout, or interruption.
+Closing the review page cancels by default and leaves an existing destination unchanged.
+
+## CLI Reference
+
+```text
+agent-tail INPUT [options]
+agent-tail serve INPUT [options]
+agent-tail compare RUN_A.jsonl RUN_B.jsonl
+agent-tail import otel INPUT --output OUTPUT
+agent-tail import session INPUT --source auto --output OUTPUT
+```
+
+Common inspection and export options are `--full-payloads`, `--metadata-only`, `--unsafe-unredacted`, `--loop-threshold`, `--fan-out-threshold`, `--warning-policy`, `--stall-seconds`, and `--max-bytes`.
+Serve-only options are `--host`, `--port`, `--open`, `--remote-access`, and `--max-live-updates`.
+
+Run command-specific help for the complete current options.
+
+```bash
 agent-tail --help
+agent-tail serve --help
+agent-tail compare --help
+agent-tail import otel --help
+agent-tail import session --help
 ```
 
-For development without installation, prefix commands with `PYTHONPATH=src python -m agent_tail`.
+## Canonical Event Envelope
 
-## Serve Mode
-
-Launch the local browser flight recorder against a growing JSONL file:
-
-```bash
-agent-tail serve run.jsonl
-```
-
-Use `--open` to open the printed URL automatically, or choose a loopback port with `--port`.
-The server follows regular files after reaching the current EOF and receives new standard-input events until stdin disconnects.
-Live reconnect history is bounded to 10,000 updates by default and can be tuned with the positive `--max-live-updates` option.
-Clients outside retained history receive a reset signal and reload authoritative run state; see [Bounded live history](docs/bounded-live-history.md).
-
-The server binds to `127.0.0.1` by default.
-A non-loopback host requires `--remote-access`, prints a prominent warning, and generates a token-protected launch URL.
-Remote access cannot be combined with `--unsafe-unredacted`.
-
-Serve mode provides graph, tree, swimlane, sequence, playback, search, inspectors, warning history, and lazy sanitized payload details through the same ingestion and trace-index behavior as the terminal application.
-The packaged browser UI has no runtime CDN dependency.
-
-To run the browser E2E suite locally:
-
-```bash
-python -m pip install '.[test]'
-python -m playwright install chromium firefox webkit
-PYTHONPATH=src python -m unittest tests.test_e2e
-```
-
-The automated release matrix drives installed stable Chrome plus Playwright Firefox and WebKit.
-Stable Safari must allow JavaScript from Apple Events or SafariDriver automation before its full installed-browser journey can be automated; without that local setting, release verification is limited to loading the dashboard in installed Safari and the passing WebKit journey.
-See [10,000-event performance envelope](docs/performance-envelope.md) for release thresholds, fixture semantics, and exact reproduction commands.
-
-Compare two local single-trace runs with `agent-tail compare RUN_A.jsonl RUN_B.jsonl`.
-See [Local run comparison](docs/run-comparison.md) for semantic fields, integrity handling, causal divergence, and deterministic output.
-Run comparison is not exact replay or a quality judgment.
-
-## Read Events
-
-Read a JSONL file:
-
-```bash
-agent-tail run.jsonl
-```
-
-Read newline-delimited events from standard input:
-
-```bash
-producer | agent-tail -
-```
-
-Each non-empty line is parsed independently, so malformed and duplicate lines are reported without discarding other valid events.
-The process succeeds when at least one valid event was accepted.
-
-## Event Envelope
-
-Every event must be a JSON object containing these fields:
-
-- `schema_version`: a supported `1.x` string.
-- `event_id`: a unique string within the input.
-- `trace_id`: the trace identifier.
-- `span_id`: the span identifier.
-- `emitter_id`: the process or stream that owns `sequence`.
-- `sequence`: a non-negative integer.
-- `timestamp`: an ISO 8601 timestamp with a timezone.
-- `kind`: the event kind string.
-- `actor`: an object with a string `id`.
-- `operation`: an object with a non-blank string `status` and optional `name`.
-
-`parent_span_id` is optional and links an event to a parent span in the same trace.
-`relationships` is an optional array of event references with string `type` and `event_id` fields.
-Relationship types are extensible, and referenced events may arrive later in a stream.
-Run-detail responses project these references into an `evidence_map` with resolved event links and unresolved references.
-Run-detail responses also project actor-specific repository context timelines under `context_provenance` for validated reads, searches, compactions, and changes.
-See [Context provenance](docs/context-provenance.md) for the exact hash bytes, safe path rules, deterministic dirty-worktree manifest, freshness and snapshot diagnostics, and producer guidance.
-See [Deterministic verification gaps](docs/verification-gaps.md) for the four factual warning rules, exact evidence, causal ordering, late resolution, and producer guidance.
-See [Audit-only taint security](docs/taint-security.md) for trust labels, sensitive capabilities, explicit influence propagation, deterministic paths, and incomplete coverage.
-
-See [Parallel coordination findings](docs/parallel-coordination.md) for fan-out, same-path change, redundant operation, explicit result consumption, lifecycle ordering, usage attribution, and producer guidance.
-See [Outcome cost attribution](docs/outcome-cost.md) for explicit usage-to-hunk relationships, conservation rules, pending targets, correction outcomes, and non-exclusive warning associations.
-Identical relationships from the same source event are projected once in first-declaration order, while the raw event retains every producer-supplied relationship.
-Resolved links include source and target kinds and actors so clients can present the smallest relevant evidence chain without joining the event list themselves.
-For repository changes, emit a `change.applied` event with a Git hunk locator under `attributes.change`:
+Every JSONL line is one object with `schema_version`, `event_id`, `trace_id`, `span_id`, `emitter_id`, `sequence`, zoned `timestamp`, `kind`, `actor.id`, and `operation.status`.
+Optional `parent_span_id` and extensible `{type, event_id}` relationships provide causal and evidence links, while adapter-specific data belongs under namespaced `attributes`.
 
 ```json
 {
+  "schema_version": "1.0",
+  "event_id": "change-1",
+  "trace_id": "trace-1",
+  "span_id": "change-span",
+  "emitter_id": "worker-1",
+  "sequence": 7,
+  "timestamp": "2026-07-18T12:00:07Z",
   "kind": "change.applied",
+  "actor": {"id": "implementer"},
+  "operation": {"status": "completed", "name": "edit"},
   "attributes": {
     "change": {
       "path": "src/auth/session.py",
       "old_start": 84,
       "old_count": 18,
       "new_start": 84,
-      "new_count": 19,
-      "symbol": "reject_expired_session"
+      "new_count": 19
     }
-  }
+  },
+  "relationships": [
+    {"type": "informed_by", "event_id": "context-1"},
+    {"type": "verified_by", "event_id": "verification-1"}
+  ]
 }
 ```
 
-`path` is a non-blank string, the four range values are non-negative integers, each positive count has a positive start, and `symbol` is an optional non-blank string.
-A `change.applied` event with missing or non-object `attributes.change` cannot identify a Git hunk, so it is excluded from `evidence_map.changes` but remains traceable under `evidence_map.invalid_changes` with its event ID, actor ID, and an `invalid_change_detail` integrity diagnostic.
-A change event with a malformed or blank required path cannot identify a Git hunk, so it is excluded from `evidence_map.changes` but remains traceable under `evidence_map.invalid_changes` with its event ID, actor ID, and an `invalid_change_path` integrity diagnostic.
-A malformed, negative, or impossible zero-valued `old_start` is excluded in the same way with an `invalid_change_old_start` diagnostic; zero remains valid when `old_count` is zero.
-A malformed or negative `old_count` is excluded in the same way with an `invalid_change_old_count` diagnostic; zero remains valid for an empty old range.
-A malformed, negative, or impossible zero-valued `new_start` is excluded in the same way with an `invalid_change_new_start` diagnostic; zero remains valid when `new_count` is zero.
-A malformed or negative `new_count` is excluded in the same way with an `invalid_change_new_count` diagnostic; zero remains valid for an empty new range.
-A supplied malformed or blank symbol is omitted while the valid hunk remains visible, produces an `invalid_change_symbol` integrity diagnostic, and keeps coverage incomplete; an absent symbol remains valid optional metadata.
-Valid locators are exposed in event order under `evidence_map.changes`, together with the change event and actor IDs.
-Each change record groups the resolved and unresolved relationships originating from that change under its own `links` and `unresolved` arrays.
-It also includes factual `coverage` for requirement, context, tool, verification, and decision evidence, plus an unresolved count for missing targets on those canonical evidence relationships, targets of the wrong event kind, missing compacted-context sources, and missing verification-start events.
-Unresolved generic relationships remain inspectable but do not reduce factual evidence coverage.
-A context category is present for direct context only when an `informed_by` relationship resolves to a `context.read` event with a validated locator; other links to context reads remain visible but do not identify what informed the applied hunk.
-A direct `informed_by` context read ordered after its change remains inspectable but is reported as read after the change and keeps coverage incomplete.
-A direct `informed_by` context read ordered after the earliest attributable `change.proposed` decision remains inspectable but is reported as read after that decision and keeps coverage incomplete; without an attributable proposal, undetermined ordering relative to the applied change also keeps coverage incomplete.
-For a direct context read and either boundary event from the same emitter, distinct sequence values establish their order despite equal or skewed timestamps; equal sequence values leave chronology undetermined, while timestamps establish order across emitters and equal timestamps remain non-contradictory.
-Canonical context-read events without a valid non-blank path remain inspectable as generic links but are reported as invalid context details and keep coverage incomplete.
-A supplied `line_start` that is not a positive integer is omitted, reported as an invalid context line start, and keeps coverage incomplete while the valid path remains visible.
-A supplied `line_end` that is not a positive integer or precedes a valid `line_start` is omitted, reported as an invalid context line end, and keeps coverage incomplete while the rest of the valid locator remains visible.
-A supplied `symbol` that is not a non-blank string is omitted, reported as an invalid context symbol, and keeps coverage incomplete while the rest of the valid locator remains visible.
-A context locator among a compaction's resolved `summarizes` sources also satisfies the category when the change references that compaction with `informed_by`; unrelated outer or source links do not.
-A summarized `context.read` ordered after its `context.compacted` event remains inspectable but is reported as read after the compaction and keeps coverage incomplete; sequence establishes source/compaction order for events from the same emitter despite equal or skewed timestamps, while timestamps establish order across emitters and equal timestamps remain non-contradictory.
-Resolved canonical summarized sources include `chronology` relative to the compaction; equal timestamps across independent emitters are reported as `undetermined` rather than claimed to establish before or after ordering.
-An `informed_by` compaction ordered after its change remains inspectable but is reported as compacted after the change and keeps coverage incomplete; ordering uses sequence for events from the same emitter and timestamps across emitters, where equal timestamps do not establish contradictory ordering.
-An `informed_by` compaction ordered after the earliest attributable `change.proposed` decision remains inspectable but is reported as compacted after that decision and keeps coverage incomplete; without an attributable proposal, undetermined ordering relative to the applied change also keeps coverage incomplete.
-For a compaction and decision from the same emitter, sequence establishes their order despite equal or skewed timestamps; equal timestamps across independent emitters keep coverage incomplete because they do not establish that compaction preceded the decision.
-An `informed_by` compaction without any `summarizes` relationship remains visible but is reported as invalid compaction details and keeps coverage incomplete even when other context evidence satisfies the category.
-A tool category is present only when a `preceded_by` relationship resolves to a tool call with a non-blank command or result; other links to tool calls remain visible, while operation identity and status alone do not satisfy it.
-Canonical tool-call events without a valid non-blank command or result remain inspectable as generic links but are reported as invalid tool details and keep coverage incomplete.
-A `preceded_by` tool event ordered after the earliest attributable `change.proposed` decision or its applied change remains inspectable but produces a temporal diagnostic and keeps coverage incomplete.
-For a tool and either boundary event from the same emitter, sequence establishes their order despite equal or skewed timestamps; otherwise timestamps establish order and equal timestamps remain non-contradictory.
-A verification category is present only when a `verified_by` relationship resolves to a finished verification with a non-blank command, either directly or through a resolved start event; other links to verifications remain visible, and a validated outcome or blank start event alone does not satisfy the category.
-A requirement category is present only when a `motivated_by` relationship resolves to a `requirement.observed` event with validated requirement details; other links to requirements remain visible but do not identify the motivation behind the applied hunk.
-A `motivated_by` requirement ordered after the earliest attributable `change.proposed` decision or its applied change remains inspectable but produces a temporal diagnostic and keeps coverage incomplete.
-For a requirement and either boundary event from the same emitter, sequence establishes their order despite equal or skewed timestamps; otherwise timestamps establish order, and equal timestamps relative to an attributable decision keep coverage incomplete because they do not establish that the requirement preceded the decision.
-A decision category is present only when an `applies` relationship resolves to a `change.proposed` event with a non-blank actor ID; other links remain visible, while anonymous canonical proposals are reported as invalid decision actors and keep coverage incomplete.
-Resolved canonical proposal links include `chronology` relative to the applied change; equal timestamps across independent emitters are reported as `undetermined` and keep coverage incomplete because they do not establish that the proposal preceded application.
-An `applies` proposal ordered after its change remains inspectable but is reported as proposed after the applied change and keeps coverage incomplete; sequence establishes proposal/application order for events from the same emitter despite equal or skewed timestamps, while timestamps establish order across emitters and equal timestamps remain non-contradictory.
-When multiple attributable proposals precede a change, the earliest decision boundary is selected with the same ordering rule, so same-emitter sequence takes precedence over clock-skewed timestamps.
-Coverage is `complete` only when all five core categories are present, every direct, compacted, or verification-lifecycle reference resolves to valid evidence, the proposal is known to predate application, every canonical verification identifies a test command, every verification is known to postdate the change, and every verification passed.
-Otherwise `missing` identifies absent categories, `integrity_issue_count` identifies malformed hunk metadata, `unknown_test_origin_count` identifies verifications without valid provenance, `same_agent_test_count` identifies tests written by the implementing agent, and `failed_verification_count` identifies failed results, without assigning a subjective confidence score.
-The run-level arrays remain available for all relationships, including those originating from events without valid change locators.
-To identify a motivating requirement, emit a `requirement.observed` event with non-blank `attributes.requirement.id` and `attributes.requirement.text` strings, then reference it from the change event with a `motivated_by` relationship.
-Resolved canonical links to that event include the validated ID and text under `requirement` and `chronology` relative to the earliest attributable decision, identifying that boundary as `decision_event_id`, or to the applied change when no decision is attributable; equal timestamps across independent emitters are reported as `undetermined` and keep coverage incomplete at either boundary.
-Canonical requirement events with malformed or blank details remain inspectable as generic links but are reported as invalid requirement details and keep coverage incomplete.
-The browser event inspector presents the selected hunk's `change.applied` event ID, path, new-file range, canonical old/new Git hunk header, optional symbol, hunk-integrity diagnostics, and applying agent together with the event ID, requirement ID, text, observing actor, and decision-boundary event ID when available for requirements linked by `motivated_by`; a zero-count new-file range is explicitly shown as `path:start (0 lines)` rather than as a one-line range, blank applying and observing actors are identified as unknown, requirements observed after the decision or change are warned about, undetermined chronology is labeled without claiming motivation preceded the decision, and unrelated requirement links are not attributed as motivations.
-When a selected `change.applied` event has invalid required change metadata and therefore no truthful hunk locator, the browser presents its event ID, applying actor, and typed change-integrity diagnostics without fabricating a Change Evidence hunk.
-To distinguish the agent that made the change decision from the agent that applied it, reference a `change.proposed` event with a non-blank actor ID from `change.applied` using an `applies` relationship; the browser presents the proposal event ID and both actors separately on the selected hunk, identifies a blank proposing actor as unknown and invalid decision evidence, warns when the proposal follows its application, labels undetermined chronology without claiming before or after ordering, and does not attribute unrelated proposals as decisions.
-Each unresolved hunk relationship is identified by its relationship type and target event ID, followed by an aggregate unresolved-reference status.
-Post-decision requirement, context, compaction, and tool diagnostics also identify the proposal event that defines their decision boundary.
-Missing canonical relationships are labeled as evidence targets, while missing generic relationships are labeled neutrally and do not imply that they affect evidence completeness.
-Resolved `motivated_by`, `informed_by`, `preceded_by`, `verified_by`, and `applies` targets of the wrong event kind remain inspectable as generic links and are also identified as invalid evidence targets with their actual event kind.
-Valid `informed_by` targets are `context.read` and `context.compacted` events.
-To identify repository or documentation evidence, emit a `context.read` event with a non-blank `attributes.context.path`, optional positive integer `line_start` and `line_end` fields where `line_end` is not before `line_start` when both are present, and an optional non-blank string `symbol`, then reference it from the change event with an `informed_by` relationship.
-Resolved canonical links to that event include the validated locator under `context` and `chronology` relative to the earliest attributable decision, identifying that boundary as `decision_event_id`, or to the applied change when no decision is attributable; equal timestamps across independent emitters are reported as `undetermined` and keep coverage incomplete at either boundary.
-Malformed optional locator fields are omitted without hiding the relationship and are reported as typed integrity diagnostics for canonical direct or compacted context evidence.
-The browser event inspector presents each context event ID, path, line range, symbol, reading actor, and decision-boundary event ID when available for context linked by `informed_by` directly on the selected change hunk; a blank reading actor is identified as unknown, an end-only range is displayed as `path:?-end`, context read after the decision or hunk is warned about, undetermined chronology is labeled without claiming before or after ordering, and unrelated context links are not attributed as informing evidence.
-To expose commands and tool results that preceded a change, reference the relevant `tool.call.*` events from the change event with a `preceded_by` relationship.
-Other event kinds linked by `preceded_by` remain inspectable but are reported as invalid evidence targets and keep coverage incomplete.
-Resolved canonical tool links include `chronology` relative to the earliest attributable decision, identifying that boundary as `decision_event_id`, or to the applied change when no decision is attributable; equal timestamps across independent emitters are reported as `undetermined` and keep coverage incomplete at either boundary.
-Resolved links to tool calls include non-blank operation status and optional non-blank operation name under `tool`; a blank supplied status or malformed or blank supplied name is omitted, reported as invalid operation metadata, and keeps coverage incomplete.
-Producers can add non-blank `attributes.tool.command` and `attributes.tool.result` strings and an optional integer `attributes.tool.exit_code`; malformed or blank optional fields are omitted without hiding the relationship or operation details.
-A supplied command or result that is malformed or blank is reported as invalid tool command or result evidence and keeps coverage incomplete, while either field may be absent when the other contains substantive provenance.
-A supplied tool exit code that is not an integer is reported as invalid tool execution evidence and keeps coverage incomplete, while an absent exit code remains valid optional metadata.
-The browser event inspector presents each tool event ID, operation, command, result, actor, status, optional exit code, and decision-boundary event ID when available for tools linked by `preceded_by` directly on the selected change hunk; a blank running actor is identified as unknown, tools occurring after the decision or change are warned about, undetermined chronology is labeled without claiming before or after ordering, and unrelated tool links are not attributed as preceding evidence.
-When context is summarized before a decision, emit a `context.compacted` event with at least one `summarizes` relationship to a source `context.read` event, then reference the compaction event from the change with `informed_by`.
-Resolved links to that event include `compaction.sources` with each distinct valid source event, its kind, actor, context-read locator, and chronology relative to the compaction, plus `compaction.unresolved` for each distinct missing source event, source of the wrong event kind, or source whose ordering relative to the compaction is undetermined.
-Compaction links from a change also include `chronology` relative to the earliest attributable decision and identify that boundary as `decision_event_id`, or use the applied change when no decision is attributable; equal timestamps across independent emitters are reported as `undetermined` and keep coverage incomplete when a decision boundary is attributable.
-Canonical summarized context reads without a valid non-blank path remain inspectable through their events but are reported as invalid compacted source details and keep coverage incomplete even when another valid source exists.
-A summarized context read with an invalid supplied `line_start` retains its valid path in the compaction source list while producing the same typed line-start diagnostic.
-Wrong-kind `summarizes` targets remain inspectable as generic links, include their actual kind in the nested diagnostic, and keep coverage incomplete.
-This preserves the observable compaction boundary without capturing private reasoning or summary contents.
-The browser event inspector presents the event ID and actor for compactions linked by `informed_by`, the proposal event defining their decision boundary when available, or labels the compacting actor unknown when its ID is blank, plus repository locators with optional symbols, source event IDs and actors, and missing, wrong-kind, late-source, or undetermined-source diagnostics linked by `summarizes` directly on the selected change hunk; a blank source actor is also identified as unknown, undetermined compaction and source chronology is labeled without claiming before or after ordering and keeps coverage incomplete, compaction after the decision or hunk is warned about, and unrelated outer and source relationships are not attributed as compacted context.
-To attach a test result, emit a `verification.finished` event with a boolean `attributes.verification.passed` field and optional integer `exit_code`, then reference it from the change event with a `verified_by` relationship.
-Finished verifications ordered before the applied change remain visible but are reported as temporal contradictions and keep coverage incomplete; sequence establishes verification/application order for events from the same emitter despite equal or skewed timestamps, while timestamps establish order across emitters.
-Resolved canonical verification links include `chronology` relative to the applied change; equal timestamps across independent emitters are reported as `undetermined` and keep coverage incomplete because they do not establish that verification postdated the hunk.
-Canonical finished verifications without a boolean result remain inspectable as generic links but are reported as invalid verification results and keep coverage incomplete.
-When `exit_code` is supplied, zero must correspond to `passed: true` and a nonzero value to `passed: false`; conflicting values remain visible but produce a diagnostic and keep coverage incomplete.
-A supplied exit code that is not an integer is omitted from the projected result, produces an invalid-exit-code diagnostic, and keeps coverage incomplete.
-For lifecycle attribution, emit the command as non-blank `attributes.verification.command` on a `verification.started` event and reference it from `verification.finished` with a `completes` relationship.
-Finished-only events can instead include the command directly for producers that do not emit a separate start event.
-A supplied finished-event command that is malformed or blank is omitted and reported as invalid verification command evidence even when a valid start supplies the effective command, while an absent finished-event command remains valid for lifecycle-based producers.
-Set optional `test_origin` to `pre_existing` when the test predates the change or `same_agent` when the change agent also wrote the test.
-A supplied `test_origin` outside those values is omitted, reported as invalid verification test provenance, and keeps coverage incomplete; an absent value remains unknown provenance without being treated as malformed.
-Resolved links to the finished event include the validated result under `verification`, including each distinct resolved start event, its actor, its chronology relative to the finish, and its `change_chronology` relative to the applied change, so each linked hunk exposes every known test command and outcome directly.
-Resolved start events without a non-blank command remain available for actor attribution but are reported as invalid start commands and keep coverage incomplete even when another lifecycle event supplies a valid command.
-Resolved start events ordered after their finished event remain visible but are reported as verification lifecycle contradictions and keep coverage incomplete; sequence establishes start/finish order for events from the same emitter despite equal or skewed timestamps, while timestamps establish order across emitters and equal timestamps across independent emitters produce an undetermined start/finish chronology diagnostic that keeps coverage incomplete.
-Resolved start events ordered before the applied change also remain visible but are reported as temporal contradictions because the test lifecycle straddles the change; sequence establishes start/change order for events from the same emitter despite equal or skewed timestamps, while timestamps establish order across emitters.
-Equal timestamps across independent emitters produce an undetermined start/change chronology diagnostic and keep coverage incomplete because they do not establish that verification started after the hunk.
-When a resolved start command conflicts with the command on the finished event or another resolved start, both commands remain visible and a conflicting-command lifecycle diagnostic keeps coverage incomplete.
-The browser falls back to the command reported by the finished event when resolved start events do not identify a command, while retaining their starter attribution.
-An outcome-only finished event remains visible in the API and browser but leaves the verification coverage category missing because no test command is known.
-It is also reported as an invalid verification command and keeps coverage incomplete even when another canonical verification supplies the category; a missing or wrong-kind start retains its more specific lifecycle diagnostic until it resolves.
-Any failed result linked by `verified_by` contributes to `failed_verification_count` and keeps coverage incomplete even when another linked verification passed; failures linked by unrelated relationship types remain generic evidence and do not affect coverage.
-Distinct missing start events, resolved starts without valid commands, starts with undetermined finish or change chronology, and `completes` targets that are not `verification.started` events remain visible under `verification.unresolved` and contribute to incomplete hunk coverage; wrong-kind targets include their actual event kind so consumers can distinguish them from missing events.
-The browser event inspector presents each test linked by `verified_by`, showing its finished event ID, each resolved start event ID and its starter and command separately from the result reporter, together with the pass or fail outcome, optional exit code, and whether the test predates the change, was written by the same agent, or has unknown provenance; a blank starter or reporter ID is identified as an unknown actor, undetermined start-to-finish, start-to-change, and verification-to-change chronology is labeled without claiming before or after ordering, and unrelated verification links are not attributed as tests of the hunk.
-It identifies each missing verification start by relationship type and event ID rather than hiding lifecycle gaps behind the aggregate incomplete-coverage status.
-Other malformed optional verification metadata is omitted without rejecting the event, its relationship, or other valid verification details.
-To record a later human change, emit a `human.corrected` event with a `corrects` relationship targeting the original `change.applied` event and set `attributes.correction.action` to `modified` or `reverted`.
-Each affected hunk exposes these inbound links in event order under `corrections`, including the human actor, validated action when available, and `chronology` relative to the applied change.
-Corrections ordered before their target change remain attributed and inspectable but are reported as temporal contradictions; sequence establishes correction/change order for events from the same emitter despite equal or skewed timestamps, while timestamps establish order across emitters and equal timestamps across independent emitters produce a `correction_chronology_undetermined` diagnostic.
-Correction chronology diagnostics remain outside core hunk evidence coverage because they describe later human activity rather than evidence used to make or verify the original change.
-Canonical corrections without a `modified` or `reverted` action remain visible but are reported as invalid correction details instead of being attributed to either outcome.
-The browser event inspector highlights each human modification or reversion directly on the selected change hunk, showing the correction event ID and naming a non-blank correcting actor or reporting that the correcting actor is unknown; undetermined chronology is labeled without claiming that the correction occurred before or after the change.
-Wrong-kind `corrects` targets remain inspectable as generic links and are also reported as invalid targets in the run-level unresolved diagnostics.
-When the correction event is selected, the browser presents the relationship type, target event ID, and actual target kind from that diagnostic without attributing it to a change hunk.
-Other inbound relationship types remain available as generic evidence links but are not attributed as human corrections.
-Malformed correction metadata is omitted without hiding the correction relationship or its typed diagnostic.
-Unknown kinds, fields, and supported minor schema versions are retained so the canonical envelope can evolve.
+Unknown supported-minor fields and relationship types are retained, unresolved references can resolve after later events arrive, and uncertain distributed order is shown rather than fabricated.
+Use the feature documents in `docs/` for exact validation, hashing, chronology, warning, security, and attribution contracts.
 
-Harnesses other than the v1 runtime need an adapter that emits this envelope.
-Adapter-specific data belongs under namespaced `attributes`, not in new top-level fields or core parsing rules.
+## Local API
 
-## Ordering And Warnings
+Serve mode exposes `GET /api/v1/runs`, `GET /api/v1/runs/{trace_id}`, lazy payload detail, and `GET /api/v1/events?cursor=N` for typed SSE updates.
+The API is process-local, versioned as `v1`, and experimental for external consumers.
 
-Ordering prefers increasing `sequence` within one `emitter_id`, then causal parent links, wall-clock timestamps, and ingestion order.
-Events without enough causal information are marked `uncertain` rather than presented as an exact distributed total order.
-Clock skew and late arrivals therefore remain visible without overriding an emitter's sequence.
+## Security And Remote Access
 
-`LOOP`, `RETRY`, `STALL`, and `ORPHAN` findings are heuristics, not diagnoses.
-Loop and retry detection compares canonical operation arguments and selected material-state attributes.
-Use an explicit `--warning-policy PATH` to tune or suppress `LOOP` and `RETRY` findings for exact canonical operation names.
-See [Warning policies](docs/warning-policies.md) for the complete versioned schema, examples, validation behavior, and projection metadata.
-Stall detection checks open spans against `--stall-seconds`, which defaults to 30 seconds.
-Orphan detection allows a short parent-arrival grace period.
+The server binds to `127.0.0.1` by default and the packaged browser has no runtime CDN dependency.
+Non-loopback binding requires `--remote-access`, prints a warning, and generates a token-protected URL; remote access cannot be combined with `--unsafe-unredacted`.
 
-## Payloads And Redaction
+Sanitization cannot guarantee removal of every secret, source fragment, customer value, path, command, or prompt.
+Review every UI, Markdown report, and HTML artifact before sharing it.
 
-By default, common bearer tokens, credential-shaped values, sensitive keys, and several common token formats are redacted before accepted events enter the index.
-This ruleset is deliberately limited and cannot guarantee that every secret or private value is detected.
-Review every terminal view and exported report before sharing it.
+## Run The Tests
 
-Payloads larger than the preview limit are truncated on a UTF-8 boundary while recording their original byte count and SHA-256 digest.
-Use `--full-payloads` to retain full accepted payloads in the in-memory inspector when the input is trusted.
-Use `--unsafe-unredacted` only for trusted local data when accepted non-structural values must remain visible.
-Use `--metadata-only` to omit every payload body before indexing, serving, rendering, or export while retaining deterministic omission metadata.
-Read the [metadata-only mode guide](docs/metadata-only.md) before relying on or sharing metadata-only output.
-
-Structural identifiers remain protected in unsafe mode because they drive indexing and can appear throughout output.
-Rejected-data diagnostics also remain redacted because malformed data never reaches the accepted-event safety boundary.
-Neither option makes arbitrary untrusted input safe to disclose.
-
-The index defaults to a 16 MiB memory budget controlled by `--max-bytes`.
-When necessary it evicts payloads before event metadata and records an `EVICT` warning.
-
-## Exports
-
-Export a deterministic Markdown report with actor states, ordered timelines, heuristic evidence, payload-retention status, and ingestion errors:
+Install browser-test dependencies and browser engines once.
 
 ```bash
-agent-tail run.jsonl --export report.md
+python -m pip install '.[test]'
+python -m playwright install chromium firefox webkit
 ```
 
-Markdown output remains the compact text export format.
-
-Export a self-contained sanitized interactive HTML report that opens offline without a server or external resources:
+Run the complete suite, the browser suite, or the 10,000-event release gates.
 
 ```bash
-agent-tail run.jsonl --export-html report.html
+PYTHONPATH=src python -m unittest discover -s tests
+PYTHONPATH=src python -m unittest tests.test_e2e
+PYTHONPATH=src python -m unittest tests.test_performance -v
 ```
 
-Use `--export-html-generated-at` when the visible export metadata needs a fixed generation timestamp, or omit it for deterministic output with no timestamp.
-Read the [HTML export usage and security guide](docs/html-export.md) before sharing an artifact.
-
-Add `--review` to either export command to inspect the exact frozen sanitized candidate and its inclusion inventory in a temporary loopback-only browser session before the destination is changed.
-Read the [pre-export review guide](docs/export-review.md) for approval, cancellation, digest, metadata-only, and local security behavior.
-
-## Keyboard Controls
-
-The interactive terminal UI provides these controls:
+## Terminal Keys
 
 - `j`: select the next event.
 - `k`: select the previous event.
@@ -303,16 +358,15 @@ The interactive terminal UI provides these controls:
 
 ## Exit Codes
 
-- `0`: at least one valid event was accepted, even if other lines were rejected.
-- `1`: input was read successfully but no valid events were accepted.
-- `2`: command-line validation, input decoding, file access, configuration, or export failed.
+- `0`: at least one valid event was accepted or a requested operation succeeded.
+- `1`: input was read successfully but no valid event was accepted.
+- `2`: command validation, configuration, input, export, review, or comparison failed.
 
-## Deferred Scope
+## Current Boundaries
 
-Version 1 defers sockets, public harness adapters, Mermaid exports, persistence, replay, hosting, and custom keybindings.
+Agent Tail does not provide hosted storage, exact replay, a general policy-enforcement engine, semantic code review, fuzzy run matching, or automatic repository inspection.
+Serve mode remains process-local, run history is not persisted across restarts, and one actor ID represents one logical invocation.
 
-Serve mode remains process-local and does not persist run history across restarts.
-One actor ID represents one logical agent invocation, and primary parentage uses the first causal cross-actor relationship that introduces the actor.
-Run titles fall back to sanitized trace IDs.
-Dense graph and tree views use progressive reveal rather than automatic clustering.
-The local API is versioned as `v1` but remains experimental for external consumers.
+## License
+
+Agent Tail is licensed under the [MIT License](LICENSE).
