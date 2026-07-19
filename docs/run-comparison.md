@@ -1,6 +1,6 @@
 # Local Run Comparison
 
-Agent Tail compares two local canonical JSONL runs without a backend, browser, persisted history, repository checkout, network request, or model call.
+AgentTrail compares two local canonical JSONL runs without a backend, browser, persisted history, repository checkout, network request, or model call.
 Each file must retain exactly one trace after canonical line validation and sanitization.
 
 ## Command
@@ -43,5 +43,5 @@ When either boundary contains concurrent or uncertain records, the report prints
 ## Interpretation
 
 The report includes run summaries, usage and cost totals, added and removed facts, integrity differences, and divergence evidence.
-Comparison is not exact replay because Agent Tail does not reconstruct repository, dependency, environment, network, tool, or model state.
+Comparison is not exact replay because AgentTrail does not reconstruct repository, dependency, environment, network, tool, or model state.
 Comparison is not a quality judgment, causal explanation, fuzzy actor match, semantic code review, or score of either run.

@@ -1,11 +1,11 @@
-# Agent Tail
+# AgentTrail
 
-Agent Tail is a local CLI, terminal UI, and browser flight recorder for debugging coding-agent and multi-agent runs without a backend.
+AgentTrail is a local CLI, terminal UI, and browser flight recorder for debugging coding-agent and multi-agent runs without a backend.
 It connects causal runtime events to repository context, changes, verification, warnings, security influence, usage, and observed outcomes.
 
 ## Quick Start
 
-Agent Tail requires Python 3.11 or newer.
+AgentTrail requires Python 3.11 or newer.
 
 ```bash
 python -m pip install .
@@ -364,9 +364,9 @@ PYTHONPATH=src python -m unittest tests.test_performance -v
 
 ## Current Boundaries
 
-Agent Tail does not provide hosted storage, exact replay, a general policy-enforcement engine, semantic code review, fuzzy run matching, or automatic repository inspection.
+AgentTrail does not provide hosted storage, exact replay, a general policy-enforcement engine, semantic code review, fuzzy run matching, or automatic repository inspection.
 Serve mode remains process-local, run history is not persisted across restarts, and one actor ID represents one logical invocation.
 
 ## License
 
-Agent Tail is licensed under the [MIT License](LICENSE).
+AgentTrail is licensed under the [MIT License](LICENSE).

@@ -1,6 +1,6 @@
 # Pre-Export Review
 
-Agent Tail can hold a complete Markdown or self-contained HTML export in memory while you inspect its sanitized data before any destination is changed.
+AgentTrail can hold a complete Markdown or self-contained HTML export in memory while you inspect its sanitized data before any destination is changed.
 The review uses the packaged browser shell, run and event inspectors, warnings, search, payload presentation, and Change Evidence Map projections used by the HTML export and local browser UI.
 
 ## Start A Review
@@ -23,7 +23,7 @@ The `--review` option is invalid without `--export` or `--export-html`, and `--o
 
 ## Frozen Candidate
 
-Agent Tail reads the file or standard input once, sanitizes accepted events once, builds one index, and serializes one candidate before starting the review server.
+AgentTrail reads the file or standard input once, sanitizes accepted events once, builds one index, and serializes one candidate before starting the review server.
 The terminal and review banner show the candidate byte count and SHA-256 digest.
 Approval atomically writes those exact frozen bytes without rereading the input, rebuilding the index, or serializing the report again.
 The destination remains untouched while review is pending and after cancellation, expiration, interruption, server failure, serialization failure, or write failure.

@@ -1,6 +1,6 @@
 # Coding-Agent Session Imports
 
-Agent Tail converts explicitly supplied local Claude Code, Codex, and OpenCode session exports into canonical Agent Tail JSONL without a source SDK or network service.
+AgentTrail converts explicitly supplied local Claude Code, Codex, and OpenCode session exports into canonical AgentTrail JSONL without a source SDK or network service.
 The importer reads only `INPUT` and writes only `OUTPUT`.
 It never searches home directories, global session directories, repository state, or other session files.
 

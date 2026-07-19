@@ -1,6 +1,6 @@
 # Audit-Only Taint Security
 
-Agent Tail reports producer-declared influence paths from untrusted sources to sensitive operations without inspecting payload content or enforcing policy.
+AgentTrail reports producer-declared influence paths from untrusted sources to sensitive operations without inspecting payload content or enforcing policy.
 
 ## Contract
 

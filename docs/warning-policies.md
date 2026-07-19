@@ -1,7 +1,7 @@
 # Warning Policies
 
-Agent Tail accepts an optional local warning policy through the explicit `--warning-policy PATH` option on standard, export, review, and serve commands.
-Agent Tail never searches the repository, current directory, or home directory for a policy.
+AgentTrail accepts an optional local warning policy through the explicit `--warning-policy PATH` option on standard, export, review, and serve commands.
+AgentTrail never searches the repository, current directory, or home directory for a policy.
 Serve mode loads the policy once at startup, and policy changes require a server restart.
 
 ## Version 1 Schema
@@ -12,7 +12,7 @@ The optional `loop_threshold` is an integer of at least `2`.
 The optional `retry_threshold` is an integer of at least `3`, because retry backoff analysis requires two delays.
 The optional `suppress` value is an array containing unique `LOOP` or `RETRY` strings.
 Unknown versions, top-level keys, tool keys, warning codes, duplicate tool names, duplicate suppression codes, and malformed values are rejected.
-The complete policy is validated before Agent Tail opens an event input, consumes standard input, starts a serve reader, or replaces an export destination.
+The complete policy is validated before AgentTrail opens an event input, consumes standard input, starts a serve reader, or replaces an export destination.
 
 ```toml
 version = 1

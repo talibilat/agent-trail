@@ -1,7 +1,7 @@
 # 01 - Serve Mode Foundation And Smokeable Shell
 
 **What to build:** Add the first end-to-end serve-mode path.
-A user can run Agent Tail in serve mode against one existing JSONL input, receive a printed local URL, open a packaged offline browser shell, and see real sanitized run and event data through a versioned local API.
+A user can run AgentTrail in serve mode against one existing JSONL input, receive a printed local URL, open a packaged offline browser shell, and see real sanitized run and event data through a versioned local API.
 The existing non-serve CLI and TUI behavior remains unchanged.
 
 **Blocked by:** None - can start immediately.

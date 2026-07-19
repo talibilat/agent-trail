@@ -1,5 +1,5 @@
 ---
-title: Agent Tail
+title: AgentTrail
 category: Small project
 prototype_effort: 3-6 hours
 hardened_mvp_effort: 2-4 days
@@ -7,11 +7,11 @@ recommended_priority: 1
 research_date: 2026-07-13
 ---
 
-# Agent Tail
+# AgentTrail
 
 ## Executive decision
 
-**Build this first.** Agent Tail is the smallest project that directly strengthens your existing 30-40-agent runtime and creates a foundation for the larger Agent Flight Recorder.
+**Build this first.** AgentTrail is the smallest project that directly strengthens your existing 30-40-agent runtime and creates a foundation for the larger Agent Flight Recorder.
 
 The initial product should be a local CLI/TUI that reads structured agent events from JSONL, standard input or a local socket and turns them into a live causal timeline. It should answer four questions immediately:
 
@@ -50,7 +50,7 @@ A CrewAI user explicitly requested visualisation because following large amounts
 
 ## Precise product gap
 
-Agent Tail should occupy the space between raw logs and full observability platforms.
+AgentTrail should occupy the space between raw logs and full observability platforms.
 
 Existing tracing tools generally optimise for persistent projects, dashboards, evaluations and production monitoring. A developer debugging a local agent run often needs something simpler:
 
@@ -384,7 +384,7 @@ These are engineering targets, not externally validated requirements. Adjust the
 - At least 60% of trial users inspect more than one run in the first week.
 - At least 30% of users export a trace or enable it in a bug-report workflow.
 - Fewer than 5% of valid fixture traces fail to render.
-- At least half of interviewed users can identify the failing agent faster with Agent Tail than with raw logs.
+- At least half of interviewed users can identify the failing agent faster with AgentTrail than with raw logs.
 
 ## Validation plan
 
@@ -440,13 +440,13 @@ Good first-contributor issues:
 
 ## Naming alternatives
 
-- Agent Tail
+- AgentTrail
 - TraceLanes
 - RunScope CLI
 - Agent Top
 - Causal Tail
 
-“Agent Tail” is clear but generic. Check package and repository availability before committing.
+“AgentTrail” is clear but generic. Check package and repository availability before committing.
 
 ## Go/no-go criteria
 

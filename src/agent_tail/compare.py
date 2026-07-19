@@ -263,7 +263,7 @@ def render_comparison(run_a: ComparedRun, run_b: ComparedRun) -> str:
     added = facts_b - facts_a
     divergence = _divergence(run_a, run_b)
     lines = [
-        "# Agent Tail Run Comparison",
+        "# AgentTrail Run Comparison",
         "",
         "Comparison is factual and local; it is not exact replay or a quality judgment.",
         "",

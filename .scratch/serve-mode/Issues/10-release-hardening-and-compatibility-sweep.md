@@ -1,7 +1,7 @@
 # 10 - Release Hardening And Compatibility Sweep
 
 **What to build:** Turn the implemented serve-mode slices into a release-ready integrated feature.
-A user can rely on serve mode as part of the same Agent Tail package, while maintainers have confidence that browser behavior, server behavior, packaging, documentation, performance, and existing CLI behavior all hold together.
+A user can rely on serve mode as part of the same AgentTrail package, while maintainers have confidence that browser behavior, server behavior, packaging, documentation, performance, and existing CLI behavior all hold together.
 
 **Blocked by:** 08 - End-To-End Browser Automation And Performance Envelope; 09 - Backend Readiness Report And UI Integration Guide.
 
@@ -19,7 +19,7 @@ A user can rely on serve mode as part of the same Agent Tail package, while main
 
 Completed the release hardening and compatibility sweep.
 The full 127-test suite passes, including installed stable Chrome, Playwright Firefox, and WebKit primary journeys with live append behavior.
-Installed stable Firefox 152.0.6 launched and rendered the real dashboard, and installed Safari 26.6 loaded the real dashboard with the expected `Agent Tail` document title.
+Installed stable Firefox 152.0.6 launched and rendered the real dashboard, and installed Safari 26.6 loaded the real dashboard with the expected `AgentTrail` document title.
 Safari's full interaction automation could not run because SafariDriver requires administrator authorization and JavaScript from Apple Events is disabled by a protected user setting; the equivalent WebKit interaction journey passes and this limitation is documented in the README.
 The browser acceptance matrix was revised to make that reproducible engine-level substitution explicit rather than claiming an unperformed stable Safari interaction journey.
 An isolated wheel installation exposes `agent-tail serve --help` and contains `agent_tail/web/index.html`.

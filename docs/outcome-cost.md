@@ -1,6 +1,6 @@
 # Outcome Cost Attribution
 
-Agent Tail attributes observed event-local usage to explicit change evidence without judging whether work was accepted, merged, valuable, or wasteful.
+AgentTrail attributes observed event-local usage to explicit change evidence without judging whether work was accepted, merged, valuable, or wasteful.
 
 ## Producer Contract
 
@@ -39,7 +39,7 @@ Warning associations are non-exclusive views and must never be added across warn
 ## Observed Outcomes
 
 Valid hunk outcomes are limited to `reverted`, `modified`, `no_correction_observed`, and `undetermined`.
-Agent Tail derives these labels only from `human.corrected` events with `corrects` relationships and validated `attributes.correction.action` values.
+AgentTrail derives these labels only from `human.corrected` events with `corrects` relationships and validated `attributes.correction.action` values.
 A correction follows another event only when same-emitter sequence or causal ancestry establishes that order.
 Wall-clock timestamps never select the final correction.
 The unique causally latest valid correction determines `modified` or `reverted`.

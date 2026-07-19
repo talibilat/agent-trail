@@ -1,4 +1,4 @@
-"""Agent Tail."""
+"""AgentTrail."""
 
 from .langgraph import AgentTailCallbackHandler
 

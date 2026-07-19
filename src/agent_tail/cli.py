@@ -402,7 +402,7 @@ def _markdown(
     )
     detail_store.set_source_status(connected=False, state="frozen")
     lines = [
-        "# Agent Tail Trace Report",
+        "# AgentTrail Trace Report",
         "",
         "Redaction ruleset: `1`",
     ]

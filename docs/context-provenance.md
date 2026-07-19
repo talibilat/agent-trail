@@ -1,6 +1,6 @@
 # Context Provenance
 
-Agent Tail accepts producer-recorded context provenance and never opens a repository or recomputes a fingerprint while ingesting, serving, reviewing, or exporting a run.
+AgentTrail accepts producer-recorded context provenance and never opens a repository or recomputes a fingerprint while ingesting, serving, reviewing, or exporting a run.
 The contract records identifiers and digests rather than file contents, search result contents, prompts, private reasoning, or compaction summary text.
 
 ## Canonical Events
@@ -74,7 +74,7 @@ The diagnostic lists exactly the differing comparable fields from `commit` and `
 Missing or malformed snapshot fields are not comparable and therefore cannot establish divergence.
 
 A compaction boundary lists only distinct explicit `summarizes` event references and their known chronology.
-Agent Tail does not infer what the compaction retained, omitted, or changed.
+AgentTrail does not infer what the compaction retained, omitted, or changed.
 
 ## Shared Projection
 
