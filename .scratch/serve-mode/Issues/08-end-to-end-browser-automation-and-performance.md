@@ -1,7 +1,7 @@
 # 08 - End-To-End Browser Automation And Performance Envelope
 
 **What to build:** Establish the approved process-boundary verification seam for serve mode.
-A maintainer can run automated tests that launch the real Agent Tail serve command, feed a growing JSONL input, exercise the real API and SSE stream, drive the packaged browser UI, and verify the core user journey without relying on implementation details.
+A maintainer can run automated tests that launch the real AgentTrail serve command, feed a growing JSONL input, exercise the real API and SSE stream, drive the packaged browser UI, and verify the core user journey without relying on implementation details.
 
 **Blocked by:** 04 - Graph And Tree Views From Real Runs; 05 - Swimlane, Sequence, And Playback Experience; 06 - Inspector, Warnings Drawer, Search, Filters, And Payload Detail; 07 - Security, Packaging, Offline Assets, And Remote Access Guardrails.
 

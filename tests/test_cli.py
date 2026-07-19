@@ -211,7 +211,7 @@ class CliTests(unittest.TestCase):
         self.assertNotIn(secret, report)
         self.assertEqual(
             hashlib.sha256(report.encode()).hexdigest(),
-            "3dc38bb6b63b5a3fea3f04fb23717408224defc566acb3cc30b7a970dadbb5a5",
+            "2fc243fe28937b023c66d17096d13d4ad3b90c2e44dd7ba6d1374d07fb79548f",
         )
 
     def test_help_names_file_and_stdin_inputs_without_internal_options(self):

@@ -1,11 +1,11 @@
 # OpenTelemetry OTLP JSON Import
 
-Agent Tail imports completed OpenTelemetry spans from the standard OTLP JSON `resourceSpans`, `scopeSpans`, and `spans` hierarchy.
+AgentTrail imports completed OpenTelemetry spans from the standard OTLP JSON `resourceSpans`, `scopeSpans`, and `spans` hierarchy.
 The importer uses only the Python standard library and does not receive protobuf, OTLP/HTTP, OTLP/gRPC, collector endpoints, Zipkin, Jaeger, or vendor-specific formats.
 
 ## Import A File
 
-Convert an OTLP JSON trace to canonical Agent Tail JSONL:
+Convert an OTLP JSON trace to canonical AgentTrail JSONL:
 
 ```bash
 agent-tail import otel traces.json --output run.jsonl
@@ -25,7 +25,7 @@ agent-tail serve run.jsonl
 
 The generated JSONL is a local source artifact that remains semantically faithful to the telemetry input and can contain credentials, prompts, tool data, and other sensitive values.
 Protect it exactly as you protect the original OTLP file.
-Agent Tail applies its existing sanitization boundary when the generated JSONL is inspected, exported to Markdown, or served, but the JSONL file itself is intentionally not redacted.
+AgentTrail applies its existing sanitization boundary when the generated JSONL is inspected, exported to Markdown, or served, but the JSONL file itself is intentionally not redacted.
 
 ## Standard Streams
 

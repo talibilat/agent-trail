@@ -1,8 +1,8 @@
 # Self-Contained HTML Export
 
-Agent Tail can export a sanitized, interactive, read-only snapshot that opens directly from one local HTML file.
+AgentTrail can export a sanitized, interactive, read-only snapshot that opens directly from one local HTML file.
 The report uses the same run summaries, run details, warnings, findings, payload previews, and Change Evidence Map projections as serve mode.
-The packaged browser UI provides graph, tree, swimlane, and sequence views together with search, playback, warnings, and event and agent inspectors without a running Agent Tail process.
+The packaged browser UI provides graph, tree, swimlane, and sequence views together with search, playback, warnings, and event and agent inspectors without a running AgentTrail process.
 
 ## Usage
 
@@ -21,18 +21,18 @@ agent-tail run.jsonl --export-html report.html \
 
 The timestamp must be an ISO 8601 value with a timezone and is normalized to UTC.
 When the option is omitted, the visible export information panel says that generation time was omitted for deterministic output.
-The same sanitized input, options, Agent Tail version, and fixed or omitted timestamp produce byte-identical output.
+The same sanitized input, options, AgentTrail version, and fixed or omitted timestamp produce byte-identical output.
 
 `--export-html` and the Markdown `--export` option are mutually exclusive.
 The HTML generation timestamp option is valid only with `--export-html`.
 HTML export preserves the standard exit codes, and a successful write atomically replaces the destination.
-If serialization or replacement fails, Agent Tail leaves an existing destination unchanged and removes its temporary artifact.
+If serialization or replacement fails, AgentTrail leaves an existing destination unchanged and removes its temporary artifact.
 
 ## Included Data
 
 The export embeds the sanitized run list and complete serve projection for every accepted trace.
 It includes warnings, ingestion findings, causal and unresolved relationships, retained payload previews and retention metadata, and valid and invalid Change Evidence Map records.
-The visible information panel records the Agent Tail version, canonical event schema versions, redaction ruleset, export mode, payload retention counts, and generation time state.
+The visible information panel records the AgentTrail version, canonical event schema versions, redaction ruleset, export mode, payload retention counts, and generation time state.
 Exported mode disables live SSE, source connectivity behavior, and lazy payload requests.
 
 The default payload policy truncates large payloads on a UTF-8 boundary and records the original byte count and SHA-256 digest.

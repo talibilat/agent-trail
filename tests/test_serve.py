@@ -5206,7 +5206,7 @@ class ServeTests(unittest.TestCase):
         detail = json.loads(urlopen(base_url + "/api/v1/runs/trace%2F1", timeout=2).read())
         payload = json.loads(urlopen(base_url + "/api/v1/runs/trace%2F1/events/evt-1/payload", timeout=2).read())
 
-        self.assertIn("Agent Tail", html)
+        self.assertIn("AgentTrail", html)
         self.assertNotIn("https://", html)
         self.assertNotIn("http://", html)
         self.assertNotIn("Access-Control-Allow-Origin", root_response.headers)

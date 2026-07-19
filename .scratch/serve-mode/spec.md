@@ -1,19 +1,19 @@
-# Implement Agent Tail Serve Mode With A Live Orchestration Web UI
+# Implement AgentTrail Serve Mode With A Live Orchestration Web UI
 
 Status: ready-for-agent
 
 ## Problem Statement
 
-Agent Tail currently helps a developer inspect canonical multi-agent runtime events through a local CLI and terminal UI.
+AgentTrail currently helps a developer inspect canonical multi-agent runtime events through a local CLI and terminal UI.
 That terminal experience is useful for fast local debugging, but it does not provide the richer visual system view shown in the supplied orchestration mock.
 A developer running many agents concurrently needs to see the live shape of a run, the causal agent graph, the active and completed agents, cross-agent handoffs, token and cost movement, warnings, and event details without rebuilding the story from interleaved logs.
 The current package is explicitly local-first and has no HTTP server, API, browser UI, or persistence beyond one in-memory trace index per process.
-The user wants the visual design to become part of the same Agent Tail tool instead of remaining a mockup or becoming a separate hosted product.
+The user wants the visual design to become part of the same AgentTrail tool instead of remaining a mockup or becoming a separate hosted product.
 The result should preserve the existing CLI and TUI behavior for terminal users while adding an opt-in serve mode for users who want the visual flight-recorder experience.
 
 ## Solution
 
-Add an integrated `serve` mode to Agent Tail.
+Add an integrated `serve` mode to AgentTrail.
 The serve mode reads the same canonical JSONL event envelope that the CLI already accepts, sanitizes and indexes those events through the existing ingestion pipeline, and exposes a local browser UI backed by real data.
 The browser UI ports the supplied orchestration design into maintainable frontend code and keeps the same product shape: top bar, run picker, search, warnings button, metrics strip, graph view, tree view, swimlane view, sequence view, inspector panel, warnings drawer, and scrub or playback transport.
 The backend projects the current trace index into a run-view JSON shape that the frontend can render directly while leaving visual layout geometry to the client.
@@ -24,7 +24,7 @@ Serve mode is local-first by default, binds to loopback by default, uses sanitiz
 ## User Stories
 
 1. As a local agent developer, I want to run one command that opens a web view for a JSONL trace, so that I can inspect agent orchestration without setting up a hosted observability product.
-2. As a terminal-first Agent Tail user, I want the existing default CLI and TUI behavior to remain unchanged, so that the new visual UI does not break my current workflow.
+2. As a terminal-first AgentTrail user, I want the existing default CLI and TUI behavior to remain unchanged, so that the new visual UI does not break my current workflow.
 3. As a developer debugging a live agent run, I want the web UI to update as new JSONL lines are appended, so that I can watch the system progress in real time.
 4. As a developer reading a completed trace, I want scrub and playback controls, so that I can move through the run at the moment where the interesting behavior happened.
 5. As a developer watching a live run, I want to pause auto-follow by scrubbing backward, so that I can investigate older events while new events continue to buffer.
@@ -72,7 +72,7 @@ Serve mode is local-first by default, binds to loopback by default, uses sanitiz
 47. As a developer, I want desktop layouts to be the primary experience, so that the complex orchestration view remains legible.
 48. As a developer on a narrow screen, I want core run selection, metrics, warnings, timeline, and inspector access to remain usable, so that the UI does not fully fail outside the ideal mock size.
 49. As a developer, I want the UI to work without external internet access, so that local debugging is not blocked by unavailable CDNs.
-50. As a package user, I want serve mode to be installed with Agent Tail, so that I do not need a separate package or service.
+50. As a package user, I want serve mode to be installed with AgentTrail, so that I do not need a separate package or service.
 51. As a developer, I want the browser URL printed in the terminal, so that I can open it manually in any environment.
 52. As a developer, I want browser auto-open controlled by a flag, so that CI, remote shells, and headless environments remain predictable.
 53. As a security-conscious user, I want serve mode bound to loopback by default, so that trace data is not exposed on the network accidentally.
@@ -88,17 +88,17 @@ Serve mode is local-first by default, binds to loopback by default, uses sanitiz
 63. As an adapter author, I want the sequence-view contract documented, so that I can emit `message.sent` events that render as handoff arrows.
 64. As an adapter author, I want the usage contract documented, so that token and cost cards populate correctly.
 65. As an adapter author, I want the role and model contracts documented, so that agent labels and inspector details populate correctly.
-66. As an Agent Tail maintainer, I want serve mode to reuse the existing sanitizer and trace index, so that the web UI does not fork canonical event behavior.
-67. As an Agent Tail maintainer, I want a pure run-view projection layer, so that backend aggregation can be tested without HTTP or browser concerns.
-68. As an Agent Tail maintainer, I want a small local HTTP server, so that serve mode remains simple and consistent with the local-first promise.
-69. As an Agent Tail maintainer, I want the frontend to compute layout geometry, so that the backend exposes domain state rather than pixel positions.
-70. As an Agent Tail maintainer, I want browser smoke tests against the real packaged UI, so that visual integration failures are caught before release.
-71. As an Agent Tail maintainer, I want the original CLI snapshot and TUI paths verified after serve-mode work, so that backward compatibility is protected.
-72. As an Agent Tail maintainer, I want performance limits stated in acceptance criteria, so that the first web UI remains useful on realistic local traces.
+66. As an AgentTrail maintainer, I want serve mode to reuse the existing sanitizer and trace index, so that the web UI does not fork canonical event behavior.
+67. As an AgentTrail maintainer, I want a pure run-view projection layer, so that backend aggregation can be tested without HTTP or browser concerns.
+68. As an AgentTrail maintainer, I want a small local HTTP server, so that serve mode remains simple and consistent with the local-first promise.
+69. As an AgentTrail maintainer, I want the frontend to compute layout geometry, so that the backend exposes domain state rather than pixel positions.
+70. As an AgentTrail maintainer, I want browser smoke tests against the real packaged UI, so that visual integration failures are caught before release.
+71. As an AgentTrail maintainer, I want the original CLI snapshot and TUI paths verified after serve-mode work, so that backward compatibility is protected.
+72. As an AgentTrail maintainer, I want performance limits stated in acceptance criteria, so that the first web UI remains useful on realistic local traces.
 
 ## Implementation Decisions
 
-- Add an opt-in `serve` subcommand to the existing Agent Tail command rather than replacing or changing the default TUI invocation.
+- Add an opt-in `serve` subcommand to the existing AgentTrail command rather than replacing or changing the default TUI invocation.
 - The default command with an input path continues to render the existing terminal experience exactly as before.
 - Serve mode accepts one JSONL file or stdin in the first release.
 - Serve mode may receive events from multiple trace IDs in that single stream.
@@ -167,7 +167,7 @@ Serve mode is local-first by default, binds to loopback by default, uses sanitiz
 - Literal mock coordinates may be adjusted for real data, responsiveness, accessibility, and maintainability.
 - Desktop widths are the primary fully interactive experience.
 - Narrower screens preserve essential run selection, metrics, warnings, timeline, and inspector access.
-- `Agent Tail` remains the product name.
+- `AgentTrail` remains the product name.
 - `Flight recorder` may be used as a descriptive label rather than a separate product identity.
 - The web UI should support graph, tree, swimlane, and sequence views in the first release.
 - The graph view communicates overall relationships.
@@ -189,7 +189,7 @@ Serve mode is local-first by default, binds to loopback by default, uses sanitiz
 ## Testing Decisions
 
 - The primary test seam is the process boundary around the real serve mode.
-- The highest-value acceptance test launches the actual Agent Tail command in serve mode against a temporary growing JSONL file.
+- The highest-value acceptance test launches the actual AgentTrail command in serve mode against a temporary growing JSONL file.
 - The test then exercises the real HTTP API, real SSE stream, and packaged browser UI.
 - The test verifies behavior from the user's perspective rather than private implementation details.
 - The same seam covers ingestion, sanitization, indexing, run projection, source following, streaming, reconnection, rendering, view switching, warnings, playback, and backward-compatible startup.

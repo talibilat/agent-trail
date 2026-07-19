@@ -1,6 +1,6 @@
 # Deterministic Verification Gaps
 
-Agent Tail reports four deterministic verification-gap warnings from canonical retained events without assigning confidence, inferring semantic test relevance, or deciding whether a patch should be accepted.
+AgentTrail reports four deterministic verification-gap warnings from canonical retained events without assigning confidence, inferring semantic test relevance, or deciding whether a patch should be accepted.
 The warnings use the same Change Evidence Map, context provenance, operation normalization, material-state, and causal-ordering contracts as the rest of the application.
 
 ## Warning Rules

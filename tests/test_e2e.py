@@ -2988,7 +2988,7 @@ def _wait_for_server_line(process: subprocess.Popen[str]) -> None:
     deadline = time.time() + 5
     while time.time() < deadline:
         line = process.stdout.readline()
-        if "Agent Tail serve mode listening" in line:
+        if "AgentTrail serve mode listening" in line:
             return
         if process.poll() is not None:
             raise AssertionError(process.stderr.read())

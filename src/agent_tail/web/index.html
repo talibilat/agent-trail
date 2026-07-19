@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Agent Tail</title>
+  <title>AgentTrail</title>
   <!-- AGENT_TAIL_EXPORT_HEAD -->
   <style>
     :root {
@@ -685,7 +685,7 @@
       const retention = Object.entries(metadata.payload_retention)
         .map(([state, count]) => `${state} ${count}`).join(' · ');
       const values = [
-        ['Agent Tail', metadata.agent_tail_version],
+        ['AgentTrail', metadata.agent_tail_version],
         ['mode', metadata.export_mode],
         ['schemas', metadata.schema_versions.join(', ') || 'none'],
         ['redaction', `ruleset ${metadata.redaction_ruleset}`],

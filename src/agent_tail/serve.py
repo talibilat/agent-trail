@@ -694,7 +694,7 @@ def _serve_store(
     url = f"http://{host}:{port}/"
     if config.access_token:
         url += f"?token={config.access_token}"
-    print(f"Agent Tail serve mode listening on {url}", flush=True)
+    print(f"AgentTrail serve mode listening on {url}", flush=True)
     if config.remote_access:
         print(
             "WARNING: remote access is enabled; share the token URL only with trusted clients.",

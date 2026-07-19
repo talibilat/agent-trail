@@ -43,7 +43,7 @@ class _Run:
 
 
 class AgentTailCallbackHandler(_CallbackBase):
-    """Write LangGraph callback activity as canonical Agent Tail JSONL."""
+    """Write LangGraph callback activity as canonical AgentTrail JSONL."""
 
     run_inline = True
     raise_error = True

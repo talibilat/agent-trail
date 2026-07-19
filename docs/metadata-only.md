@@ -23,7 +23,7 @@ agent-tail run.jsonl --metadata-only --export report.md
 agent-tail run.jsonl --metadata-only --export-html report.html
 ```
 
-For each present top-level payload, Agent Tail retains only its original compact UTF-8 JSON byte count, SHA-256 digest, an explicit `omitted: true` state, and redaction ruleset version.
+For each present top-level payload, AgentTrail retains only its original compact UTF-8 JSON byte count, SHA-256 digest, an explicit `omitted: true` state, and redaction ruleset version.
 
 The digest and byte count describe the original serialized payload before redaction, and identical input produces identical omission metadata.
 

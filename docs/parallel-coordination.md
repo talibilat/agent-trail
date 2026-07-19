@@ -1,6 +1,6 @@
 # Parallel Coordination Findings
 
-Agent Tail reports factual coordination evidence without inferring semantic conflicts, duplicated intent, stale assumptions, task relevance, avoidable spend, or potential savings.
+AgentTrail reports factual coordination evidence without inferring semantic conflicts, duplicated intent, stale assumptions, task relevance, avoidable spend, or potential savings.
 
 The five coordination findings use the same shared warning stream as LOOP, RETRY, STALL, ORPHAN, and verification-gap findings.
 

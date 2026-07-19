@@ -1,11 +1,11 @@
 # LangGraph Callback Adapter
 
-The direct LangGraph adapter writes callback activity incrementally as canonical Agent Tail JSONL.
-It supports LangGraph 1.x and does not add LangGraph to the base Agent Tail installation.
+The direct LangGraph adapter writes callback activity incrementally as canonical AgentTrail JSONL.
+It supports LangGraph 1.x and does not add LangGraph to the base AgentTrail installation.
 
 ## Install
 
-Install Agent Tail with the optional LangGraph dependency:
+Install AgentTrail with the optional LangGraph dependency:
 
 ```bash
 python -m pip install 'agent-tail[langgraph]'
@@ -153,6 +153,6 @@ Helpers do not fabricate those facts when their event IDs are absent.
 The generated JSONL is append-only source telemetry and can contain prompts, model output, tool arguments, errors, checkpoint data, credentials, and private application state.
 Protect it like the original LangGraph execution data.
 
-Agent Tail sanitizes accepted events before they enter `TraceIndex` in terminal, export, serve API, and browser paths.
+AgentTrail sanitizes accepted events before they enter `TraceIndex` in terminal, export, serve API, and browser paths.
 The existing sanitizer redacts recognized secret values and sensitive keys, but no ruleset can guarantee detection of every secret.
 Review generated artifacts and rendered output before sharing them.
