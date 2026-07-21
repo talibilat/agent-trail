@@ -3,8 +3,7 @@
 AgentTrail is a local CLI, terminal UI, and browser flight recorder for debugging coding-agent and multi-agent runs without a backend.
 It connects causal runtime events to repository context, changes, verification, warnings, security influence, usage, and observed outcomes.
 
-## Quick Start
-
+## Quick Star
 AgentTrail requires Python 3.11 or newer.
 
 ```bash
